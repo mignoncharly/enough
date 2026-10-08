@@ -1,0 +1,42 @@
+{
+  "name": "enough",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.20.0",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.20.0",
+      "onFail": "error"
+    }
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env scripts/dev.mjs",
+    "dev:web": "pnpm --filter @enough/web dev",
+    "dev:api": "pnpm --filter @enough/api dev",
+    "dev:worker": "pnpm --filter @enough/worker dev",
+    "extension:build": "pnpm --filter @enough/extension build",
+    "extension:release:artifacts": "pnpm --filter @enough/extension build && pnpm --filter @enough/extension package:stores",
+    "desktop:start": "pnpm --filter @enough/desktop start",
+    "desktop:build": "pnpm --filter @enough/desktop build",
+    "desktop:dist": "pnpm --filter @enough/desktop dist",
+    "db:precheck": "pnpm --filter @enough/db db:precheck",
+    "db:migrate": "pnpm --filter @enough/db db:migrate",
+    "db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "typecheck": "pnpm --recursive --if-present typecheck",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.2.4",
+    "@types/node": "^24.0.0",
+    "drizzle-kit": "^0.31.5",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

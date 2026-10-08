@@ -1,0 +1,26 @@
+{
+  "name": "@enough/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@enough/auth": "workspace:*",
+    "@enough/cache": "workspace:*",
+    "@enough/config": "workspace:*",
+    "@enough/db": "workspace:*",
+    "@enough/queue": "workspace:*",
+    "@enough/shared": "workspace:*",
+    "fastify": "^5.6.1",
+    "tsx": "^4.20.5",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.2"
+  },
+  "scripts": {
+    "dev": "node --env-file-if-exists=../../.env --import tsx --watch src/server.ts",
+    "start": "node --env-file-if-exists=../../.env --import tsx src/server.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

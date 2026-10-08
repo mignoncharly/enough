@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Focus check · Enough</title>
+    <link rel="stylesheet" href="src/ui.css" />
+  </head>
+  <body class="block-shell">
+    <main class="account-card">
+      <span class="brand-mark" aria-hidden="true">E</span>
+      <p class="eyebrow">Focus check</p>
+      <h1 id="block-title">This site is paused</h1>
+      <p id="block-host" class="host-line"></p>
+      <p id="block-reason" class="muted">Your current Enough policy paused this development site.</p>
+      <p>Choose a next action that supports your current product goal.</p>
+      <div class="button-row"><button id="growth-button" class="primary-button" type="button">Start a 60-minute Growth Session</button><button id="back-button" class="secondary-button" type="button">Go back</button></div>
+      <p id="block-message" class="notice" role="status" hidden></p>
+      <p class="fine-print">Growth Mode temporarily allows the market tool allowlist stored by this extension. Your account policy continues to apply to other domains.</p>
+    </main>
+    <script type="module" src="src/block.ts"></script>
+  </body>
+</html>

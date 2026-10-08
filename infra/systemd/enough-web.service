@@ -1,0 +1,28 @@
+[Unit]
+Description=Enough web application
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=enough
+Group=enough
+WorkingDirectory=/home/enough/apps/enough/current
+Environment=NODE_ENV=production
+EnvironmentFile=/home/enough/apps/enough/shared/.env
+ExecStart=/usr/bin/pnpm --filter @enough/web start
+Restart=always
+RestartSec=5
+TimeoutStartSec=90
+TimeoutStopSec=60
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

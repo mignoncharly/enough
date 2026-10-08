@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'">
+    <title>Focus with Enough</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./lock.js" defer></script>
+  </head>
+  <body class="lock-body">
+    <main class="lock-shell">
+      <div class="lock-mark">E</div>
+      <p class="eyebrow">FOCUS REMINDER</p>
+      <h1 id="lock-title">Return to your work</h1>
+      <p id="lock-copy" class="lock-copy">This application is restricted by your current focus policy.</p>
+      <p id="lock-reason" class="lock-reason"></p>
+      <form id="lock-bypass-form" class="lock-form">
+        <label>Emergency reason<input id="lock-bypass-reason" type="text" minlength="2" maxlength="300" required placeholder="Why do you need access now?"></label>
+        <div class="button-row"><select id="lock-bypass-minutes" aria-label="Bypass duration"><option value="5">5 minutes</option><option value="15" selected>15 minutes</option><option value="30">30 minutes</option><option value="60">60 minutes</option></select><button class="danger" type="submit">Emergency unlock</button></div>
+      </form>
+      <p id="lock-error" class="error-message" role="status"></p>
+      <p class="lock-footnote">Switch to an allowed app and this screen will close automatically.</p>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "name": "@enough/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema.ts"
+  },
+  "dependencies": {
+    "@enough/config": "workspace:*",
+    "drizzle-orm": "^0.44.5",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.5",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  },
+  "scripts": {
+    "db:migrate": "node --env-file-if-exists=../../.env --import tsx src/migrate.ts",
+    "db:precheck": "node --env-file-if-exists=../../.env --import tsx src/migration-precheck.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

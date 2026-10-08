@@ -1,0 +1,14 @@
+packages:
+  - apps/*
+  - packages/*
+
+engineStrict: true
+strictPeerDependencies: true
+autoInstallPeers: true
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: true
+  electron: true
+  electron-builder: true
+  get-windows: true
+  electron-winstaller: true

@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily encrypted Enough database backup
+
+[Timer]
+OnCalendar=*-*-* 03:17:00
+RandomizedDelaySec=20m
+Persistent=true
+Unit=enough-backup.service
+
+[Install]
+WantedBy=timers.target

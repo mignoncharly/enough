@@ -1,0 +1,13 @@
+node_modules/
+.pnpm-store/
+.next/
+dist/
+apps/desktop/release/
+apps/desktop/resources/native-host.cjs
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+.turbo/
+.runtime/

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'">
+    <title>Enough</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div><p class="eyebrow">ENOUGH DESKTOP</p><h1>Stay with the work that matters.</h1></div>
+        <div class="connection"><span id="connection-dot" class="dot"></span><span id="connection-label">Starting…</span></div>
+      </header>
+
+      <section id="login-card" class="card login-card">
+        <div class="section-heading"><div><p class="eyebrow">CONNECT YOUR ACCOUNT</p><h2>Sign in to sync your focus rules</h2></div></div>
+        <label>API address<input id="api-base" type="url" placeholder="http://127.0.0.1:4000" autocomplete="url"></label>
+        <div class="login-grid">
+          <form id="password-form" class="login-option">
+            <h3>Email and password</h3>
+            <label>Email<input id="email" type="email" autocomplete="username" required></label>
+            <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
+            <button class="primary" type="submit">Sign in</button>
+          </form>
+          <form id="token-form" class="login-option">
+            <h3>Desktop access token</h3>
+            <label>One-time token<input id="token" type="password" autocomplete="off"></label>
+            <button class="secondary" type="submit">Connect token</button>
+            <p class="muted">Create a desktop token from your Enough account settings.</p>
+          </form>
+        </div>
+        <p id="storage-note" class="callout warning hidden"></p>
+      </section>
+
+      <section id="workspace" class="hidden">
+        <div class="toolbar card">
+          <div class="product-picker"><label for="product">Product</label><select id="product"></select></div>
+          <div class="toolbar-actions"><span id="user-email" class="muted"></span><button id="sync-button" class="secondary" type="button">Sync policy</button><button id="logout-button" class="quiet" type="button">Sign out</button></div>
+        </div>
+
+        <div id="notices" class="notices" aria-live="polite"></div>
+
+        <div class="grid two-col">
+          <section class="card mode-card">
+            <div class="section-heading"><div><p class="eyebrow">FOCUS SESSION</p><h2 id="mode-title">Build Mode</h2></div><span id="mode-pill" class="pill">BUILD</span></div>
+            <p id="mode-copy" class="muted">Your local rules are watching the active application.</p>
+            <div class="timer" id="session-timer">00:00:00</div>
+            <div class="button-row">
+              <button id="build-mode" class="primary" type="button">Start Build</button>
+              <button id="growth-mode" class="secondary" type="button">Start Growth · 60 min</button>
+            </div>
+            <button id="pause-session" class="quiet wide" type="button">Pause session</button>
+          </section>
+
+          <section class="card active-card">
+            <div class="section-heading"><div><p class="eyebrow">ACTIVE APPLICATION</p><h2 id="active-name">Waiting for activity</h2></div><span id="decision-pill" class="pill neutral">—</span></div>
+            <p id="active-key" class="mono muted">No application identifier yet</p>
+            <p id="decision-reason" class="muted">When an app is detected, its local policy decision appears here.</p>
+            <label for="classification">Classify this application</label>
+            <select id="classification" disabled>
+              <option value="">Use account classification</option>
+              <option value="BUILD">BUILD</option><option value="GROWTH">GROWTH</option>
+              <option value="NEUTRAL">NEUTRAL</option><option value="CONTEXTUAL">CONTEXTUAL</option>
+              <option value="BLOCKED">BLOCKED</option><option value="ALLOWED">ALLOWED</option>
+            </select>
+            <p class="muted small">This device-only choice overrides the account classification for this app.</p>
+          </section>
+        </div>
+
+        <div class="grid two-col">
+          <section class="card">
+            <div class="section-heading"><div><p class="eyebrow">RECENT APPS</p><h2>Time on this device</h2></div><span class="local-chip">Encrypted local cache</span></div>
+            <p class="muted small">Only app name and active time are kept. Window titles and browser URLs are ignored.</p>
+            <div id="applications" class="app-list"><p class="muted">Detected apps will appear here.</p></div>
+          </section>
+
+          <section class="card">
+            <div class="section-heading"><div><p class="eyebrow">AGENT SETTINGS</p><h2>Control how it runs</h2></div></div>
+            <label class="toggle-row"><span><strong>Local focus protection</strong><small>Show a full-screen reminder after the grace period for a restricted app.</small></span><input id="protection" type="checkbox"></label>
+            <label class="toggle-row"><span><strong>Sync app time</strong><small>Send app identifier, classification, policy action, and active seconds to your account.</small></span><input id="tracking" type="checkbox"></label>
+            <p id="activity-consent-note" class="muted small" role="status"></p>
+            <label class="toggle-row"><span><strong>Start when I sign in</strong><small>Launch the tray agent automatically.</small></span><input id="autostart" type="checkbox"></label>
+            <label>Grace period<select id="grace"><option value="30">30 seconds</option><option value="60">1 minute</option><option value="120">2 minutes</option><option value="300">5 minutes</option></select></label>
+            <div class="divider"></div>
+            <button id="update-button" class="secondary wide" type="button">Check for updates</button>
+            <p id="update-status" class="muted small">Update status has not been checked.</p>
+            <div class="divider"></div>
+            <h3>Emergency bypass</h3>
+            <p class="muted small">Temporarily allow the current restricted app. The bypass is recorded with your policy overrides.</p>
+            <form id="bypass-form" class="bypass-form">
+              <label>Reason<input id="bypass-reason" type="text" minlength="2" maxlength="300" required placeholder="Why do you need access now?"></label>
+              <div class="button-row"><select id="bypass-minutes" aria-label="Bypass duration"><option value="5">5 minutes</option><option value="15" selected>15 minutes</option><option value="30">30 minutes</option><option value="60">60 minutes</option></select><button class="danger" type="submit">Unlock this app</button></div>
+            </form>
+            <button id="signout-button" class="quiet wide" type="button">Sign out of this device</button>
+          </section>
+        </div>
+      </section>
+      <footer><span id="sync-label">Policy not synced</span><span>App detection runs on this device.</span></footer>
+      <p id="error-message" class="error-message" role="status"></p>
+    </main>
+  </body>
+</html>

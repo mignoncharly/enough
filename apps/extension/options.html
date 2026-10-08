@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Enough extension settings</title>
+    <link rel="stylesheet" href="src/ui.css" />
+  </head>
+  <body class="settings-shell">
+    <main>
+      <header class="brand-row"><span class="brand-mark" aria-hidden="true">E</span><div><p class="eyebrow">Browser extension</p><h1>Connect Enough</h1></div></header>
+      <p class="intro">Sign in with a verified Enough account. The extension requests access only to the API origin you enter. Browser blocking uses your synced local policy snapshot.</p>
+      <form id="login-form" class="form-stack">
+        <label>API address<input id="api-url" type="url" required placeholder="https://api.example.com" autocomplete="url" /></label>
+        <label>Email<input id="email" type="email" autocomplete="username" /></label>
+        <label>Password<input id="password" type="password" autocomplete="current-password" /></label>
+        <label>Extension access token (optional)<textarea id="access-token" rows="3" autocomplete="off" placeholder="Paste the token shown once on your Enough account page"></textarea></label>
+        <p class="fine-print">Use email and password or an extension access token. Tokens support accounts that sign in with a provider or magic link.</p>
+        <button id="connect-button" class="primary-button" type="submit">Grant API access and sign in</button>
+      </form>
+      <p id="settings-message" class="notice" role="status" hidden></p>
+      <p id="settings-error" class="error" role="alert" hidden></p>
+      <section class="account-card">
+        <p class="eyebrow">Privacy and access</p>
+        <ul>
+          <li>Policy and classification data are cached in extension storage for offline enforcement.</li>
+          <li>Visited domains are not uploaded unless you enable tracking in the popup.</li>
+          <li>When enabled, the extension stores only the hostname, mode, and policy action. It discards queued activity after seven days.</li>
+          <li>The API must allow this extension's exact origin in <code>AUTH_ALLOWED_ORIGINS</code>.</li>
+        </ul>
+      </section>
+      <footer><a href="https://developer.chrome.com/docs/extensions/" target="_blank" rel="noreferrer">Extension permissions and privacy</a></footer>
+    </main>
+    <script type="module" src="src/options.ts"></script>
+  </body>
+</html>

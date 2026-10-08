@@ -1,0 +1,2 @@
+# Allows the unprivileged release operator to restart only Enough application units.
+enough ALL=(root) NOPASSWD: /usr/bin/systemctl restart enough-api.service enough-web.service enough-worker.service

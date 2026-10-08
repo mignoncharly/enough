@@ -1,0 +1,23 @@
+[Unit]
+Description=Create and upload an encrypted Enough PostgreSQL backup
+After=network-online.target postgresql.service
+Wants=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=enough
+Group=enough
+WorkingDirectory=/home/enough/apps/enough/current
+Environment=NODE_ENV=production
+EnvironmentFile=/home/enough/apps/enough/shared/.env
+ExecStart=/usr/bin/bash /home/enough/apps/enough/current/scripts/backup.sh
+UMask=0077
+Nice=10
+IOSchedulingClass=best-effort
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true

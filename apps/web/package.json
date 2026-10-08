@@ -1,0 +1,26 @@
+{
+  "name": "@enough/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node --env-file-if-exists=../../.env scripts/run-next.mjs dev",
+    "build": "next build",
+    "start": "node --env-file-if-exists=../../.env scripts/run-next.mjs start",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@enough/cache": "workspace:*",
+    "@enough/config": "workspace:*",
+    "@enough/db": "workspace:*",
+    "@enough/shared": "workspace:*",
+    "next": "^16.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "typescript": "^5.9.2"
+  }
+}

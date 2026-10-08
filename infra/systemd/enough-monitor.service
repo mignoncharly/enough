@@ -1,0 +1,20 @@
+[Unit]
+Description=Check Enough service readiness
+After=enough-api.service enough-web.service enough-worker.service
+
+[Service]
+Type=oneshot
+User=enough
+Group=enough
+WorkingDirectory=/home/enough/apps/enough/current
+Environment=NODE_ENV=production
+Environment=VERIFY_ATTEMPTS=1
+EnvironmentFile=/home/enough/apps/enough/shared/.env
+ExecStart=/usr/bin/node --env-file-if-exists=/home/enough/apps/enough/shared/.env /home/enough/apps/enough/current/scripts/verify-services.mjs
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true

@@ -1,0 +1,36 @@
+# Implementation Status
+
+The canonical scope and phase acceptance criteria are in `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md`. Active remediation is tracked in [REMEDIATION_IMPLEMENTATION_PLAN.md](REMEDIATION_IMPLEMENTATION_PLAN.md), with the current execution state in [REMEDIATION_HANDOFF.md](REMEDIATION_HANDOFF.md).
+
+| Phase | Name | Status |
+| --- | --- | --- |
+| 0 | Product Contract and Scope Freeze | Complete: seven contract documents frozen under user-delegated engineering authority; decisions recorded in PHASE_0_REVIEW.md; implementation acceptance remains pending |
+| 1 | Repository and Core Foundation | Code complete; DB baseline applied; runtime acceptance blocked by sandbox package access (see handoff) |
+| 2 | Authentication, Users, Sessions, Devices | Code implemented; migration and runtime/provider/client acceptance pending (see handoff) |
+| 3 | Product Onboarding | Wizard and authenticated profile API implemented; Phase 4 now links profiles to canonical products; migration and runtime acceptance pending (see handoff) |
+| 4 | Product and Stage Engine | Product, stage-history, goals, metrics, stage guidance, API, and workspace dashboard implemented; migration and runtime acceptance pending (see handoff) |
+| 5 | Activity Event Platform | Idempotent single and batch ingestion, per-device ordering, future and over-seven-day timestamp correction, offline timestamps, hourly aggregates, and account export implemented; migration and runtime acceptance pending (see handoff) |
+| 6 | Tool Classification Engine | Default catalog, account/product mappings, context overrides, resolver, and workspace UI implemented; migration and runtime acceptance pending (see handoff) |
+| 7 | Rule Engine | Scoped, scheduled, versioned rules, temporary overrides, deterministic evaluator, API, and workspace UI implemented; shared evaluator unit/property tests pass; runtime acceptance pending (see handoff) |
+| 8 | Build Credit Engine | Global/product wallets, expiring lots, reservation and spend allocations, idempotent API, wallet UI, and account export implemented; migration, concurrency tests, and runtime acceptance pending (see handoff) |
+| 9 | Web Application | Shared workspace navigation and themes; Today, Activity, Growth, Tasks, Reports, Notifications, Devices, Settings, and future-phase placeholders implemented; responsive/accessibility/browser acceptance pending (see handoff) |
+| 10 | Browser Extension | Chromium/Firefox MV3 source, bearer auth, cached shared policy evaluation, dynamic domain blocking, focus page, Growth Mode, and opt-in tracking implemented; Chrome/Firefox bundles build; browser acceptance pending (see handoff) |
+| 11 | Desktop Agent | Electron tray app, encrypted cache, shared local policy evaluation, app/idle monitoring, focus reminder, emergency override, sync, and native-host source implemented; desktop bundle builds; platform, security, packaging, and runtime acceptance pending (see handoff) |
+| 12 | Growth Task Engine | Stage templates, custom and recurring tasks, signal strength, priority, estimates, due dates, workspace UI, API, and account export implemented; reward gating added in Phase 13; migration and runtime acceptance pending (see handoff) |
+| 13 | Evidence System | Private self-report, note, URL, upload, screenshot, and user-submitted integration-reference records; manual review and atomic verified-task rewards implemented; migration and runtime acceptance pending (see handoff) |
+| 14 | Integrations | Encrypted credential/event architecture, signed Generic webhook/Public Event API, normalized event ingestion, pending task evidence, and workspace controls implemented; vendor adapters, migration, and runtime acceptance pending (see handoff) |
+| 15 | AI Layer | Authenticated Coach API, seven advisory capabilities, optional strict-schema OpenAI Responses integration, local stage-guidance fallback, and user-reviewed task suggestions implemented; provider and runtime acceptance pending (see handoff) |
+| 16 | Reports | Daily report, weekly founder review, UTC Build/Grow and signal trends, credit ledger trend, anonymous linked event ratios, and stage progression implemented; database/browser/runtime acceptance pending (see handoff) |
+| 17 | Notifications | Persisted inbox, desktop alerts, opt-in email delivery, channel preferences, quiet hours, and per-channel pacing implemented; migration/browser/runtime acceptance pending (see handoff) |
+| 18 | Billing | Configurable Stripe Checkout and Customer Portal, subscription/trial/coupon/tax flow, webhook reconciliation, invoice history, grace periods, and centralized paid-feature entitlement state implemented; webhook signature and mocked route contract tests pass; Stripe configuration, feature mapping, migration, and runtime acceptance pending (see handoff) |
+| 19 | Privacy and Data Controls | Consent gates, retention preferences, activity/evidence deletion, export, and privacy dashboard implemented; migration and runtime acceptance pending (see handoff) |
+| 20 | Security Hardening | Desktop navigation/IPC restrictions, redirect rejection, OAuth callback limits, entitlement mapping, native messaging bounds, and route-limit review implemented; runtime acceptance pending (see handoff) |
+| 21 | Anti-Tamper and Edge Cases | Offline/stale policy handling, clock-change safeguards, bounded queues, duplicate and multi-device safeguards, native-agent heartbeat, revoke/fake-completion protections, and identity limitations reviewed; shared client helper tests pass, direct runtime acceptance pending (see handoff) |
+| 22 | Admin Console | Role-protected admin API and console for users, subscriptions, devices, integrations, failed jobs, templates, flags, AI usage, health, support actions, and audit history implemented; migration and runtime acceptance pending (see handoff) |
+| 23 | Quality Engineering | Partial: 65 unit/property/contract tests pass; extension and desktop bundles build; database, browser/Electron runtime, multi-device, load, and broad security acceptance remain pending (see handoff) |
+| 24 | Installers and Distribution | Partial: installer targets, updater configuration, release workflow, and extension store archives are in place; signed installers, store submissions, and install/update acceptance remain pending (see handoff) |
+| 25 | Production Infrastructure | Partial: Ubuntu setup, TLS reverse proxy, systemd, release/rollback, backup/restore, monitoring, and logging templates added; no configured host or reboot acceptance (see handoff) |
+| 26 | Production Verification | Partial: verification matrix documented; local service probes unavailable because no services or production host are configured |
+| 27 | Full Product Launch Gate | Partial: capability-by-capability launch assessment recorded NO-GO; required production and product acceptance remain outstanding |
+
+Update this tracker and `IMPLEMENTATION_HANDOFF.md` after every phase or meaningful interruption. A phase is complete only after its exit criteria are accepted.

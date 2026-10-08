@@ -1,0 +1,13 @@
+{
+  "name": "@enough/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "package:stores": "node scripts/package-stores.mjs"
+  },
+  "devDependencies": {
+    "vite": "7.3.6"
+  }
+}
