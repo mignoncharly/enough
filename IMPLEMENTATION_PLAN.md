@@ -5,8 +5,8 @@ The canonical scope and phase acceptance criteria are in `ENOUGH_COMPLETE_IMPLEM
 | Phase | Name | Status |
 | --- | --- | --- |
 | 0 | Product Contract and Scope Freeze | Complete: seven contract documents frozen under user-delegated engineering authority; decisions recorded in PHASE_0_REVIEW.md; implementation acceptance remains pending |
-| 1 | Repository and Core Foundation | Code complete; DB baseline applied; runtime acceptance blocked by sandbox package access (see handoff) |
-| 2 | Authentication, Users, Sessions, Devices | Code implemented; migration and runtime/provider/client acceptance pending (see handoff) |
+| 1 | Repository and Core Foundation | COMPLETE: verified revision `7e78c9d87ea993c7e95530b56dc5db9da1f8d4e7`; migration/runtime/tests/builds accepted; 124 non-blocking lint warnings and one informational diagnostic; launch remains NO-GO (PHASE_1_ACCEPTANCE.md) |
+| 2 | Authentication, Users, Sessions, Devices | PARTIAL: 68 default and 34 local integration tests pass; seven auth security defects fixed; real Google/GitHub logins and interactive client acceptance remain blocked. Phase 3 on hold (PHASE_2_ACCEPTANCE.md) |
 | 3 | Product Onboarding | Wizard and authenticated profile API implemented; Phase 4 now links profiles to canonical products; migration and runtime acceptance pending (see handoff) |
 | 4 | Product and Stage Engine | Product, stage-history, goals, metrics, stage guidance, API, and workspace dashboard implemented; migration and runtime acceptance pending (see handoff) |
 | 5 | Activity Event Platform | Idempotent single and batch ingestion, per-device ordering, future and over-seven-day timestamp correction, offline timestamps, hourly aggregates, and account export implemented; migration and runtime acceptance pending (see handoff) |

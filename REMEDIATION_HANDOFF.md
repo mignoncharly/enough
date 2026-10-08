@@ -11,11 +11,27 @@ Close the incomplete work from Phases 1–26 in dependency order, run the requir
 
 ## Current active work
 
-**Phase 0 complete; Phase 1 / Wave 0 environment acceptance is in progress and incomplete.** The user delegated routine engineering choices based on scaling, maintainability, security and compatibility. All seven contract documents are frozen; `PHASE_0_REVIEW.md` records decisions and tradeoffs. Establish the reproducible test environment and begin Phase 1 runtime acceptance.
+**Phase 0 and Phase 1 COMPLETE; Phase 2 authentication acceptance in progress.** Phase 1 accepted at verified source revision `7e78c9d87ea993c7e95530b56dc5db9da1f8d4e7`; main synchronized with origin/main and clean before documentation updates. Migrations/runtime/smoke checks, typecheck, 65 tests and client builds passed; lint has 124 non-blocking warnings and one informational diagnostic. Launch remains **NO-GO**. Do not reopen Phase 1 without a real regression or begin Phase 3 before Phase 2 is fully verified.
+
+Canonical repository: `C:\Enough`; Windows development, no Docker, no GitHub Actions, no production deployment. Preserve architecture and passing functionality. Phase 2 scope and exits are defined by `IMPLEMENTATION_PLAN.md` and `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md`.
 
 Routine engineering choices proceed autonomously under this authorization. Record decisions and validate them. Ask only for missing external/business/legal facts, credentials or actions outside existing authorization. No repeated architecture preference questionnaire is needed.
 
 ### Latest work and next step
+
+**Phase 2 PARTIAL — local server acceptance passed; provider and interactive client acceptance blocked.** Evidence and the exact acceptance matrix are in [PHASE_2_ACCEPTANCE.md](PHASE_2_ACCEPTANCE.md). Final verification on 2026-10-08: formatting, lint (124 warnings and one informational diagnostic), workspace typecheck, 68 default tests, 34 PostgreSQL/Redis/live-HTTP integration tests, Chrome/Firefox extension builds, desktop source build and migration checksum precheck all passed. The 34 integration tests are intentionally skipped by the default suite and were run separately with no skips.
+
+This continuation completed a failing regression for derived-session authentication freshness: an old passwordless session could issue a new token and delete the account without signing in again. Web/desktop/extension derived sessions now preserve the parent's original authentication timestamp. Three additional failing race tests demonstrated issuance after parent-session revocation, device revocation or rotation; session creation now revalidates and locks the parent within its transaction and returns 401 without creating a device. Earlier rotation, stale-password and cookie fixes are retained. Seven fixed defects and source SHA-256 fingerprints are recorded in the acceptance document.
+
+Changed Phase 2 files: `packages/auth/src/session.ts`, `packages/auth/src/routes.ts`, `packages/auth/src/auth.integration.test.ts`, `packages/auth/src/session.security.test.ts`, `apps/api/src/auth-http.integration.test.ts`, `scripts/phase2-auth-tests.mjs`, root test script, auth README, acceptance document, security status and trackers. Existing Phase 1 documentation edits were preserved. Working tree remains uncommitted on base `7e78c9d87ea993c7e95530b56dc5db9da1f8d4e7`; no commit/push, dependencies, migrations, client source, Docker, CI or production changes were made in this continuation.
+
+**Remaining High blockers:** both Google/GitHub credential pairs are absent from ignored `.env`; live provider flows remain unverified. User explicitly asked to retain these blockers and requires both successful real end-to-end logins before COMPLETE. No connected browser is available for interactive web/extension checks. Installed desktop authentication also remains unverified; Computer Use guidance prohibits automating user authentication dialogs. API contracts and builds do not satisfy interactive acceptance. Owner: developer for test execution; user for real provider setup and browser access. All blockers recorded 2026-10-08; launch remains NO-GO and Phase 3 is on hold.
+
+The isolated PostgreSQL fixture was restarted after the initial suite found it stopped. Redis 8.10.2 was already running in Ubuntu WSL and returned PONG. API 4400 and web 3301 were restarted against `.runtime/phase1/fixture.env`; API was restarted again after the final source fix. PostgreSQL 55432, Redis 56379, API and web were left running; check readiness before reuse. Worker was not required or restarted. An intermediate expanded deletion regression exceeded the real rate limit; independent synthetic accounts corrected the test without changing security limits. Final 34-test run passed in 32.16 seconds.
+
+**Next safe command:** `pnpm test:auth:integration` after confirming fixture API/web readiness; startup commands are in `PHASE_1_ACCEPTANCE.md`. The next acceptance work is interactive web/client testing when a supported surface is available, then both real OAuth flows when the user adds real credentials only to `C:\Enough\.env`. The exact four variable names, callbacks, local base URLs, and source read locations are in `PHASE_2_ACCEPTANCE.md`. Fixture tests intentionally keep providers disabled; the real app enables each provider when its complete real pair is configured. Do not store credentials in evidence, fixtures, source, examples or logs, and do not claim the local runner verifies live providers.
+
+The following resume history is superseded by Phase 1 COMPLETE above:
 
 **2026-10-08 update (supersedes the older environment bullets below):** Approved execution resolved the sandbox startup/package failures. PostgreSQL 18 fixture at `127.0.0.1:55432/enough_phase1` and Redis 8.10.2 in Ubuntu WSL at port 56379 are working. All 15 migrations applied to the isolated database, checksum precheck passed, and rerun was a no-op. Web/API/worker health and readiness all returned 200 with healthy dependencies. A database transaction/least-privilege check and BullMQ worker round trip passed using `apps/api/src/phase1-smoke.ts`. The original application database was not touched.
 
@@ -36,7 +52,7 @@ The following bullets are the prior 2026-10-07 record, retained for context:
 - Next safe action once runtime is available: `node scripts/phase1-postgres.mjs start`; then establish supported Redis, restore stable package access and rerun the baseline checks. Apply migrations only after verifying the isolated database URL. Remain in Phase 1 until provenance, migrations and service readiness are accepted.
 - Phase 0 contract decisions remain recorded in `PHASE_0_REVIEW.md`; subsequent scope is unchanged by this evidence update.
 
-### Known environment state
+### Historical environment state (superseded by current active work)
 
 - `C:\Enough` is not a Git repository and has no recorded canonical remote. No approved commit/ref can be deployed from this workspace yet.
 - This workspace is Windows. A read-only probe on 2026-10-07 found ports 80, 443, 3000, 3001, 4000, 4001, 5433, and 6379 closed; web/API/worker readiness requests were unavailable.
@@ -46,7 +62,7 @@ The following bullets are the prior 2026-10-07 record, retained for context:
 - Extension store archives were generated. Signed desktop installers, store publication, end-user install/update acceptance, provider credentials, Stripe pricing, production email, backup keys/remotes, and external alerting are not configured.
 - Gmail, Outlook, Google Calendar, and Microsoft Calendar vendor adapters are not implemented. The Generic webhook/Public Event API authenticates an owner-controlled source and is not vendor verification.
 
-## First execution sequence
+## Historical initial execution sequence (Phase 1 complete; do not restart this sequence)
 
 1. Confirm the authoritative source location and create/use a clean Git checkout. Do not invent a remote or deploy ref. Preserve the current workspace as a source snapshot until the authoritative checkout is confirmed.
 2. Use a supported Node/pnpm environment with readable workspace package links. Record `node --version`, `pnpm --version`, OS, commit, and whether the working tree is clean. Stop if package reads still produce `EPERM`; do not delete package stores or reset databases to work around it.
@@ -99,8 +115,8 @@ The detailed phase-by-phase items and acceptance conditions are in [REMEDIATION_
 | Create current remediation handoff | Complete | This file |
 | Prepare Phase 0 contract documents | Complete | Seven contract documents and `PHASE_0_REVIEW.md`; source comparison complete |
 | Agree and freeze Phase 0 contract | Complete | User delegated decisions; `PHASE_0_REVIEW.md` records agreed targets and future implementation checks |
-| Establish canonical Git checkout and supported test environment | In progress / blocked by environment | Versions/install recorded; package access remains intermittent, canonical source unknown; see `PHASE_1_ACCEPTANCE.md` |
-| Apply/verify migrations and complete Phase 1 runtime acceptance | Incomplete | Isolated PG cluster initialized but cannot start; supported Redis unavailable; no migrations/readiness acceptance |
+| Establish canonical Git checkout and supported test environment | Complete | Verified `7e78c9d87ea993c7e95530b56dc5db9da1f8d4e7`; canonical Windows checkout, synchronized main, clean at acceptance |
+| Apply/verify migrations and complete Phase 1 runtime acceptance | Complete | All 15 fixture migrations/checksums, services, database/queue, tests and builds accepted; `PHASE_1_ACCEPTANCE.md` |
 | Complete Phases 2–22 runtime/security acceptance | Pending | Follow phase checklists and retain evidence |
 | Complete Phase 23–26 quality, release, production, and integration acceptance | Pending | Requires CI signing, provider sandboxes, and a configured Ubuntu host |
 | Repeat Phase 27 launch gate | Pending | Current decision remains NO-GO |

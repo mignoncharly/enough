@@ -50,21 +50,24 @@ Dependencies run forward: do not test later phases against an unapplied or unver
 
 **Critical**
 
-- [ ] Establish the canonical Git checkout/remote and a clean working tree. The current workspace has no Git repository, so release refs and source provenance cannot be verified.
-- [ ] Resolve the package-store permission failures that blocked `pg`, TypeScript, and `dotenv` reads. Confirm Node.js and pnpm versions and frozen-lockfile installation in a supported development environment.
-- [ ] Start PostgreSQL, Redis, web, API, and worker in an isolated development environment. Apply/verify the baseline migration and confirm every health/readiness endpoint.
-- [ ] Keep ports and credentials isolated from any pre-existing services; record the chosen test ports and database names.
+- [x] Canonical repository `C:\Enough`, verified commit `7e78c9d87ea993c7e95530b56dc5db9da1f8d4e7`; main synchronized with origin/main and clean at acceptance. Initial snapshot pushed.
+- [x] Approved execution resolved package access; Node/pnpm versions and frozen installation accepted.
+- [x] Isolated PostgreSQL, Redis, web, API and worker passed migrations, checksum/idempotent rerun, health/readiness, database and queue smoke checks.
+- [x] Isolated ports and credentials recorded in `PHASE_1_ACCEPTANCE.md`. **Phase 1 COMPLETE**; formatting/typecheck/65 tests/client builds passed; lint has 124 non-blocking warnings and one informational diagnostic; launch remains **NO-GO**.
 
 ### Phase 2 — Authentication, Users, Sessions, Devices
 
 **Critical**
 
-- [ ] Apply migration `0002_authentication.sql` through the migration runner.
-- [ ] Exercise signup, verification, password login/reset, magic link, logout, session rotation, export, and deletion; verify one-use tokens, expiry, replay rejection, and session/device revocation.
+- [x] Apply migration `0002_authentication.sql` through the migration runner; accepted in Phase 1, checksum precheck reconfirmed 2026-10-08.
+- [x] Exercise signup, verification, password login/reset, magic link, logout, session rotation, export, and deletion; verify one-use tokens, expiry, replay rejection, and session/device revocation at database/API level. 34 integration checks pass; interactive acceptance is tracked separately below.
 - [ ] Verify Google and GitHub OAuth state/PKCE, verified email, callback, and session exchange with provider test credentials.
-- [ ] Verify Resend delivery or the explicitly enabled local link preview; ensure production disables preview.
-- [ ] Exercise extension bearer login and revocation; later repeat with the desktop client.
-- [ ] Review auth behavior and run requested lint, typecheck, unit, and integration checks.
+- [x] Verify the explicitly enabled local link preview; ensure production disables preview. Real Resend delivery is not claimed.
+- [x] Exercise extension and desktop bearer login/revocation at real HTTP/API-contract level.
+- [ ] Complete interactive web and installed extension/desktop authentication and revocation; no connected browser is available, and Windows Computer Use disallows authentication-dialog automation.
+- [x] Review auth behavior and run requested formatting, lint, typecheck, unit, integration and client-build checks. 68 default tests and 34 integration tests passed; seven defects fixed, including derived-session freshness and revocation races. Evidence: `PHASE_2_ACCEPTANCE.md`.
+
+**Phase 2 remains PARTIAL; Phase 3 is on hold.** Both real Google and GitHub end-to-end logins remain mandatory. Credentials may later be added only to gitignored `C:\Enough\.env`; exact variable names, callbacks, base URLs and code read locations are in `PHASE_2_ACCEPTANCE.md`. Providers are not permanently disabled.
 
 ### Phase 3 — Product Onboarding
 

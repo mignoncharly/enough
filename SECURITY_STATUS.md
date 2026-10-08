@@ -1,8 +1,10 @@
 # Security Status
 
-Last updated: 2026-10-07
+Last updated: 2026-10-08
 
 ## Current status
+
+Phase 1 is COMPLETE at verified revision `7e78c9d87ea993c7e95530b56dc5db9da1f8d4e7`; launch remains NO-GO. Phase 2 local verification demonstrated and fixed concurrent rotation, rotation/derived-session deletion reauthentication bypasses, stale-password login/change races, duplicated cookie headers and derived-session issuance after parent revocation/rotation. Parent-session issuance now revalidates the credential under a database lock and inherits the original authentication time. Final 68 default tests and 34 separate PostgreSQL/Redis/live-HTTP integration checks passed, along with formatting, lint, typecheck and both client builds. Production cookie/configuration contracts are tested without deployment. Both real Google/GitHub end-to-end logins remain mandatory blockers pending real credentials only in ignored `.env`; provider implementation remains intact. Interactive browser/installed-client acceptance also remains pending. Phase 2 is PARTIAL and Phase 3 on hold. Current evidence and exact OAuth setup/read locations are in `PHASE_2_ACCEPTANCE.md`; historical statements below do not supersede it.
 
 Phase 14 adds hashed API keys, encrypted signing secrets/tokens, exact-raw-body HMAC verification, five-minute timestamp checks, stable event-ID idempotency, rate limits, soft revocation, normalized event storage, and exportable event records. A valid signature authenticates the workspace-controlled source only. Linked task evidence is pending owner review and does not issue credits at receipt. The Phase 13 manually submitted integration-reference type remains user-submitted; provider-specific OAuth and vendor signature adapters are still planned.
 

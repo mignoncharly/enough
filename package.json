@@ -30,7 +30,8 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "typecheck": "pnpm --recursive --if-present typecheck",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:auth:integration": "node scripts/phase2-auth-tests.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.4",

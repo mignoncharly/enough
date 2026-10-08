@@ -1,8 +1,14 @@
 # Phase 1 — Foundation Acceptance
 
+Status: **COMPLETE** (accepted 2026-10-08). Canonical repository: `C:\Enough`.
+Verified source revision: `7e78c9d87ea993c7e95530b56dc5db9da1f8d4e7`.
+`main` is synchronized with `origin/main`; the working tree was clean before these documentation updates. The initial source snapshot was pushed successfully.
+Migration/checksum/idempotent rerun, all service health/readiness endpoints, database/queue smoke checks, frozen install, formatting, typecheck, 65 tests, Chrome/Firefox builds and desktop source build passed. Lint passed with **124 non-blocking warnings and one informational diagnostic**. Product launch remains **NO-GO**.
+Phase 1 is closed; reopen it only for a demonstrated regression. Active work is Phase 2; no Docker, GitHub Actions or production deployment is authorized.
+
 ## Resume evidence — 2026-10-08
 
-The checks below supersede the historical environment failures recorded later in this document. Phase 1 remains **incomplete because there is no identifiable source revision**; launch remains **NO-GO**.
+The checks below supersede the historical environment failures recorded later in this document. Source provenance is now accepted at the exact revision above; Phase 1 is **COMPLETE** and launch remains **NO-GO**. Earlier provenance notes below are historical.
 
 - The workspace now has a Git repository on unborn `main` with `origin` set to `https://github.com/mignoncharly/enough.git`. An approved `git ls-remote origin HEAD` exited 0 with no refs. No commit was created or pushed.
 - Approved execution outside the sandbox resolved package reads and PostgreSQL restricted-token startup. Node v24.19.0 and pnpm 11.20.0 remain in use. Ubuntu WSL is accessible and provides Redis 8.10.2.

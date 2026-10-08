@@ -21,6 +21,7 @@ import {
   clearSessionCookies,
   createSession,
   issuePreAuthCsrf,
+  SessionCredentialsChangedError,
   sessionPayload,
   setSessionCookies,
   toPublicUser,
@@ -354,12 +355,21 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     if (!user.email_verified_at)
       return reply.code(403).send({ error: "Verify your email address before signing in." });
 
-    const issue = await createSession(
-      user.id,
-      body.clientType,
-      body.deviceName ?? (body.clientType === "web" ? "Web browser" : `${body.clientType} device`),
-      "password",
-    );
+    let issue: Awaited<ReturnType<typeof createSession>>;
+    try {
+      issue = await createSession(
+        user.id,
+        body.clientType,
+        body.deviceName ??
+          (body.clientType === "web" ? "Web browser" : `${body.clientType} device`),
+        "password",
+        user.password_hash ?? "",
+      );
+    } catch (error) {
+      if (error instanceof SessionCredentialsChangedError)
+        return reply.code(401).send({ error: "Email or password is incorrect." });
+      throw error;
+    }
     setSessionCookies(reply, issue);
     return reply.send({
       user: toPublicUser({
@@ -575,10 +585,17 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     try {
       await client.query("BEGIN");
       const updated = await client.query(
-        `UPDATE enough.auth_sessions
-         SET token_hash = $2, csrf_token_hash = $3, created_at = now(), expires_at = $4, last_seen_at = now()
-         WHERE id = $1 AND revoked_at IS NULL`,
-        [session.sessionId, hashToken(token), csrfToken ? hashToken(csrfToken) : null, expiresAt],
+        `UPDATE enough.auth_sessions AS s
+         SET token_hash = $2, csrf_token_hash = $3, expires_at = $4, last_seen_at = now()
+         WHERE id = $1 AND revoked_at IS NULL AND token_hash = $5 AND expires_at > now()
+           AND EXISTS (SELECT 1 FROM enough.auth_devices d WHERE d.id = s.device_id AND d.revoked_at IS NULL)`,
+        [
+          session.sessionId,
+          hashToken(token),
+          csrfToken ? hashToken(csrfToken) : null,
+          expiresAt,
+          session.tokenHash,
+        ],
       );
       if (!updated.rowCount) {
         await client.query("ROLLBACK");
@@ -658,12 +675,21 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) return invalidRequest(reply);
     if (session.credentialType === "bearer" && parsed.data.clientType === "web")
       return invalidRequest(reply);
-    const issue = await createSession(
-      session.id,
-      parsed.data.clientType,
-      parsed.data.deviceName,
-      session.authMethod,
-    );
+    let issue: Awaited<ReturnType<typeof createSession>>;
+    try {
+      issue = await createSession(
+        session.id,
+        parsed.data.clientType,
+        parsed.data.deviceName,
+        session.authMethod,
+        undefined,
+        session,
+      );
+    } catch (error) {
+      if (error instanceof SessionCredentialsChangedError)
+        return reply.code(401).send({ error: "Sign in again before creating a session." });
+      throw error;
+    }
     setSessionCookies(reply, issue);
     return reply.code(201).send(sessionPayload(issue));
   });
@@ -799,10 +825,16 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      await client.query(
-        "UPDATE enough.auth_users SET password_hash = $2, updated_at = now() WHERE id = $1",
-        [session.id, passwordHash],
+      const changed = await client.query(
+        "UPDATE enough.auth_users SET password_hash = $2, updated_at = now() WHERE id = $1 AND password_hash = $3",
+        [session.id, passwordHash, oldHash],
       );
+      if (!changed.rowCount) {
+        await client.query("ROLLBACK");
+        return reply
+          .code(400)
+          .send({ error: "Your password changed. Sign in again before changing it." });
+      }
       await client.query(
         "UPDATE enough.auth_sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL",
         [session.id],

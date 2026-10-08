@@ -23,6 +23,7 @@ export interface AuthSession extends AuthUser {
   sessionCreatedAt: Date;
   sessionExpiresAt: Date;
   csrfTokenHash: Buffer | null;
+  tokenHash: Buffer;
 }
 
 export interface SessionIssue {
@@ -32,6 +33,13 @@ export interface SessionIssue {
   csrfToken: string | null;
   expiresAt: Date;
   credentialType: "cookie" | "bearer";
+}
+
+export class SessionCredentialsChangedError extends Error {
+  constructor() {
+    super("Account credentials changed before session issuance.");
+    this.name = "SessionCredentialsChangedError";
+  }
 }
 
 export const sessionCookieName =
@@ -53,9 +61,8 @@ function cookieHeader(name: string, value: string, maxAge: number, httpOnly: boo
 }
 
 function appendCookie(reply: FastifyReply, value: string): void {
-  const current = reply.getHeader("set-cookie");
-  const existing = Array.isArray(current) ? current.map(String) : current ? [String(current)] : [];
-  reply.header("set-cookie", [...existing, value]);
+  // Fastify appends Set-Cookie values itself; repeating the existing array duplicates cookies.
+  reply.header("set-cookie", value);
 }
 
 function readCookie(request: FastifyRequest, name: string): string | null {
@@ -117,6 +124,8 @@ export async function createSession(
   clientType: ClientType,
   deviceName: string,
   authMethod: AuthMethod,
+  expectedPasswordHash?: string,
+  sourceSession?: Pick<AuthSession, "sessionId" | "tokenHash">,
 ): Promise<SessionIssue> {
   const sessionId = randomUUID();
   const deviceId = randomUUID();
@@ -128,7 +137,35 @@ export async function createSession(
 
   try {
     await client.query("BEGIN");
-    await client.query("SELECT id FROM enough.auth_users WHERE id = $1 FOR UPDATE", [userId]);
+    const account = await client.query<{
+      password_hash: string | null;
+      email_verified_at: Date | null;
+    }>("SELECT password_hash, email_verified_at FROM enough.auth_users WHERE id = $1 FOR UPDATE", [
+      userId,
+    ]);
+    const user = account.rows[0];
+    if (
+      !user?.email_verified_at ||
+      (expectedPasswordHash !== undefined && user.password_hash !== expectedPasswordHash)
+    ) {
+      throw new SessionCredentialsChangedError();
+    }
+    let authenticatedAt: Date | null = null;
+    if (sourceSession) {
+      // Recheck the credential after taking the account lock: it may have been
+      // revoked or rotated while this request was waiting to issue a session.
+      const source = await client.query<{ created_at: Date }>(
+        `SELECT s.created_at FROM enough.auth_sessions s
+         JOIN enough.auth_devices d ON d.id = s.device_id
+         WHERE s.id = $1 AND s.user_id = $2 AND s.token_hash = $3
+           AND s.revoked_at IS NULL AND s.expires_at > clock_timestamp()
+           AND d.revoked_at IS NULL
+         FOR UPDATE OF s`,
+        [sourceSession.sessionId, userId, sourceSession.tokenHash],
+      );
+      if (!source.rows[0]) throw new SessionCredentialsChangedError();
+      authenticatedAt = source.rows[0].created_at;
+    }
     await client.query(
       `INSERT INTO enough.auth_devices (id, user_id, name, client_type)
        VALUES ($1, $2, $3, $4)`,
@@ -136,8 +173,8 @@ export async function createSession(
     );
     await client.query(
       `INSERT INTO enough.auth_sessions
-         (id, user_id, device_id, token_hash, csrf_token_hash, credential_type, auth_method, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+         (id, user_id, device_id, token_hash, csrf_token_hash, credential_type, auth_method, expires_at, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::timestamptz, now()))`,
       [
         sessionId,
         userId,
@@ -147,6 +184,8 @@ export async function createSession(
         credentialType,
         authMethod,
         expiresAt,
+        // Derived sessions inherit authentication freshness; issuance is not a new sign-in.
+        authenticatedAt,
       ],
     );
     await client.query(
@@ -237,6 +276,7 @@ export async function authenticate(request: FastifyRequest): Promise<AuthSession
     sessionCreatedAt: row.session_created_at,
     sessionExpiresAt: row.session_expires_at,
     csrfTokenHash: row.csrf_token_hash,
+    tokenHash: hashToken(token),
     id: row.id,
     email: row.email,
     displayName: row.display_name,
