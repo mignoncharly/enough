@@ -32,7 +32,9 @@
     "typecheck": "pnpm --recursive --if-present typecheck",
     "test": "vitest run",
     "test:auth:integration": "node scripts/phase2-runtime.mjs test",
-    "test:auth:serve": "node scripts/phase2-runtime.mjs serve"
+    "test:auth:serve": "node scripts/phase2-runtime.mjs serve",
+    "test:onboarding:integration": "node scripts/phase2-runtime.mjs test --phase3",
+    "test:onboarding:serve": "node scripts/phase2-runtime.mjs serve --phase3"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.4",

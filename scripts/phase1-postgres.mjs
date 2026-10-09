@@ -1,21 +1,23 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Dedicated local fixture. Never reads .env or targets the application's existing database.
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const phase2 = process.argv.includes("--phase2");
-const phase = phase2 ? "phase2" : "phase1";
-const fixture = join(root, ".runtime", phase);
+const phase3 = process.argv.includes("--phase3");
+const phase = phase3 ? "phase3" : phase2 ? "phase2" : "phase1";
+const fixture = phase3 ? join(tmpdir(), "enough-phase3") : join(root, ".runtime", phase);
 const data = join(fixture, "pgdata");
-const port = phase2 ? "55433" : "55432";
+const port = phase3 ? "55434" : phase2 ? "55433" : "55432";
 const admin = `enough_${phase}_admin`;
 const database = `enough_${phase}`;
-const redisPort = phase2 ? "56381" : "56379";
-const webPort = phase2 ? "3302" : "3301";
-const apiPort = phase2 ? "4402" : "4400";
+const redisPort = phase3 ? "56383" : phase2 ? "56381" : "56379";
+const webPort = phase3 ? "3303" : phase2 ? "3302" : "3301";
+const apiPort = phase3 ? "4404" : phase2 ? "4402" : "4400";
 const credentialPath = join(fixture, "credentials.json");
 const action = process.argv[2] ?? "start";
 if (!["start", "stop", "status"].includes(action)) throw new Error("Use start, stop or status.");
@@ -121,7 +123,7 @@ if (action !== "start") {
       `REDIS_URL=redis://127.0.0.1:${redisPort}/0`,
       `WEB_PORT=${webPort}`,
       `API_PORT=${apiPort}`,
-      `WORKER_PORT=${phase2 ? "4403" : "4401"}`,
+      `WORKER_PORT=${phase3 ? "4405" : phase2 ? "4403" : "4401"}`,
       `APP_BASE_URL=http://127.0.0.1:${webPort}`,
       `API_BASE_URL=http://127.0.0.1:${apiPort}`,
       `AUTH_SECRET=${credentials.auth}`,
@@ -143,7 +145,7 @@ if (action !== "start") {
     { mode: 0o600 },
   );
   console.info(
-    `Isolated PostgreSQL ready on 127.0.0.1:${port}; database ${database}. Credentials remain in ignored .runtime/${phase}.`,
+    `Isolated PostgreSQL ready on 127.0.0.1:${port}; database ${database}. Credentials remain in the private fixture directory.`,
   );
   console.info(
     `Redis must be provisioned separately using a supported version on port ${redisPort}. No migrations have been run.`,

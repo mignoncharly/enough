@@ -37,6 +37,7 @@ const onboardingSchema = z
   });
 
 interface OnboardingRow {
+  product_id: string | null;
   product_description: string;
   target_customer: string;
   problem_statement: string;
@@ -55,6 +56,7 @@ interface OnboardingRow {
 function profileResponse(row: OnboardingRow) {
   return {
     completed: true,
+    productId: row.product_id,
     completedAt: row.completed_at.toISOString(),
     answers: {
       productDescription: row.product_description,
@@ -115,7 +117,13 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
       return reply.send(
         row
           ? profileResponse(row)
-          : { completed: false, completedAt: null, answers: null, recommendation: null },
+          : {
+              completed: false,
+              productId: null,
+              completedAt: null,
+              answers: null,
+              recommendation: null,
+            },
       );
     } catch (error) {
       request.log.error({ err: error }, "Could not load onboarding profile");
@@ -137,7 +145,7 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
     }
     const answers = parsed.data;
     const hasLaunched = answers.hasLaunched || isLaunchedProductStage(answers.productStage);
-    const recommendation = initialRecommendation(answers);
+    const recommendation = initialRecommendation({ ...answers, hasLaunched });
     const client = await pool.connect();
     try {
       await client.query("BEGIN");

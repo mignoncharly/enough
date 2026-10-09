@@ -13,6 +13,7 @@ import {
 } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
@@ -20,10 +21,17 @@ import { parseEnv } from "node:util";
 
 // Fixed, separately owned targets. Never loads the root .env or resets another service.
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const fixture = join(root, ".runtime", "phase2");
+const phase3 = process.argv.includes("--phase3");
+const fixture = phase3 ? join(tmpdir(), "enough-phase3") : join(root, ".runtime", "phase2");
+const pgPort = phase3 ? 55434 : 55433;
+const redisPort = phase3 ? 56383 : 56381;
+const wslRedisPort = phase3 ? "56384" : "56382";
+const apiPort = phase3 ? 4404 : 4402;
+const webPort = phase3 ? 3303 : 3302;
+const phaseFlag = phase3 ? "--phase3" : "--phase2";
 const mode = process.argv[2] ?? "test";
 assert.ok(["test", "serve", "prepare"].includes(mode), "Use test, serve or prepare.");
-const extensionOrigins = process.argv[3] ?? "";
+const extensionOrigins = phase3 ? "" : (process.argv[3] ?? "");
 assert.ok(
   extensionOrigins
     .split(",")
@@ -100,7 +108,7 @@ async function cleanup() {
           "-h",
           "127.0.0.1",
           "-p",
-          "56382",
+          wslRedisPort,
           "shutdown",
           "nosave",
         ],
@@ -111,7 +119,7 @@ async function cleanup() {
   if (postgresStarted) {
     execFileSync(
       process.execPath,
-      [join(root, "scripts", "phase1-postgres.mjs"), "stop", "--phase2"],
+      [join(root, "scripts", "phase1-postgres.mjs"), "stop", phaseFlag],
       { windowsHide: true, stdio: "inherit" },
     );
   }
@@ -122,7 +130,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 
 try {
   // Refuse occupied ports, including a previously started fixture; never take it over.
-  for (const port of [55433, 56381, 4402, 3302]) await freePort(port);
+  for (const port of [pgPort, redisPort, apiPort, webPort]) await freePort(port);
   // Check Redis's WSL network namespace as well as the Windows listener.
   execFileSync(
     "wsl",
@@ -132,12 +140,12 @@ try {
       "--exec",
       "python3",
       "-c",
-      "import socket; s=socket.socket(); s.bind(('127.0.0.1',56382)); s.close()",
+      `import socket; s=socket.socket(); s.bind(('127.0.0.1',${wslRedisPort})); s.close()`,
     ],
     { windowsHide: true, stdio: "pipe" },
   );
   await mkdir(fixture, { recursive: true });
-  await runNode(["scripts/phase1-postgres.mjs", "start", "--phase2"]);
+  await runNode(["scripts/phase1-postgres.mjs", "start", phaseFlag]);
   postgresStarted = true;
   const environment = {
     ...process.env,
@@ -147,11 +155,15 @@ try {
   environment.NEXT_TELEMETRY_DISABLED = "1";
   environment.CI = "1";
   environment.AUTH_ALLOWED_ORIGINS = extensionOrigins;
-  environment.ENOUGH_PHASE2_INTEGRATION = "1";
+  environment.ENOUGH_PHASE2_INTEGRATION = phase3 ? "0" : "1";
+  environment.ENOUGH_PHASE3_INTEGRATION = phase3 ? "1" : "0";
   // The generated fixture explicitly blanks all provider credentials; no root env file is loaded.
-  assert.equal(new URL(environment.DATABASE_URL).pathname, "/enough_phase2");
-  assert.equal(new URL(environment.DATABASE_URL).port, "55433");
-  assert.equal(environment.REDIS_URL, "redis://127.0.0.1:56381/0");
+  assert.equal(
+    new URL(environment.DATABASE_URL).pathname,
+    phase3 ? "/enough_phase3" : "/enough_phase2",
+  );
+  assert.equal(new URL(environment.DATABASE_URL).port, String(pgPort));
+  assert.equal(environment.REDIS_URL, `redis://127.0.0.1:${redisPort}/0`);
   const redis = launch("wsl", [
     "-d",
     "Ubuntu",
@@ -160,7 +172,7 @@ try {
     "--bind",
     "127.0.0.1",
     "--port",
-    "56382",
+    wslRedisPort,
     "--save",
     "",
     "--appendonly",
@@ -173,7 +185,7 @@ try {
   for (let attempt = 0; attempt < 30; attempt += 1) {
     try {
       pong =
-        execFileSync("wsl", ["-d", "Ubuntu", "--exec", "redis-cli", "-p", "56382", "ping"], {
+        execFileSync("wsl", ["-d", "Ubuntu", "--exec", "redis-cli", "-p", wslRedisPort, "ping"], {
           windowsHide: true,
           encoding: "utf8",
           stdio: ["ignore", "pipe", "ignore"],
@@ -198,7 +210,7 @@ try {
         "-c",
         [
           "import socket,sys,threading",
-          "s=socket.create_connection(('127.0.0.1',56382))",
+          `s=socket.create_connection(('127.0.0.1',${wslRedisPort}))`,
           "def send():",
           " try:",
           "  while data:=sys.stdin.buffer.read1(65536): s.sendall(data)",
@@ -217,11 +229,11 @@ try {
     socket.on("close", () => relay.kill());
     relay.on("exit", () => socket.destroy());
   });
-  redisBridge.listen(56381, "127.0.0.1");
+  redisBridge.listen(redisPort, "127.0.0.1");
   await once(redisBridge, "listening");
   const expectedInfo = execFileSync(
     "wsl",
-    ["-d", "Ubuntu", "--exec", "redis-cli", "-p", "56382", "info", "server"],
+    ["-d", "Ubuntu", "--exec", "redis-cli", "-p", wslRedisPort, "info", "server"],
     { windowsHide: true, encoding: "utf8" },
   );
   const Redis = createRequire(join(root, "packages/cache/package.json"))("ioredis");
@@ -250,13 +262,17 @@ try {
       env: environment,
     });
   }
-  // Copy only tracked web sources. Its .next, generated tsconfig and caches stay in .runtime.
+  // Copy web sources; builds and generated configuration stay inside the fixture.
   const webRoot = join(fixture, "web");
-  const paths = execFileSync("git", ["ls-files", "-z", "apps/web"], {
-    cwd: root,
-    encoding: "utf8",
-    windowsHide: true,
-  })
+  const paths = execFileSync(
+    "git",
+    ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "apps/web"],
+    {
+      cwd: root,
+      encoding: "utf8",
+      windowsHide: true,
+    },
+  )
     .split("\0")
     .filter(Boolean);
   for (const path of paths) {
@@ -295,27 +311,46 @@ try {
       "--hostname",
       "127.0.0.1",
       "--port",
-      "3302",
+      String(webPort),
     ],
     { cwd: webRoot, env: environment },
   );
-  await ready("http://127.0.0.1:4402/ready", api);
-  await ready("http://127.0.0.1:3302/api/ready", web);
-  console.info(
-    "Phase 2 isolated API/web ready at 4402/3302; existing 4400/3301 runtime untouched.",
-  );
+  await ready(`http://127.0.0.1:${apiPort}/ready`, api);
+  await ready(`http://127.0.0.1:${webPort}/api/ready`, web);
+  console.info(`Isolated API/web ready at ${apiPort}/${webPort}; other runtimes untouched.`);
   if (mode === "test") {
-    await runNode(["scripts/phase2-auth-tests.mjs"], { env: environment });
+    await runNode(
+      phase3
+        ? [
+            join(root, "node_modules", "vitest", "vitest.mjs"),
+            "run",
+            "apps/api/src/onboarding.integration.test.ts",
+            "--hookTimeout=60000",
+            "--testTimeout=60000",
+            "--maxWorkers=1",
+          ]
+        : ["scripts/phase2-auth-tests.mjs"],
+      { env: environment },
+    );
   } else {
-    await runNode(["--import", "tsx", join(root, "scripts", "phase2-manual-account.mjs")], {
-      cwd: join(root, "apps", "api"),
-      env: environment,
-    });
+    await runNode(
+      [
+        "--import",
+        "tsx",
+        join(root, "scripts", phase3 ? "phase3-manual-account.mjs" : "phase2-manual-account.mjs"),
+      ],
+      {
+        cwd: join(root, "apps", "api"),
+        env: environment,
+      },
+    );
     if (mode === "prepare") {
       console.info("Manual fixture preparation verified; stopping fixture services.");
     } else {
       console.info(
-        "Fixture serving. Ctrl+C stops only this fixture; data stays in ignored .runtime/phase2.",
+        phase3
+          ? "Fixture serving. Ctrl+C stops this fixture; data stays in TEMP/enough-phase3."
+          : "Fixture serving. Ctrl+C stops only this fixture; data stays in ignored .runtime/phase2.",
       );
       await Promise.race([once(api, "exit"), once(web, "exit"), once(redis, "exit")]);
       throw new Error("A fixture service exited.");

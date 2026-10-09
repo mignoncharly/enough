@@ -5,8 +5,10 @@ import {
   changeProductStage,
   createProduct,
   createProductGoal,
+  loadOnboarding,
   loadProduct,
   loadProducts,
+  type OnboardingResult,
   type ProductDetail,
   type ProductGoal,
   type ProductStage,
@@ -39,6 +41,7 @@ export default function DashboardPage() {
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [detail, setDetail] = useState<ProductDetail | null>(null);
+  const [onboarding, setOnboarding] = useState<OnboardingResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -49,9 +52,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let active = true;
-    void loadProducts()
-      .then((items) => {
+    void Promise.all([loadProducts(), loadOnboarding()])
+      .then(([items, profile]) => {
         if (!active) return;
+        setOnboarding(profile);
         setProducts(items);
         if (items.length === 0) {
           setShowCreate(true);
@@ -119,11 +123,13 @@ export default function DashboardPage() {
   }, [selectedId]);
 
   async function refreshWorkspace(productId = selectedId) {
-    const [items, loaded] = await Promise.all([
+    const [items, loaded, profile] = await Promise.all([
       loadProducts(),
       productId ? loadProduct(productId) : Promise.resolve(null),
+      loadOnboarding(),
     ]);
     setProducts(items);
+    setOnboarding(profile);
     if (loaded) setDetail(loaded);
   }
 
@@ -375,6 +381,13 @@ export default function DashboardPage() {
                 <p className="eyebrow">{product.productStageLabel} · Recommended focus</p>
                 <h2>{guidance.headline}</h2>
               </div>
+              {onboarding?.productId === product.id && onboarding.recommendation ? (
+                <section>
+                  <h3>Recommended next action</h3>
+                  <p>{onboarding.recommendation.firstAction}</p>
+                  <a href="/onboarding">Edit onboarding answers</a>
+                </section>
+              ) : null}
               <div className="ratio-block">
                 <div className="ratio-labels">
                   <span>

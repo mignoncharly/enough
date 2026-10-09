@@ -1,6 +1,6 @@
 # Remediation Implementation Plan
 
-Last consolidated: 2026-10-09 (Phase 2 scope update)
+Last consolidated: 2026-10-09 (Phase 2 checkpoint accepted; Phase 3 COMPLETE, checkpoint approval pending)
 Source of truth for implementation order: this file. The historical scope remains in `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md`; historical implementation detail and evidence remain in `IMPLEMENTATION_HANDOFF.md`.
 
 ## Objective and current decision 
@@ -73,16 +73,29 @@ Dependencies run forward: do not test later phases against an unapplied or unver
 - [x] Triage all 19 original dependency audit entries for path, surface, reachability, patch availability and remediation risk in `PHASE_2_DEPENDENCY_SECURITY.md`; apply only the narrow Drizzle 0.45.2 fix. Eighteen findings remain explicitly open; risky upgrades are documented, not silently waived.
 - [x] V1: installed-client evidence accepted; final review complete. 49/49 integration checks, 68 default tests, typecheck, format and lint PASS. Three added tests verify identity disconnect safety, concurrent OAuth exchange replay and live proxy origin/client-type rejection. Audit disposition is complete: 18 open findings assigned to security/toolchain/distribution gates in `PHASE_2_DEPENDENCY_SECURITY.md`; no launch waiver.
 
-**Phase 2 PASS; no Phase 2 blockers. Phase 3 is ready after the user's final review and remains on hold in this continuation.** Real provider happy paths and installed clients passed by user report; do not reopen those checks. Existing real credentials stay only in ignored `.env`; isolated tests use synthetic provider responses and never read/copy those credentials. Current acceptance applies to the uncommitted working tree over `0b3df3a`, pending commit. Dependency remediation remains open for Phases 20/23/24. Launch remains NO-GO.
+**Phase 2 COMPLETE, checkpoint `fd9bc2467bf4daeca9e80e1287029310d4ee2f7c`.** HEAD and recorded origin/main matched and the tree was clean at Phase 3 start. Real providers and installed clients remain accepted. Existing credentials and runtime are protected. Dependency remediation remains open for Phases 20/23/24; launch remains NO-GO. Do not commit or push the Phase 3 checkpoint without explicit user approval.
 
 ### Phase 3 — Product Onboarding
 
-**High**
+**High — COMPLETE, 2026-10-09. Checkpoint approval pending.**
 
-- [ ] Apply migrations `0002`–`0003` in order.
-- [ ] Verify every onboarding answer saves, reloads, edits, and appears in account export.
-- [ ] Verify each product stage produces its intended recommendation and opens the correct dashboard.
-- [ ] Check authenticated ownership boundaries and validation errors.
+Completed execution: reconcile existing source; verify ordered migrations on a separate
+TEMP fixture; exercise all ten answers and nine stages through the live web/API;
+fix demonstrated onboarding defects; run automated quality/regression checks;
+then one consolidated browser acceptance session. Current product linkage and
+export require the already-existing later tables; applying their migrations
+does not accept those later phases. No architecture expansion or new policies.
+
+- [x] Apply migrations `0002`–`0003` in order. The dedicated TEMP fixture has all 15 existing migrations; source checksums and ordered history verified 2026-10-09. This is not later-phase acceptance or a new migration-from-zero claim.
+- [x] Verify every onboarding answer saves, reloads, edits, and appears in account export at live API/web-proxy level. Fresh 18/18 integration checks PASS; evidence in `PHASE_3_ACCEPTANCE.md`.
+- [x] Verify each product stage produces its intended recommendation and opens the correct dashboard. All nine stage API cases and page compilation PASS; hydrated wizard navigation/product selection accepted in P3-1/P3-2/P3-4 by explicit user report, 2026-10-09.
+- [x] Check authenticated ownership boundaries and validation errors. Cross-account read/write/export, CSRF/origin rejection, invalid values and numeric bounds PASS on disposable services.
+- [x] Complete and record the single browser session in `PHASE_3_ACCEPTANCE.md`: P3-1, P3-2, P3-3, P3-4, P3-5 and P3-6 all PASS by explicit user report; no failures observed. Do not reopen or repeat these checks.
+
+Phase 3 is formally COMPLETE with no remaining phase blocker. Await explicit
+user checkpoint approval before commit/push. Phase 1/2 evidence remains accepted;
+Phase 4 is not started by this closure. All 18 dependency findings remain open
+release obligations; production launch remains NO-GO.
 
 ### Phase 4 — Product and Stage Engine
 

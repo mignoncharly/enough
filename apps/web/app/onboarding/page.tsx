@@ -31,6 +31,7 @@ export default function OnboardingPage() {
   const [toolsText, setToolsText] = useState("");
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -50,8 +51,10 @@ export default function OnboardingPage() {
           window.location.replace("/login");
           return;
         }
-        if (active)
+        if (active) {
+          setLoadFailed(true);
           setError(cause instanceof Error ? cause.message : "Your workspace could not be loaded.");
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -67,6 +70,7 @@ export default function OnboardingPage() {
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving || loadFailed) return;
     setError("");
     if (step < 2) {
       setStep((current) => current + 1);
@@ -92,9 +96,9 @@ export default function OnboardingPage() {
         buildTools,
         currentRevenue: answers.currentRevenue?.trim() || null,
       });
-      if (!result.completed)
+      if (!result.completed || !result.productId)
         throw new Error("Your answers were saved, but the workspace could not be prepared.");
-      window.location.replace("/dashboard");
+      window.location.replace(`/dashboard?productId=${encodeURIComponent(result.productId)}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Your answers could not be saved.");
     } finally {
@@ -107,6 +111,21 @@ export default function OnboardingPage() {
       <main className="message-shell">
         <section className="auth-card">
           <p className="notice">Loading your workspace…</p>
+        </section>
+      </main>
+    );
+
+  if (loadFailed)
+    return (
+      <main className="message-shell">
+        <section className="auth-card">
+          <h1>Workspace unavailable</h1>
+          <p className="error" role="alert">
+            {error}
+          </p>
+          <a className="primary-button link-button" href="/onboarding">
+            Try again
+          </a>
         </section>
       </main>
     );
@@ -211,6 +230,7 @@ export default function OnboardingPage() {
                       type="number"
                       required
                       min={0}
+                      max={2147483647}
                       step={1}
                       value={answers.userCount}
                       onChange={(event) => update("userCount", Number(event.target.value))}
@@ -222,6 +242,7 @@ export default function OnboardingPage() {
                       type="number"
                       required
                       min={0}
+                      max={2147483647}
                       step={1}
                       value={answers.payingUserCount}
                       onChange={(event) => update("payingUserCount", Number(event.target.value))}
@@ -233,6 +254,7 @@ export default function OnboardingPage() {
                   <input
                     type="number"
                     min={0}
+                    max="999999999999.99"
                     step="0.01"
                     value={answers.currentRevenue ?? ""}
                     onChange={(event) => update("currentRevenue", event.target.value || null)}
@@ -298,6 +320,7 @@ export default function OnboardingPage() {
                 <button
                   className="quiet-button"
                   type="button"
+                  disabled={saving}
                   onClick={() => {
                     setStep((current) => current - 1);
                     setError("");

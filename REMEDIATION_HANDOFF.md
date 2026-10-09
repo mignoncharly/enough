@@ -11,6 +11,74 @@ Close the incomplete work from Phases 1–26 in dependency order, run the requir
 
 ## Current active work
 
+**Phase 3 formally COMPLETE — 2026-10-09.** The user reported the consolidated
+browser session completed successfully, with no acceptance failures:
+**P3-1 PASS; P3-2 PASS; P3-3 PASS; P3-4 PASS; P3-5 PASS; P3-6 PASS.** These are
+accepted user-reported results, not assistant browser observations. All six checks
+are closed; do not reopen or repeat them. Phase 1/2 accepted evidence is preserved.
+The user previously closed Phase 2 and authorized Phase 3. Verified clean `main`,
+HEAD and recorded `origin/main` at
+`fd9bc2467bf4daeca9e80e1287029310d4ee2f7c` before edits. This supersedes all
+historical review/commit/Phase 3 hold directions below. Do not commit or push
+Phase 3 until the user explicitly approves its checkpoint.
+
+Read the current remediation guides first, implementation tracker, canonical
+Phase 3 scope, Phase 2 acceptance/engineering/dependency-security records and
+security status. Existing onboarding source is present; no feature restart.
+Scope: ten answers, save/reload/edit/export, nine-stage recommendations,
+configured dashboard, authenticated ownership and validation. Existing canonical
+product linkage requires migration 0004; full current migrations support account
+export. These dependencies do not close Phase 4 or later acceptance.
+
+Verification uses a dedicated Phase 3 fixture under OS TEMP/enough-phase3,
+PostgreSQL 55434, Redis relay 56383/WSL 56384, API 4404, web 3303. Existing `.env`,
+`.runtime/`, credentials and browser profiles are not read or changed. Reuses
+Windows-first fixture code with an explicit Phase 3 option; no Docker, CI or
+production. Synthetic fixture credentials are newly generated only under TEMP.
+Sandbox startup repeatedly failed with `helper_unknown_error`; approved retries
+succeeded. Resume inspection found the prior source changes and migrated TEMP
+fixture, but no retained integration-result log. Do not infer that the prior
+attempt passed. Fresh `pnpm test:onboarding:integration` passed 18/18 checks
+(22.73 s, exit 0), with migrations/checksums verified and fixture shutdown.
+Fresh default suite passed 68 tests (67 opt-in skipped, 5.19 s); formatting,
+lint (124 existing warnings / 1 info) and workspace typecheck passed. The isolated
+optimized web build passed with synthetic build-only configuration, after the
+first attempt correctly failed production-environment validation. Manual fixture
+preparation passed (exit 0), created only a synthetic TEMP account, and stopped
+its services. Full commands, failures, logs, source hashes and the single browser
+session are in `PHASE_3_ACCEPTANCE.md`. `git diff --check` passed.
+
+All 18 dependency findings remain OPEN at their Phase 20/23/24 gates. No
+dependency upgrade, lockfile mutation, suppression or release waiver. Production
+launch remains **NO-GO**; Phase 3 completion does not close any release obligation.
+
+**Next safe action:** wait for explicit user Phase 3 checkpoint approval before
+commit/push. Implementation, automated verification and P3-1–P3-6 browser
+acceptance are complete; no Phase 3 blocker remains. Do not repeat Phase 2
+provider/installed-client or Phase 3 manual acceptance. Phase 4 is not started
+by this closure. Suggested checkpoint message:
+`fix: complete phase 3 onboarding acceptance`.
+HEAD and recorded origin/main still match `fd9bc2467bf4daeca9e80e1287029310d4ee2f7c`.
+Working tree: 11 modified tracked files, 3 untracked; nothing staged. Exact
+inventory is in the acceptance record. Protected runtime/configuration and
+existing browser profiles were untouched. At the end of automated preparation,
+fixture services were stopped. That shutdown check found zero listeners via
+`Get-NetTCPConnection -State Listen`
+on 55434/56383/4404/3303; a WSL loopback bind probe confirmed 56384 is free.
+Final `git diff --check` and status/revision reads passed; no staged changes.
+These service observations precede the user's browser session; current service
+state is not inferred or changed during closure. Final closure is documentation
+only: all nine recorded source/lockfile hashes match; package changes remain only
+the two previously tested onboarding scripts. `git diff --check` PASS (exit 0);
+Phase 1/2 acceptance/security evidence and lockfile diff are empty; current
+trackers consistently record COMPLETE. No formatting/lint/typecheck rerun was
+needed for Markdown-only closure with unchanged tested source/configuration.
+Commands/results are in `PHASE_3_ACCEPTANCE.md`. Sandbox helper startup failures
+were resolved by approved retries; no manual checks were repeated. The complete
+14-file working tree is ready for checkpoint commit after explicit user approval.
+
+### Historical Phase 2 record (superseded by the current Phase 3 state above)
+
 **Phases 0 and 1 COMPLETE; Phase 2 PASS after final engineering review.** Phase 1 accepted at `7e78c9d87ea993c7e95530b56dc5db9da1f8d4e7`. Phase 2 evidence covers the tested uncommitted working tree over `0b3df3a65ffef936409cc03c7493923f92a61b9c`; HEAD and locally recorded origin/main still match. Phase 3 is technically ready after the user's final review and has not begun. Launch remains **NO-GO**. Do not reopen accepted installed-client or provider tests.
 
 Canonical repository: `C:\Enough`; Windows development, no Docker, no GitHub Actions, no production deployment. Preserve architecture and passing functionality. Phase 2 scope and exits are defined by `IMPLEMENTATION_PLAN.md` and `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md`.

@@ -16,10 +16,15 @@ The dependency audit is **not clean**: 18 open entries (3 critical / 8 high /
 7 moderate), explicitly assigned to native installer, test-runner, schema-tool
 and packaging remediation gates in `PHASE_2_DEPENDENCY_SECURITY.md`. Reviewed
 reachability does not expose a Phase 2 auth path; this is no release waiver.
-Phase 3 is technically ready after user final review but has not begun. The
-overall product remains **NO-GO**; later security/distribution/production work
-is still required. Current acceptance is for an uncommitted working tree over
-`0b3df3a65ffef936409cc03c7493923f92a61b9c`.
+Phase 2 is formally accepted at `fd9bc2467bf4daeca9e80e1287029310d4ee2f7c`.
+Phase 3 is COMPLETE: 18 isolated onboarding integration checks and 68 default
+tests pass, including ownership, forged IDs, CSRF/origins, invalid inputs and
+concurrent saves. The optimized web build and quality checks pass; P3-1–P3-6
+browser acceptance is PASS by explicit user report, 2026-10-09, in
+`PHASE_3_ACCEPTANCE.md`. Checkpoint approval remains pending. No dependencies,
+lockfile, existing credentials or protected runtime files changed. The 18 audit
+entries above remain open; no new audit or release waiver is claimed. The overall
+product remains **NO-GO**; later security/distribution/production work is required.
 
 ### Historical Phase 2 source-verification record
 

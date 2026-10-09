@@ -479,6 +479,7 @@ export interface AiProviderStatus {
 
 export interface OnboardingResult {
   completed: boolean;
+  productId: string | null;
   completedAt: string | null;
   answers: OnboardingAnswers | null;
   recommendation: OnboardingRecommendation | null;
