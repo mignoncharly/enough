@@ -256,6 +256,18 @@ async function resolveOAuthUser(
           [randomUUID(), user.id],
         );
       } else {
+        // A password chosen before email ownership was proved must not become
+        // usable merely because the real owner signs in through a provider.
+        if (!user.email_verified_at) {
+          await client.query(
+            "UPDATE enough.auth_tokens SET consumed_at = now() WHERE user_id = $1 AND consumed_at IS NULL",
+            [user.id],
+          );
+          await client.query(
+            "UPDATE enough.auth_sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL",
+            [user.id],
+          );
+        }
         const updated = await client.query<{
           id: string;
           email: string;
@@ -264,7 +276,8 @@ async function resolveOAuthUser(
           created_at: Date;
         }>(
           `UPDATE enough.auth_users
-           SET email_verified_at = COALESCE(email_verified_at, now()),
+           SET password_hash = CASE WHEN email_verified_at IS NULL THEN NULL ELSE password_hash END,
+               email_verified_at = COALESCE(email_verified_at, now()),
                display_name = COALESCE(display_name, $2), updated_at = now()
            WHERE id = $1
            RETURNING id, email, display_name, email_verified_at, created_at`,

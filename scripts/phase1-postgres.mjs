@@ -6,11 +6,16 @@ import { fileURLToPath } from "node:url";
 
 // Dedicated local fixture. Never reads .env or targets the application's existing database.
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const fixture = join(root, ".runtime", "phase1");
+const phase2 = process.argv.includes("--phase2");
+const phase = phase2 ? "phase2" : "phase1";
+const fixture = join(root, ".runtime", phase);
 const data = join(fixture, "pgdata");
-const port = "55432";
-const admin = "enough_phase1_admin";
-const database = "enough_phase1";
+const port = phase2 ? "55433" : "55432";
+const admin = `enough_${phase}_admin`;
+const database = `enough_${phase}`;
+const redisPort = phase2 ? "56381" : "56379";
+const webPort = phase2 ? "3302" : "3301";
+const apiPort = phase2 ? "4402" : "4400";
 const credentialPath = join(fixture, "credentials.json");
 const action = process.argv[2] ?? "start";
 if (!["start", "stop", "status"].includes(action)) throw new Error("Use start, stop or status.");
@@ -106,19 +111,19 @@ if (action !== "start") {
   if (actual.replaceAll("\\", "/").toLowerCase() !== data.replaceAll("\\", "/").toLowerCase()) {
     throw new Error("Port belongs to another database cluster. No provisioning performed.");
   }
-  const sql = `SELECT 'CREATE ROLE enough_phase1 LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD ''${credentials.app}''' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'enough_phase1')\n\\gexec\nSELECT 'CREATE DATABASE enough_phase1 OWNER enough_phase1' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'enough_phase1')\n\\gexec\n`;
+  const sql = `SELECT 'CREATE ROLE ${database} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD ''${credentials.app}''' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${database}')\n\\gexec\nSELECT 'CREATE DATABASE ${database} OWNER ${database}' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '${database}')\n\\gexec\n`;
   native("psql", ["-X", "-v", "ON_ERROR_STOP=1"], { env: environment, input: sql });
   writeFileSync(
     join(fixture, "fixture.env"),
     [
       "NODE_ENV=test",
-      `DATABASE_URL=postgresql://enough_phase1:${credentials.app}@127.0.0.1:${port}/${database}`,
-      "REDIS_URL=redis://127.0.0.1:56379/0",
-      "WEB_PORT=3301",
-      "API_PORT=4400",
-      "WORKER_PORT=4401",
-      "APP_BASE_URL=http://127.0.0.1:3301",
-      "API_BASE_URL=http://127.0.0.1:4400",
+      `DATABASE_URL=postgresql://${database}:${credentials.app}@127.0.0.1:${port}/${database}`,
+      `REDIS_URL=redis://127.0.0.1:${redisPort}/0`,
+      `WEB_PORT=${webPort}`,
+      `API_PORT=${apiPort}`,
+      `WORKER_PORT=${phase2 ? "4403" : "4401"}`,
+      `APP_BASE_URL=http://127.0.0.1:${webPort}`,
+      `API_BASE_URL=http://127.0.0.1:${apiPort}`,
       `AUTH_SECRET=${credentials.auth}`,
       "AUTH_DEV_SHOW_EMAIL_LINKS=false",
       ...[
@@ -138,9 +143,9 @@ if (action !== "start") {
     { mode: 0o600 },
   );
   console.info(
-    `Isolated PostgreSQL ready on 127.0.0.1:${port}; database ${database}. Credentials remain in ignored .runtime/phase1.`,
+    `Isolated PostgreSQL ready on 127.0.0.1:${port}; database ${database}. Credentials remain in ignored .runtime/${phase}.`,
   );
   console.info(
-    "Redis must be provisioned separately using a supported version on port 56379. No migrations have been run.",
+    `Redis must be provisioned separately using a supported version on port ${redisPort}. No migrations have been run.`,
   );
 }

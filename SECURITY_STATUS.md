@@ -1,8 +1,27 @@
 # Security Status
 
-Last updated: 2026-10-08
+Last updated: 2026-10-09
 
 ## Current status
+
+**Final Phase 2 review: PASS.** This update supersedes the historical Phase 2
+pending-provider/client statements below. Real Google/GitHub and installed
+Desktop D1–D3, Chrome E1–E3 and Firefox E1–E3 are accepted from user reports.
+49 isolated integration checks and 68 default tests pass, as do typecheck,
+format and lint. The working tree includes the OAuth preregistration-password
+takeover fix and Drizzle 0.45.2; evidence is in `PHASE_2_ACCEPTANCE.md` and
+`PHASE_2_ENGINEERING_VERIFICATION.md`. No remaining Phase 2 blocker was found.
+
+The dependency audit is **not clean**: 18 open entries (3 critical / 8 high /
+7 moderate), explicitly assigned to native installer, test-runner, schema-tool
+and packaging remediation gates in `PHASE_2_DEPENDENCY_SECURITY.md`. Reviewed
+reachability does not expose a Phase 2 auth path; this is no release waiver.
+Phase 3 is technically ready after user final review but has not begun. The
+overall product remains **NO-GO**; later security/distribution/production work
+is still required. Current acceptance is for an uncommitted working tree over
+`0b3df3a65ffef936409cc03c7493923f92a61b9c`.
+
+### Historical Phase 2 source-verification record
 
 Phase 1 is COMPLETE at verified revision `7e78c9d87ea993c7e95530b56dc5db9da1f8d4e7`; launch remains NO-GO. Phase 2 local verification demonstrated and fixed concurrent rotation, rotation/derived-session deletion reauthentication bypasses, stale-password login/change races, duplicated cookie headers and derived-session issuance after parent revocation/rotation. Parent-session issuance now revalidates the credential under a database lock and inherits the original authentication time. Final 68 default tests and 34 separate PostgreSQL/Redis/live-HTTP integration checks passed, along with formatting, lint, typecheck and both client builds. Production cookie/configuration contracts are tested without deployment. Both real Google/GitHub end-to-end logins remain mandatory blockers pending real credentials only in ignored `.env`; provider implementation remains intact. Interactive browser/installed-client acceptance also remains pending. Phase 2 is PARTIAL and Phase 3 on hold. Current evidence and exact OAuth setup/read locations are in `PHASE_2_ACCEPTANCE.md`; historical statements below do not supersede it.
 

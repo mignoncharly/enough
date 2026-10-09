@@ -5,19 +5,20 @@ const enabled = process.env.ENOUGH_PHASE2_INTEGRATION === "1";
 describe.skipIf(!enabled)("Phase 2 live API and web proxy", () => {
   let pool: typeof import("@enough/db").pool;
   const ids: string[] = [];
-  const api = "http://127.0.0.1:4400";
-  const web = "http://127.0.0.1:3301";
+  const api = "http://127.0.0.1:4402";
+  const web = "http://127.0.0.1:3302";
 
   beforeAll(async () => {
     const target = new URL(process.env.DATABASE_URL ?? "http://invalid");
     expect([target.hostname, target.port, target.pathname, target.username]).toEqual([
       "127.0.0.1",
-      "55432",
-      "/enough_phase1",
-      "enough_phase1",
+      "55433",
+      "/enough_phase2",
+      "enough_phase2",
     ]);
     expect(process.env.APP_BASE_URL).toBe(web);
     expect(process.env.API_BASE_URL).toBe(api);
+    expect(process.env.REDIS_URL).toBe("redis://127.0.0.1:56381/0");
     ({ pool } = await import("@enough/db"));
     const response = await fetch(`${api}/ready`, { signal: AbortSignal.timeout(5000) });
     expect(response.status).toBe(200);
@@ -118,6 +119,43 @@ describe.skipIf(!enabled)("Phase 2 live API and web proxy", () => {
     });
     expect(logout.status).toBe(204);
     expect((await send(web, "/api/auth/me", { headers: { cookie } })).status).toBe(401);
+  });
+
+  it("rejects hostile origins and bearer impersonation through the live web proxy", async () => {
+    const user = await account();
+    const csrf = await send(web, "/api/auth/csrf");
+    const { csrfToken } = await csrf.json();
+    const headers = {
+      origin: web,
+      cookie: cookies(csrf),
+      "x-csrf-token": csrfToken,
+      "content-type": "application/json",
+    };
+    const payload = { email: user.email, password: user.password, clientType: "web" };
+    for (const origin of ["https://attacker.example", "null"]) {
+      const denied = await send(web, "/api/auth/login", {
+        method: "POST",
+        headers: { ...headers, origin },
+        body: JSON.stringify(payload),
+      });
+      expect(denied.status).toBe(403);
+      expect(denied.headers.has("access-control-allow-origin")).toBe(false);
+      expect(denied.headers.getSetCookie()).toHaveLength(0);
+      expect(await denied.text()).not.toContain(user.password);
+    }
+    for (const clientType of ["desktop", "extension"]) {
+      const denied = await send(web, "/api/auth/login", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ ...payload, clientType, deviceName: "Phase 2 impersonation" }),
+      });
+      expect(denied.status).toBe(400);
+      expect(await denied.json()).toEqual({ error: "Invalid client type." });
+    }
+    expect(
+      (await pool.query("SELECT id FROM enough.auth_sessions WHERE user_id = $1", [user.id]))
+        .rowCount,
+    ).toBe(0);
   });
 
   it.each(["desktop", "extension"])(

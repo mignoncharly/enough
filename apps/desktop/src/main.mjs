@@ -15,7 +15,7 @@ import {
   safeStorage,
   Tray,
 } from "electron";
-import { autoUpdater } from "electron-updater";
+import electronUpdater from "electron-updater";
 import { activeWindow } from "get-windows";
 import {
   appendBoundedEvent,
@@ -30,6 +30,8 @@ import {
   normalizeToolKey,
   resolveToolClassification,
 } from "../../../packages/shared/src/tool-classification.ts";
+
+const { autoUpdater } = electronUpdater;
 
 const APP_NAME = "Enough";
 const IDLE_THRESHOLD_SECONDS = 300;

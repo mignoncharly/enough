@@ -1,6 +1,6 @@
 # Remediation Implementation Plan
 
-Last consolidated: 2026-10-07  
+Last consolidated: 2026-10-09 (Phase 2 scope update)
 Source of truth for implementation order: this file. The historical scope remains in `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md`; historical implementation detail and evidence remain in `IMPLEMENTATION_HANDOFF.md`.
 
 ## Objective and current decision 
@@ -61,13 +61,19 @@ Dependencies run forward: do not test later phases against an unapplied or unver
 
 - [x] Apply migration `0002_authentication.sql` through the migration runner; accepted in Phase 1, checksum precheck reconfirmed 2026-10-08.
 - [x] Exercise signup, verification, password login/reset, magic link, logout, session rotation, export, and deletion; verify one-use tokens, expiry, replay rejection, and session/device revocation at database/API level. 34 integration checks pass; interactive acceptance is tracked separately below.
-- [ ] Verify Google and GitHub OAuth state/PKCE, verified email, callback, and session exchange with provider test credentials.
+- [x] Preserve accepted real Google/GitHub login/logout/re-login evidence. Verify negative state/PKCE/callback/replay, verified-email and account-linking cases with isolated provider responses and real disposable PostgreSQL/Redis; ten additional OAuth cases passed 2026-10-09. Preregistration-password takeover regression fixed and retested.
 - [x] Verify the explicitly enabled local link preview; ensure production disables preview. Real Resend delivery is not claimed.
 - [x] Exercise extension and desktop bearer login/revocation at real HTTP/API-contract level.
-- [ ] Complete interactive web and installed extension/desktop authentication and revocation; no connected browser is available, and Windows Computer Use disallows authentication-dialog automation.
+- [x] D1 verified disposable email/password desktop sign-in: explicit user report 2026-10-09, isolated API 4402, Connected, matching account, loaded workspace, no authentication error; No products yet expected. Evidence: `PHASE_2_ACCEPTANCE.md`. Preserve D2/D3; no repeat desktop checks.
+- [x] Desktop D1–D3, Chrome E1–E3 and Firefox E1–E3 PASS by explicit combined user report, 2026-10-09. Token/password sign-in, persistence, logout/revocation and recovery accepted. Firefox evidence covers popup/reload persistence; persistent signed-install/full restart stays Phase 24 distribution scope under the user's completed Phase 2 acceptance. Do not request duplicate tests. Real OAuth happy paths remain accepted.
 - [x] Review auth behavior and run requested formatting, lint, typecheck, unit, integration and client-build checks. 68 default tests and 34 integration tests passed; seven defects fixed, including derived-session freshness and revocation races. Evidence: `PHASE_2_ACCEPTANCE.md`.
 
-**Phase 2 remains PARTIAL; Phase 3 is on hold.** Both real Google and GitHub end-to-end logins remain mandatory. Credentials may later be added only to gitignored `C:\Enough\.env`; exact variable names, callbacks, base URLs and code read locations are in `PHASE_2_ACCEPTANCE.md`. Providers are not permanently disabled.
+**User-approved revised Phase 2 plan — 2026-10-09:** Remaining invalid credentials, renewal/old-credential rejection, signup verification, magic-link internals, reset/change-password security, deletion/invalidation and OAuth security/identity edge cases are automated engineering verification, not a manual click-through table. Use the separate Phase 2 runtime (PostgreSQL 55433, Redis Windows 56381 / WSL 56382, API 4402, web 3302), synthetic accounts and a separate `.next` directory. Never reuse the active account/runtime. The original 34 integration tests plus 12 additional cases passed; see `PHASE_2_ENGINEERING_VERIFICATION.md` for current commands and evidence. No additional Web UI happy-path request is required by the present evidence.
+
+- [x] Triage all 19 original dependency audit entries for path, surface, reachability, patch availability and remediation risk in `PHASE_2_DEPENDENCY_SECURITY.md`; apply only the narrow Drizzle 0.45.2 fix. Eighteen findings remain explicitly open; risky upgrades are documented, not silently waived.
+- [x] V1: installed-client evidence accepted; final review complete. 49/49 integration checks, 68 default tests, typecheck, format and lint PASS. Three added tests verify identity disconnect safety, concurrent OAuth exchange replay and live proxy origin/client-type rejection. Audit disposition is complete: 18 open findings assigned to security/toolchain/distribution gates in `PHASE_2_DEPENDENCY_SECURITY.md`; no launch waiver.
+
+**Phase 2 PASS; no Phase 2 blockers. Phase 3 is ready after the user's final review and remains on hold in this continuation.** Real provider happy paths and installed clients passed by user report; do not reopen those checks. Existing real credentials stay only in ignored `.env`; isolated tests use synthetic provider responses and never read/copy those credentials. Current acceptance applies to the uncommitted working tree over `0b3df3a`, pending commit. Dependency remediation remains open for Phases 20/23/24. Launch remains NO-GO.
 
 ### Phase 3 — Product Onboarding
 

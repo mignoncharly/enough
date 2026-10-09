@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance, type InjectOptions } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,6 +11,7 @@ describe.skipIf(!enabled)("Phase 2 authentication with real PostgreSQL and Redis
   let closeRedis: typeof import("@enough/cache").closeRedis;
   let env: typeof import("@enough/config").env;
   const emails: string[] = [];
+  const oauthStates: string[] = [];
   const previews: Array<{ purpose: string; token: string }> = [];
   let testIp = 0;
   const ipPrefix = `127.${randomBytes(1)[0]}.${randomBytes(1)[0]}`;
@@ -21,11 +22,11 @@ describe.skipIf(!enabled)("Phase 2 authentication with real PostgreSQL and Redis
     const target = new URL(process.env.DATABASE_URL ?? "http://invalid");
     expect([target.hostname, target.port, target.pathname, target.username]).toEqual([
       "127.0.0.1",
-      "55432",
-      "/enough_phase1",
-      "enough_phase1",
+      "55433",
+      "/enough_phase2",
+      "enough_phase2",
     ]);
-    expect(process.env.REDIS_URL).toBe("redis://127.0.0.1:56379/0");
+    expect(process.env.REDIS_URL).toBe("redis://127.0.0.1:56381/0");
     ({ env } = await import("@enough/config"));
     // Never enable real providers or send emails from the integration harness.
     Object.assign(env, {
@@ -69,11 +70,25 @@ describe.skipIf(!enabled)("Phase 2 authentication with real PostgreSQL and Redis
   beforeEach(() => {
     testIp += 1;
     previews.length = 0;
+    Object.assign(env, {
+      GOOGLE_CLIENT_ID: undefined,
+      GOOGLE_CLIENT_SECRET: undefined,
+      GITHUB_CLIENT_ID: undefined,
+      GITHUB_CLIENT_SECRET: undefined,
+    });
+    vi.mocked(fetch)
+      .mockReset()
+      .mockImplementation(async () => {
+        throw new Error("External requests are disabled in local authentication tests");
+      });
   });
   afterAll(async () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     if (pool) {
+      await pool.query("DELETE FROM enough.auth_oauth_states WHERE state_hash = ANY($1::bytea[])", [
+        oauthStates.map(hashToken),
+      ]);
       // Account cascades remove only this run's fixtures. No global reset/flush.
       await pool.query(
         "DELETE FROM enough.auth_audit_events WHERE user_id IN (SELECT id FROM enough.auth_users WHERE email_normalized = ANY($1::text[]))",
@@ -849,6 +864,311 @@ describe.skipIf(!enabled)("Phase 2 authentication with real PostgreSQL and Redis
       headers: await csrf(),
     });
     expect(response.statusCode).toBe(503);
+  });
+
+  async function providerStart(provider: "google" | "github") {
+    Object.assign(env, {
+      GOOGLE_CLIENT_ID: "synthetic-google-client",
+      GOOGLE_CLIENT_SECRET: "synthetic-google-secret",
+      GITHUB_CLIENT_ID: "synthetic-github-client",
+      GITHUB_CLIENT_SECRET: "synthetic-github-secret",
+    });
+    const headers = await csrf();
+    const response = await request({
+      method: "POST",
+      url: `/auth/oauth/${provider}/start`,
+      headers,
+    });
+    expect(response.statusCode).toBe(200);
+    const authorize = new URL(response.json().authorizationUrl);
+    const state = authorize.searchParams.get("state");
+    if (!state) throw new Error("Missing OAuth state");
+    oauthStates.push(state);
+    return { headers, authorize, state };
+  }
+
+  function providerReplies(
+    provider: "google" | "github",
+    email: string,
+    verified: boolean,
+    subject = 12345,
+  ) {
+    vi.mocked(fetch).mockImplementation(async (input, options) => {
+      const url = String(input);
+      if (
+        url ===
+        (provider === "google"
+          ? "https://oauth2.googleapis.com/token"
+          : "https://github.com/login/oauth/access_token")
+      ) {
+        expect(options?.redirect).toBe("error");
+        return Response.json({ access_token: "synthetic-provider-token" });
+      }
+      if (provider === "google" && url === "https://openidconnect.googleapis.com/v1/userinfo")
+        return Response.json({ sub: String(subject), email, email_verified: verified });
+      if (provider === "github" && url === "https://api.github.com/user")
+        return Response.json({ id: subject, login: "synthetic" });
+      if (provider === "github" && url === "https://api.github.com/user/emails?per_page=100")
+        return Response.json([{ email, primary: true, verified }]);
+      throw new Error("Unexpected outbound provider URL; network is disabled");
+    });
+  }
+
+  async function callback(provider: string, state: string, extra = "code=synthetic-code") {
+    return request({
+      method: "GET",
+      url: `/auth/oauth/${provider}/callback?state=${state}&${extra}`,
+    });
+  }
+
+  it.each(["google", "github"] as const)(
+    "checks %s PKCE, callback/state/provider binding and exchange replay with an isolated provider",
+    async (provider) => {
+      const user = await signup();
+      const started = await providerStart(provider);
+      providerReplies(provider, user.email, true);
+      expect(started.authorize.searchParams.get("code_challenge_method")).toBe("S256");
+      expect(started.authorize.searchParams.get("redirect_uri")).toBe(
+        `${env.API_BASE_URL}/auth/oauth/${provider}/callback`,
+      );
+      const wrong = await callback(provider === "google" ? "github" : "google", started.state);
+      expect(wrong.headers.location).toContain("oauth=error");
+      const tampered = await callback(provider, randomBytes(32).toString("base64url"));
+      expect(tampered.headers.location).toContain("oauth=error");
+      expect(fetch).not.toHaveBeenCalled();
+      const result = await callback(provider, started.state);
+      expect(result.statusCode).toBe(302);
+      expect(result.cookies).toHaveLength(0);
+      const fields = vi.mocked(fetch).mock.calls[0][1]?.body as URLSearchParams;
+      expect(fields.get("redirect_uri")).toBe(
+        `${env.API_BASE_URL}/auth/oauth/${provider}/callback`,
+      );
+      expect(
+        createHash("sha256")
+          .update(fields.get("code_verifier") ?? "")
+          .digest("base64url"),
+      ).toBe(started.authorize.searchParams.get("code_challenge"));
+      const calls = vi.mocked(fetch).mock.calls.length;
+      expect((await callback(provider, started.state)).headers.location).toContain("oauth=error");
+      expect(vi.mocked(fetch).mock.calls).toHaveLength(calls);
+      const token = new URLSearchParams(new URL(String(result.headers.location)).hash.slice(1)).get(
+        "token",
+      );
+      expect(
+        (
+          await request({
+            method: "POST",
+            url: "/auth/oauth/consume",
+            headers: await csrf(),
+            payload: { token },
+          })
+        ).statusCode,
+      ).toBe(400);
+      const consume = await request({
+        method: "POST",
+        url: "/auth/oauth/consume",
+        headers: started.headers,
+        payload: { token },
+      });
+      expect(consume.statusCode).toBe(200);
+      expect(consume.json().user.id).toBe(user.id);
+      expect((await login(user.email, "desktop")).statusCode).toBe(200);
+      expect(
+        (
+          await request({
+            method: "POST",
+            url: "/auth/oauth/consume",
+            headers: started.headers,
+            payload: { token },
+          })
+        ).statusCode,
+      ).toBe(400);
+    },
+  );
+
+  it.each(["google", "github"] as const)(
+    "rejects %s cancelled, expired and failed callbacks without creating sessions",
+    async (provider) => {
+      const user = await signup();
+      providerReplies(provider, user.email, true);
+      const cancelled = await providerStart(provider);
+      expect(
+        (await callback(provider, cancelled.state, "error=access_denied")).headers.location,
+      ).toContain("oauth=cancelled");
+      expect((await callback(provider, cancelled.state)).headers.location).toContain("oauth=error");
+      const expired = await providerStart(provider);
+      await pool.query(
+        "UPDATE enough.auth_oauth_states SET expires_at = now() - interval '1 minute', created_at = now() - interval '11 minutes' WHERE state_hash = $1",
+        [hashToken(expired.state)],
+      );
+      expect((await callback(provider, expired.state)).headers.location).toContain("oauth=error");
+      expect(fetch).not.toHaveBeenCalled();
+      const failed = await providerStart(provider);
+      vi.mocked(fetch).mockResolvedValue(new Response("provider failed", { status: 503 }));
+      expect((await callback(provider, failed.state)).headers.location).toContain("oauth=error");
+      expect(
+        (await pool.query("SELECT id FROM enough.auth_sessions WHERE user_id = $1", [user.id]))
+          .rowCount,
+      ).toBe(0);
+      expect(
+        (
+          await pool.query(
+            "SELECT id FROM enough.auth_tokens WHERE user_id = $1 AND purpose = 'oauth_exchange'",
+            [user.id],
+          )
+        ).rowCount,
+      ).toBe(0);
+    },
+  );
+
+  it.each(["google", "github"] as const)(
+    "rejects %s unverified provider email without linking an account",
+    async (provider) => {
+      const user = await signup();
+      const started = await providerStart(provider);
+      providerReplies(provider, user.email, false);
+      expect((await callback(provider, started.state)).headers.location).toContain("oauth=error");
+      expect(
+        (await pool.query("SELECT id FROM enough.auth_identities WHERE user_id = $1", [user.id]))
+          .rowCount,
+      ).toBe(0);
+    },
+  );
+
+  it.each(["google", "github"] as const)(
+    "keeps %s subject ownership stable when provider email changes",
+    async (provider) => {
+      const first = await signup();
+      const second = await signup();
+      const subject = Math.floor(Math.random() * 1e9) + 1;
+      for (const email of [first.email, second.email]) {
+        const started = await providerStart(provider);
+        providerReplies(provider, email, true, subject);
+        const result = await callback(provider, started.state);
+        const token = new URLSearchParams(
+          new URL(String(result.headers.location)).hash.slice(1),
+        ).get("token");
+        const consume = await request({
+          method: "POST",
+          url: "/auth/oauth/consume",
+          headers: started.headers,
+          payload: { token },
+        });
+        expect(consume.statusCode).toBe(200);
+        expect(consume.json().user.id).toBe(first.id);
+      }
+      expect(
+        (await pool.query("SELECT id FROM enough.auth_identities WHERE user_id = $1", [second.id]))
+          .rowCount,
+      ).toBe(0);
+    },
+  );
+
+  it.each(["google", "github"] as const)(
+    "does not retain an unverified preregistration password after %s proves email ownership",
+    async (provider) => {
+      const user = await signup(false);
+      const started = await providerStart(provider);
+      providerReplies(provider, user.email, true, Math.floor(Math.random() * 1e9) + 1);
+      const result = await callback(provider, started.state);
+      expect(String(result.headers.location)).toContain("/oauth/complete#token=");
+      const stalePassword = await request({
+        method: "POST",
+        url: "/auth/login",
+        payload: {
+          email: user.email,
+          password,
+          clientType: "desktop",
+          deviceName: "preregistration-regression",
+        },
+      });
+      expect(stalePassword.statusCode).toBe(401);
+      expect(
+        (
+          await request({
+            method: "POST",
+            url: "/auth/email-verification/consume",
+            payload: { token: user.token },
+          })
+        ).statusCode,
+      ).toBe(400);
+      const exchange = new URLSearchParams(
+        new URL(String(result.headers.location)).hash.slice(1),
+      ).get("token");
+      const signedIn = await request({
+        method: "POST",
+        url: "/auth/oauth/consume",
+        headers: started.headers,
+        payload: { token: exchange },
+      });
+      expect(signedIn.statusCode).toBe(200);
+      expect(signedIn.json().user.id).toBe(user.id);
+    },
+  );
+
+  it("scopes identity disconnection to the owner, enforces CSRF and preserves the last sign-in method", async () => {
+    const owner = await signup();
+    const other = await signup();
+    await pool.query(
+      "INSERT INTO enough.auth_identities (id, user_id, provider, provider_subject) VALUES ($1, $2, 'google', $3)",
+      [randomUUID(), owner.id, randomUUID()],
+    );
+    const ownerHeaders = sessionHeaders(await login(owner.email));
+    const otherHeaders = sessionHeaders(await login(other.email));
+    const url = "/auth/identities/google";
+    expect((await request({ method: "DELETE", url })).statusCode).toBe(401);
+    expect((await request({ method: "DELETE", url, headers: otherHeaders })).statusCode).toBe(404);
+    expect(
+      (await request({ method: "DELETE", url, headers: { cookie: ownerHeaders.cookie } }))
+        .statusCode,
+    ).toBe(403);
+    const listed = await request({ method: "GET", url: "/auth/identities", headers: ownerHeaders });
+    expect(listed.json()).toMatchObject({
+      hasPassword: true,
+      identities: [{ provider: "google" }],
+    });
+    expect(JSON.stringify(listed.json())).not.toContain("provider_subject");
+    await pool.query("UPDATE enough.auth_users SET password_hash = NULL WHERE id = $1", [owner.id]);
+    expect((await request({ method: "DELETE", url, headers: ownerHeaders })).statusCode).toBe(409);
+    await pool.query(
+      "INSERT INTO enough.auth_identities (id, user_id, provider, provider_subject) VALUES ($1, $2, 'github', $3)",
+      [randomUUID(), owner.id, randomUUID()],
+    );
+    // Both requests must serialize on the account; one usable identity must survive.
+    const removed = await Promise.all(
+      ["google", "github"].map((provider) =>
+        request({ method: "DELETE", url: `/auth/identities/${provider}`, headers: ownerHeaders }),
+      ),
+    );
+    expect(removed.map((response) => response.statusCode).sort()).toEqual([200, 409]);
+    expect(
+      (
+        await pool.query("SELECT provider FROM enough.auth_identities WHERE user_id = $1", [
+          owner.id,
+        ])
+      ).rowCount,
+    ).toBe(1);
+  });
+
+  it("issues only one session for concurrent consumption of an OAuth exchange", async () => {
+    const user = await signup();
+    const headers = await csrf();
+    const token = randomBytes(32).toString("base64url");
+    await pool.query(
+      `INSERT INTO enough.auth_tokens (id, user_id, token_hash, purpose, binding_hash, source_provider, expires_at)
+       VALUES ($1, $2, $3, 'oauth_exchange', $4, 'google', now() + interval '2 minutes')`,
+      [randomUUID(), user.id, hashToken(token), hashToken(headers["x-csrf-token"])],
+    );
+    const results = await Promise.all(
+      [0, 1].map(() =>
+        request({ method: "POST", url: "/auth/oauth/consume", headers, payload: { token } }),
+      ),
+    );
+    expect(results.map((response) => response.statusCode).sort()).toEqual([200, 400]);
+    expect(
+      (await pool.query("SELECT id FROM enough.auth_sessions WHERE user_id = $1", [user.id]))
+        .rowCount,
+    ).toBe(1);
   });
 
   it("rejects OAuth exchanges with the wrong browser, expiry or replay without provider credentials", async () => {
