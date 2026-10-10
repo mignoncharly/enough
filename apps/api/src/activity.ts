@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { checkRateLimit } from "@enough/auth";
+import { type AuthSession, checkRateLimit } from "@enough/auth";
 import { pool } from "@enough/db";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -10,7 +10,18 @@ const MAX_ATTRIBUTE_BYTES = 2_048;
 const FUTURE_CLOCK_TOLERANCE_MS = 5 * 60 * 1_000;
 const MAX_OFFLINE_EVENT_AGE_MS = 7 * 24 * 60 * 60_000;
 
-const attributeValueSchema = z.union([z.string().max(256), z.number(), z.boolean(), z.null()]);
+const attributeValueSchema = z.union([
+  z
+    .string()
+    .max(256)
+    .refine(
+      (value) => !value.includes("\u0000") && Buffer.from(value, "utf8").toString("utf8") === value,
+      "Event attributes must contain valid Unicode text without NUL characters.",
+    ),
+  z.number(),
+  z.boolean(),
+  z.null(),
+]);
 
 const activityEventSchema = z
   .object({
@@ -139,11 +150,8 @@ function parseEvents(values: ActivityEvent[]): NormalizedEvent[] {
   return [...uniqueEvents.values()];
 }
 
-async function ingestActivityEvents(
-  userId: string,
-  deviceId: string,
-  submittedEvents: ActivityEvent[],
-) {
+async function ingestActivityEvents(session: AuthSession, submittedEvents: ActivityEvent[]) {
+  const { id: userId, deviceId } = session;
   const events = parseEvents(submittedEvents);
   const client = await pool.connect();
   try {
@@ -157,6 +165,23 @@ async function ingestActivityEvents(
         403,
         "Activity collection is disabled. Grant activity consent in Privacy settings to record events.",
       );
+    }
+    // Authentication happened before this transaction and may now be stale.
+    // Lock device before session, matching device revocation's write order.
+    // SHARE also conflicts with non-key revocation/rotation updates.
+    const device = await client.query(
+      `SELECT id FROM enough.auth_devices
+       WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL FOR SHARE`,
+      [deviceId, userId],
+    );
+    const credential = await client.query(
+      `SELECT id FROM enough.auth_sessions
+       WHERE id = $1 AND user_id = $2 AND device_id = $3 AND token_hash = $4
+         AND revoked_at IS NULL AND expires_at > clock_timestamp() FOR SHARE`,
+      [session.sessionId, userId, deviceId, session.tokenHash],
+    );
+    if (device.rowCount !== 1 || credential.rowCount !== 1) {
+      throw new ActivityRequestError(401, "Sign in again before uploading activity.");
     }
     const productIds = [...new Set(events.map((event) => event.productId))];
     const ownedProducts = await client.query<{ id: string }>(
@@ -325,7 +350,13 @@ async function ingestActivityEvents(
 function sendIngestError(request: FastifyRequest, reply: FastifyReply, error: unknown) {
   if (error instanceof ActivityRequestError)
     return reply.code(error.statusCode).send({ error: error.message });
-  request.log.error({ err: error }, "Could not ingest activity events");
+  // Database diagnostics can echo event attributes. Retain only a SQLSTATE,
+  // never raw error details or client-supplied values.
+  const code = (error as { code?: unknown } | null)?.code;
+  request.log.error(
+    { code: typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? code : "UNKNOWN" },
+    "Could not ingest activity events",
+  );
   return reply
     .code(503)
     .send({ error: "Activity could not be recorded. Retry the same event IDs shortly." });
@@ -434,7 +465,7 @@ export async function registerActivityRoutes(app: FastifyInstance): Promise<void
     )
       return;
     try {
-      return reply.send(await ingestActivityEvents(session.id, session.deviceId, [parsed.data]));
+      return reply.send(await ingestActivityEvents(session, [parsed.data]));
     } catch (error) {
       return sendIngestError(request, reply, error);
     }
@@ -464,9 +495,7 @@ export async function registerActivityRoutes(app: FastifyInstance): Promise<void
     )
       return;
     try {
-      return reply.send(
-        await ingestActivityEvents(session.id, session.deviceId, parsed.data.events),
-      );
+      return reply.send(await ingestActivityEvents(session, parsed.data.events));
     } catch (error) {
       return sendIngestError(request, reply, error);
     }

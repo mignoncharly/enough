@@ -1,6 +1,6 @@
 # Remediation Implementation Plan
 
-Last consolidated: 2026-10-10 (Phase 4 COMPLETE; checkpoint approval pending)
+Last consolidated: 2026-10-10 (Phase 5 engineering accepted; Phase 6 not started)
 Source of truth for implementation order: this file. The historical scope remains in `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md`; historical implementation detail and evidence remain in `IMPLEMENTATION_HANDOFF.md`.
 
 ## Objective and current decision 
@@ -117,18 +117,26 @@ external blocker found. No commit/push until explicit Phase 4 checkpoint approva
 
 Phase 4 is formally COMPLETE with no remaining phase blocker. Accepted Phase 1–3
 evidence is preserved; all 11 tested source/manifest/lockfile fingerprints match
-at closure. Wait for explicit checkpoint approval before commit/push. Phase 5
-is not started by this closure. All 18 findings remain OPEN; launch remains NO-GO.
+at closure. The checkpoint was subsequently accepted at
+`7d1e532ee7cfc9769bbe8268a78e0ad62e81cd89`, after which Phase 5 was activated
+below. No commit or push was performed in this continuation. All 18 findings
+remain OPEN; launch remains NO-GO.
 
 ### Phase 5 — Activity Event Platform
 
-**Critical**
+**Critical — COMPLETE (engineering acceptance), 2026-10-10.** Phase 4 is
+checkpointed at `7d1e532ee7cfc9769bbe8268a78e0ad62e81cd89`; Phase 5 passed its isolated
+migration, live API/database, concurrency, regression, and quality checks.
+Detailed evidence is in `PHASE_5_ACCEPTANCE.md`. No dependency upgrade, Docker,
+GitHub Actions, production deployment, commit, or push occurred. The Phase 5
+checkpoint commit/push still requires explicit approval. Overall launch remains
+**NO-GO** while the existing security and production gates remain open.
 
-- [ ] Apply migrations `0002`–`0005` in order.
-- [ ] Verify duplicate/replayed batches do not change aggregates; conflicting event IDs or sequence reuse reject atomically.
-- [ ] Verify offline ordering, timestamp correction, future/old event handling, and hourly aggregates against PostgreSQL.
-- [ ] Verify product/device ownership, privacy-safe payload bounds, export, and deletion.
-- [ ] Add database integration coverage for transaction and concurrency behavior.
+- [x] Apply migrations `0002`–`0005` in order. A fresh scratch database applied all 15 current migrations in filename order; checksum precheck passed and both activity tables were verified.
+- [x] Verify duplicate/replayed batches do not change aggregates; conflicting event IDs or sequence reuse reject atomically. Covered by live PostgreSQL integration tests.
+- [x] Verify offline ordering, timestamp correction, future/old event handling, and hourly aggregates against PostgreSQL. Covered by live PostgreSQL integration tests.
+- [x] Verify product/device ownership, privacy-safe payload bounds, export, and deletion. Covered by live API/database tests using synthetic accounts.
+- [x] Add database integration coverage for transaction and concurrency behavior. Activity, product, and onboarding regressions pass 72/72; default unit/contract suite passes 68/68.
 
 ### Phase 6 — Tool Classification Engine
 

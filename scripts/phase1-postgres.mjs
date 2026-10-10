@@ -10,16 +10,33 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const phase2 = process.argv.includes("--phase2");
 const phase3 = process.argv.includes("--phase3");
 const phase4 = process.argv.includes("--phase4");
-const phase = phase4 ? "phase4" : phase3 ? "phase3" : phase2 ? "phase2" : "phase1";
+const phase5 = process.argv.includes("--phase5");
+const phase = phase5
+  ? "phase5"
+  : phase4
+    ? "phase4"
+    : phase3
+      ? "phase3"
+      : phase2
+        ? "phase2"
+        : "phase1";
 const fixture =
-  phase3 || phase4 ? join(tmpdir(), `enough-${phase}`) : join(root, ".runtime", phase);
+  phase3 || phase4 || phase5 ? join(tmpdir(), `enough-${phase}`) : join(root, ".runtime", phase);
 const data = join(fixture, "pgdata");
-const port = phase4 ? "55435" : phase3 ? "55434" : phase2 ? "55433" : "55432";
+const port = phase5 ? "55436" : phase4 ? "55435" : phase3 ? "55434" : phase2 ? "55433" : "55432";
 const admin = `enough_${phase}_admin`;
 const database = `enough_${phase}`;
-const redisPort = phase4 ? "56385" : phase3 ? "56383" : phase2 ? "56381" : "56379";
-const webPort = phase4 ? "3304" : phase3 ? "3303" : phase2 ? "3302" : "3301";
-const apiPort = phase4 ? "4406" : phase3 ? "4404" : phase2 ? "4402" : "4400";
+const redisPort = phase5
+  ? "56387"
+  : phase4
+    ? "56385"
+    : phase3
+      ? "56383"
+      : phase2
+        ? "56381"
+        : "56379";
+const webPort = phase5 ? "3305" : phase4 ? "3304" : phase3 ? "3303" : phase2 ? "3302" : "3301";
+const apiPort = phase5 ? "4408" : phase4 ? "4406" : phase3 ? "4404" : phase2 ? "4402" : "4400";
 const credentialPath = join(fixture, "credentials.json");
 const action = process.argv[2] ?? "start";
 if (!["start", "stop", "status"].includes(action)) throw new Error("Use start, stop or status.");
@@ -125,7 +142,7 @@ if (action !== "start") {
       `REDIS_URL=redis://127.0.0.1:${redisPort}/0`,
       `WEB_PORT=${webPort}`,
       `API_PORT=${apiPort}`,
-      `WORKER_PORT=${phase4 ? "4407" : phase3 ? "4405" : phase2 ? "4403" : "4401"}`,
+      `WORKER_PORT=${phase5 ? "4409" : phase4 ? "4407" : phase3 ? "4405" : phase2 ? "4403" : "4401"}`,
       `APP_BASE_URL=http://127.0.0.1:${webPort}`,
       `API_BASE_URL=http://127.0.0.1:${apiPort}`,
       `AUTH_SECRET=${credentials.auth}`,

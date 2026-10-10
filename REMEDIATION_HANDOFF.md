@@ -11,7 +11,50 @@ Close the incomplete work from Phases 1–26 in dependency order, run the requir
 
 ## Current active work
 
-**Phase 4 formally COMPLETE — 2026-10-10; checkpoint approval pending.**
+**Phase 5 engineering acceptance COMPLETE — 2026-10-10.** The current
+remediation plan and `IMPLEMENTATION_PLAN.md` define Phase 5 as the Activity
+Event Platform. Fresh migrations, live API/database behavior, concurrency,
+regressions, and quality checks passed. Full evidence and exact commands are in
+[PHASE_5_ACCEPTANCE.md](PHASE_5_ACCEPTANCE.md).
+Phase 2 Authentication remains COMPLETE and is not an open Phase 5 item. No
+Phase 5 engineering blocker remains.
+
+Continuation inspection found existing uncommitted Phase 5 implementation and
+test changes; this work verified and corrected the expiry-race fixture rather
+than restarting completed implementation. Node `v24.19.0`, pnpm `11.20.0`.
+`pnpm test:activity:integration` PASS 72/72 (28 activity, 26 product, 18
+onboarding); the first run was 71/72 because its synthetic expiry update
+violated the session schema check. After correcting the fixture row,
+`pnpm db:phase5:migration-check` applied all 15 migrations in order to a fresh
+scratch database, passed checksum precheck, verified the activity tables, and
+dropped only that scratch database. `pnpm test` PASS 68/68 (121 opt-in checks
+skipped), `pnpm typecheck` PASS, `pnpm format:check` PASS, `pnpm lint` exit 0
+with 124 existing warnings and one informational diagnostic. Final
+`git diff --check` passed after documentation closure; no changes are staged.
+
+`pnpm audit --json` returned 18 open advisories (3 critical / 8 high / 7
+moderate); no dependency or lockfile changed. `pnpm security:secrets` is not a
+configured script, and no `gitleaks`, `trufflehog`, or `detect-secrets` binary
+is installed. The limited key-pattern scan found no matches but is not a full
+secret scan. All 18 security findings remain OPEN; launch remains **NO-GO**.
+The disposable fixture was stopped; no Windows listeners remained on 55436,
+56387, 4408, or 3305, and WSL Redis port 56388 refused connections. No
+production service, deployment, commit, or push was used.
+
+Final documentation reconciliation checks (2026-10-10): repository-wide
+Markdown contamination scan returned no matches. The trailing-whitespace scan
+for the new acceptance record, integration test, and migration verifier
+returned no matches. `git diff --check` passed (exit 0; Git noted CRLF
+normalization for two Markdown files). `git status --short` showed 10 modified
+tracked files and 3 untracked files; `git diff --cached --name-only` was empty.
+
+**Next safe item:** Phase 6, Tool Classification Engine, in dependency order.
+Keep the Phase 5 worktree uncommitted until explicit checkpoint approval.
+
+### Historical Phase 4 closure (checkpoint subsequently accepted)
+
+**Phase 4 formally COMPLETE — 2026-10-10; checkpoint subsequently accepted at
+`7d1e532ee7cfc9769bbe8268a78e0ad62e81cd89`.**
 The user explicitly reported the consolidated browser session completed
 successfully: **P4-1 PASS; P4-2 PASS; P4-3 PASS; P4-4 PASS; P4-5 PASS**, with no
 browser acceptance failures. These are accepted user-reported results, not
@@ -29,9 +72,9 @@ a documentation-only closure; no further formatting/lint/typecheck/test/build
 run is needed for unchanged tested source. Final commands/results are recorded
 in the acceptance record. Sandbox startup failures required approved retries.
 
-No Phase 4 blocker remains. **Next safe action: wait for explicit Phase 4
-checkpoint approval before any staging, commit or push.** Suggested message:
-`fix: complete phase 4 product and stage acceptance`. Do not start Phase 5 here.
+No Phase 4 blocker remains. The earlier direction to wait for checkpoint
+approval was superseded when the user accepted the checkpoint and authorized
+Phase 5, recorded in the current section above. Do not repeat Phase 4 acceptance.
 HEAD and recorded origin/main remain `e07f502a90aaa85a22ad2f70647b8ca9bd234a4d`
 on `main`; inventory is 13 modified tracked files and two untracked, nothing
 staged. All 15 paths to commit are listed in the acceptance record. No credentials,

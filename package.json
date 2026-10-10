@@ -36,7 +36,9 @@
     "test:onboarding:integration": "node scripts/phase2-runtime.mjs test --phase3",
     "test:onboarding:serve": "node scripts/phase2-runtime.mjs serve --phase3",
     "test:products:integration": "node scripts/phase2-runtime.mjs test --phase4",
-    "test:products:serve": "node scripts/phase2-runtime.mjs serve --phase4"
+    "test:products:serve": "node scripts/phase2-runtime.mjs serve --phase4",
+    "test:activity:integration": "node scripts/phase2-runtime.mjs test --phase5",
+    "db:phase5:migration-check": "node scripts/phase5-migration-check.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.4",

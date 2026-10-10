@@ -23,18 +23,20 @@ import { parseEnv } from "node:util";
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const phase3 = process.argv.includes("--phase3");
 const phase4 = process.argv.includes("--phase4");
-const phase = phase4 ? "phase4" : phase3 ? "phase3" : "phase2";
+const phase5 = process.argv.includes("--phase5");
+const phase = phase5 ? "phase5" : phase4 ? "phase4" : phase3 ? "phase3" : "phase2";
 const fixture =
-  phase3 || phase4 ? join(tmpdir(), `enough-${phase}`) : join(root, ".runtime", phase);
-const pgPort = phase4 ? 55435 : phase3 ? 55434 : 55433;
-const redisPort = phase4 ? 56385 : phase3 ? 56383 : 56381;
-const wslRedisPort = phase4 ? "56386" : phase3 ? "56384" : "56382";
-const apiPort = phase4 ? 4406 : phase3 ? 4404 : 4402;
-const webPort = phase4 ? 3304 : phase3 ? 3303 : 3302;
+  phase3 || phase4 || phase5 ? join(tmpdir(), `enough-${phase}`) : join(root, ".runtime", phase);
+const pgPort = phase5 ? 55436 : phase4 ? 55435 : phase3 ? 55434 : 55433;
+const redisPort = phase5 ? 56387 : phase4 ? 56385 : phase3 ? 56383 : 56381;
+const wslRedisPort = phase5 ? "56388" : phase4 ? "56386" : phase3 ? "56384" : "56382";
+const apiPort = phase5 ? 4408 : phase4 ? 4406 : phase3 ? 4404 : 4402;
+const webPort = phase5 ? 3305 : phase4 ? 3304 : phase3 ? 3303 : 3302;
 const phaseFlag = `--${phase}`;
 const mode = process.argv[2] ?? "test";
 assert.ok(["test", "serve", "prepare"].includes(mode), "Use test, serve or prepare.");
-const extensionOrigins = phase3 || phase4 ? "" : (process.argv[3] ?? "");
+assert.ok(!phase5 || mode === "test", "Phase 5 is an automated ingestion fixture.");
+const extensionOrigins = phase3 || phase4 || phase5 ? "" : (process.argv[3] ?? "");
 assert.ok(
   extensionOrigins
     .split(",")
@@ -158,9 +160,10 @@ try {
   environment.NEXT_TELEMETRY_DISABLED = "1";
   environment.CI = "1";
   environment.AUTH_ALLOWED_ORIGINS = extensionOrigins;
-  environment.ENOUGH_PHASE2_INTEGRATION = phase3 || phase4 ? "0" : "1";
-  environment.ENOUGH_PHASE3_INTEGRATION = phase3 || phase4 ? "1" : "0";
-  environment.ENOUGH_PHASE4_INTEGRATION = phase4 ? "1" : "0";
+  environment.ENOUGH_PHASE2_INTEGRATION = phase3 || phase4 || phase5 ? "0" : "1";
+  environment.ENOUGH_PHASE3_INTEGRATION = phase3 || phase4 || phase5 ? "1" : "0";
+  environment.ENOUGH_PHASE4_INTEGRATION = phase4 || phase5 ? "1" : "0";
+  environment.ENOUGH_PHASE5_INTEGRATION = phase5 ? "1" : "0";
   // The generated fixture explicitly blanks all provider credentials; no root env file is loaded.
   assert.equal(new URL(environment.DATABASE_URL).pathname, `/enough_${phase}`);
   assert.equal(new URL(environment.DATABASE_URL).port, String(pgPort));
@@ -321,12 +324,13 @@ try {
   console.info(`Isolated API/web ready at ${apiPort}/${webPort}; other runtimes untouched.`);
   if (mode === "test") {
     await runNode(
-      phase3 || phase4
+      phase3 || phase4 || phase5
         ? [
             join(root, "node_modules", "vitest", "vitest.mjs"),
             "run",
             "apps/api/src/onboarding.integration.test.ts",
-            ...(phase4 ? ["apps/api/src/products.integration.test.ts"] : []),
+            ...(phase4 || phase5 ? ["apps/api/src/products.integration.test.ts"] : []),
+            ...(phase5 ? ["apps/api/src/activity.integration.test.ts"] : []),
             "--hookTimeout=60000",
             "--testTimeout=60000",
             "--maxWorkers=1",
