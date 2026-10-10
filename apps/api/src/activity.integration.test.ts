@@ -7,25 +7,28 @@ describe.skipIf(process.env.ENOUGH_PHASE5_INTEGRATION !== "1")(
   () => {
     let pool: typeof import("@enough/db").pool;
     const ids: string[] = [];
-    const api = "http://127.0.0.1:4408";
-    const web = "http://127.0.0.1:3305";
+    const phase6 = process.env.ENOUGH_PHASE6_INTEGRATION === "1";
+    const api = phase6 ? "http://127.0.0.1:4410" : "http://127.0.0.1:4408";
+    const web = phase6 ? "http://127.0.0.1:3306" : "http://127.0.0.1:3305";
 
     beforeAll(async () => {
       const target = new URL(process.env.DATABASE_URL ?? "http://invalid");
       expect([target.hostname, target.port, target.pathname, target.username]).toEqual([
         "127.0.0.1",
-        "55436",
-        "/enough_phase5",
-        "enough_phase5",
+        phase6 ? "55437" : "55436",
+        phase6 ? "/enough_phase6" : "/enough_phase5",
+        phase6 ? "enough_phase6" : "enough_phase5",
       ]);
-      expect(process.env.REDIS_URL).toBe("redis://127.0.0.1:56387/0");
+      expect(process.env.REDIS_URL).toBe(
+        phase6 ? "redis://127.0.0.1:56389/0" : "redis://127.0.0.1:56387/0",
+      );
       expect(process.env.APP_BASE_URL).toBe(web);
       expect(process.env.API_BASE_URL).toBe(api);
       ({ pool } = await import("@enough/db"));
       const identity = await pool.query("SELECT current_user, current_database()");
       expect(identity.rows[0]).toEqual({
-        current_user: "enough_phase5",
-        current_database: "enough_phase5",
+        current_user: phase6 ? "enough_phase6" : "enough_phase5",
+        current_database: phase6 ? "enough_phase6" : "enough_phase5",
       });
     });
     afterAll(async () => {

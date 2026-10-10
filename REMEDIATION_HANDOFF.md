@@ -11,45 +11,71 @@ Close the incomplete work from Phases 1–26 in dependency order, run the requir
 
 ## Current active work
 
-**Phase 5 engineering acceptance COMPLETE — 2026-10-10.** The current
-remediation plan and `IMPLEMENTATION_PLAN.md` define Phase 5 as the Activity
-Event Platform. Fresh migrations, live API/database behavior, concurrency,
-regressions, and quality checks passed. Full evidence and exact commands are in
+**Phase 5 COMPLETE and checkpointed** at
+`28cdbedc8afed3d0735e86d461d283447d878532` (`feat(activity): complete phase 5
+event platform`). Local `main`, recorded `origin/main`, and live remote matched;
+the working tree was clean at Phase 6 start. Full retained evidence is in
 [PHASE_5_ACCEPTANCE.md](PHASE_5_ACCEPTANCE.md).
-Phase 2 Authentication remains COMPLETE and is not an open Phase 5 item. No
-Phase 5 engineering blocker remains.
 
-Continuation inspection found existing uncommitted Phase 5 implementation and
-test changes; this work verified and corrected the expiry-race fixture rather
-than restarting completed implementation. Node `v24.19.0`, pnpm `11.20.0`.
-`pnpm test:activity:integration` PASS 72/72 (28 activity, 26 product, 18
-onboarding); the first run was 71/72 because its synthetic expiry update
-violated the session schema check. After correcting the fixture row,
-`pnpm db:phase5:migration-check` applied all 15 migrations in order to a fresh
-scratch database, passed checksum precheck, verified the activity tables, and
-dropped only that scratch database. `pnpm test` PASS 68/68 (121 opt-in checks
-skipped), `pnpm typecheck` PASS, `pnpm format:check` PASS, `pnpm lint` exit 0
-with 124 existing warnings and one informational diagnostic. Final
-`git diff --check` passed after documentation closure; no changes are staged.
+**Phase 6 COMPLETE — Tool Classification Engine.** The canonical scope remains
+the seeded application/domain catalog, six labels, custom account/product
+mappings, context-dependent resolution, and predictable mapping for tracked
+tools. The existing application source passed isolated automated acceptance;
+no resolver/API/UI implementation change was needed. Detailed evidence is in
+[`PHASE_6_ACCEPTANCE.md`](PHASE_6_ACCEPTANCE.md).
 
-`pnpm audit --json` returned 18 open advisories (3 critical / 8 high / 7
-moderate); no dependency or lockfile changed. `pnpm security:secrets` is not a
-configured script, and no `gitleaks`, `trufflehog`, or `detect-secrets` binary
-is installed. The limited key-pattern scan found no matches but is not a full
-secret scan. All 18 security findings remain OPEN; launch remains **NO-GO**.
-The disposable fixture was stopped; no Windows listeners remained on 55436,
-56387, 4408, or 3305, and WSL Redis port 56388 refused connections. No
-production service, deployment, commit, or push was used.
+Completed in dependency order: the disposable PostgreSQL 18 fixture applied
+migrations `0001`–`0015` and passed precheck with none pending; five live
+classification integration tests passed for catalog/mappings, normalization,
+contexts, wildcards, unknown tools, duplicate conflicts, precedence, CSRF,
+ownership, export, and synthetic deletion. The Phase 3–5 regressions passed
+72/72; default tests passed 68/68 with 126 DB/runtime tests skipped by design;
+workspace typecheck and format passed; lint exited 0 with 124 warnings and one
+informational diagnostic. Fixture services stopped normally. No production
+service, Docker, GitHub Actions, dependency, `.env`, `.runtime/`, credential, or
+browser profile was touched.
 
-Final documentation reconciliation checks (2026-10-10): repository-wide
-Markdown contamination scan returned no matches. The trailing-whitespace scan
-for the new acceptance record, integration test, and migration verifier
-returned no matches. `git diff --check` passed (exit 0; Git noted CRLF
-normalization for two Markdown files). `git status --short` showed 10 modified
-tracked files and 3 untracked files; `git diff --cached --name-only` was empty.
+The user reported the consolidated tools-page session passed **P6-1 PASS;
+P6-2 PASS; P6-3 PASS; P6-4 PASS; P6-5 PASS**. The user confirmed the page says
+`BLOCKED` and `ALLOWED` are descriptive labels only, the isolated fixture
+stopped successfully, and no manual acceptance failures were observed. These
+are user-reported results; no Phase 6 checks were rerun. Full evidence is in
+[`PHASE_6_ACCEPTANCE.md`](PHASE_6_ACCEPTANCE.md). No Phase 6 blocker remains.
 
-**Next safe item:** Phase 6, Tool Classification Engine, in dependency order.
-Keep the Phase 5 worktree uncommitted until explicit checkpoint approval.
+**Next safe item:** wait for explicit Phase 6 checkpoint approval. Do not
+commit, push, or begin Phase 7 before authorization.
+
+**Verification record (Node `v24.19.0`, pnpm `11.20.0`):**
+`pnpm test:classification:integration` PASS (77/77 across classification,
+activity, products, and onboarding; all 15 migrations applied and precheck
+passed); `pnpm test` PASS (68 passed, 126 integration tests skipped by default);
+`pnpm typecheck` PASS; `pnpm format:check` PASS (158 files); `pnpm lint` exit 0
+(124 warnings, 1 informational diagnostic); `git diff --check` PASS.
+`pnpm security:secrets` is unavailable because it is not a defined package
+script; no secret-scan pass is claimed. `git diff --cached --name-only` is
+empty. Exact current `git status --short`:
+
+```text
+ M IMPLEMENTATION_HANDOFF.md
+ M IMPLEMENTATION_PLAN.md
+ M LAUNCH_READINESS.md
+ M REMEDIATION_HANDOFF.md
+ M REMEDIATION_IMPLEMENTATION_PLAN.md
+ M SECURITY_STATUS.md
+ M apps/api/src/activity.integration.test.ts
+ M apps/api/src/onboarding.integration.test.ts
+ M apps/api/src/products.integration.test.ts
+ M package.json
+ M scripts/phase1-postgres.mjs
+ M scripts/phase2-runtime.mjs
+?? PHASE_6_ACCEPTANCE.md
+?? apps/api/src/classification.integration.test.ts
+?? scripts/phase6-manual-account.mjs
+```
+
+No genuine product or provider blocker is known. All 18 dependency-security
+findings (3 critical / 8 high / 7 moderate) remain open release obligations;
+production launch remains **NO-GO**. No Phase 6 commit or push is authorized.
 
 ### Historical Phase 4 closure (checkpoint subsequently accepted)
 

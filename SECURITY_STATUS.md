@@ -55,6 +55,16 @@ findings (3 critical / 8 high / 7 moderate); no dependency changed and productio
 launch remains **NO-GO**. A full secret-scanner executable is unavailable; the
 limited high-confidence pattern scan is documented in the acceptance record.
 
+**Phase 6 Tool Classification Engine COMPLETE, 2026-10-10.** On a disposable
+PostgreSQL 18/Redis/API fixture, migrations `0001`–`0015` and precheck passed;
+5 classification integration tests plus 72 Phase 3–5 regressions passed, along
+with 68 default tests, workspace typecheck, format, and lint (124 warnings, 1
+informational diagnostic). The user reported P6-1–P6-5 PASS in the consolidated
+tools-page review; the fixture stopped and no failures were observed.
+`BLOCKED` and `ALLOWED` remain labels only, not access enforcement. Evidence is
+in `PHASE_6_ACCEPTANCE.md`. All 18 dependency findings remain open release
+obligations; production launch remains NO-GO.
+
 ### Historical Phase 2 source-verification record
 
 Phase 1 is COMPLETE at verified revision `7e78c9d87ea993c7e95530b56dc5db9da1f8d4e7`; launch remains NO-GO. Phase 2 local verification demonstrated and fixed concurrent rotation, rotation/derived-session deletion reauthentication bypasses, stale-password login/change races, duplicated cookie headers and derived-session issuance after parent revocation/rotation. Parent-session issuance now revalidates the credential under a database lock and inherits the original authentication time. Final 68 default tests and 34 separate PostgreSQL/Redis/live-HTTP integration checks passed, along with formatting, lint, typecheck and both client builds. Production cookie/configuration contracts are tested without deployment. Both real Google/GitHub end-to-end logins remain mandatory blockers pending real credentials only in ignored `.env`; provider implementation remains intact. Interactive browser/installed-client acceptance also remains pending. Phase 2 is PARTIAL and Phase 3 on hold. Current evidence and exact OAuth setup/read locations are in `PHASE_2_ACCEPTANCE.md`; historical statements below do not supersede it.
@@ -81,7 +91,7 @@ Production configuration rejects the development auth secret, non-HTTPS base URL
 - Passkeys are deferred. Provider-specific OAuth configuration is not present in this workspace.
 - Product guidance, recommended ratios, and tasks are advisory; no stage-based access policy is enforced in this phase.
 - Activity ingestion passed isolated runtime acceptance; clients must still avoid sending personal or secret values in event attributes.
-- Tool mapping and resolution routes have not passed runtime acceptance. Mapping reads and writes are user-scoped, product IDs are checked for ownership, and cookie-session writes require CSRF. `BLOCKED` and `ALLOWED` are labels only; Phase 6 does not enforce access policy.
+- Tool mapping and resolution routes passed isolated Phase 6 runtime/API acceptance; the user also accepted the tools-page browser flow. User-scoped mappings, product ownership, CSRF, export, and deletion boundaries passed. `BLOCKED` and `ALLOWED` are labels only; Phase 6 does not enforce access policy.
 - Rule creation, edits, overrides, and evaluation have not passed runtime acceptance. Evaluation is currently exposed as a preview/API decision; native app enforcement and device agents are not implemented. Deterministic evaluator tests remain pending.
 - Credit wallet code has not passed runtime or concurrent-device acceptance. The account row lock serializes operations within each global or product wallet; this guarantee still needs database concurrency coverage. Credit writes use Redis rate limits (120 per minute; grants/adjustments are additionally limited to 10 per hour). Authenticated earn and adjust routes let owners issue credits to their own accounts. New task rewards are issued only after evidence review; previously issued Phase 12 rewards remain marked self-reported. Manual earn and adjustment controls remain prototypes, not billing or evidence-verification sources.
 - Authenticated activity history API reads, ownership, export, and deletion passed the Phase 5 isolated runtime acceptance; browser workspace presentation was not part of that service-level check. Phase 13 evidence endpoints enforce ownership and private file retrieval in source, but migration, authorization, content handling, review idempotency, reward issuance, account export/deletion, and browser behavior remain unverified. Integration references are not authenticated against providers. A client-side login redirect does not replace API authorization.

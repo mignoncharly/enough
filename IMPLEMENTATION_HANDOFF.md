@@ -196,11 +196,15 @@ Implemented flows include email/password signup and login, email verification, m
 - [x] Add custom application/domain mappings, product scope, context pairs, uniqueness, and account export support.
 - [x] Add deterministic resolution with wildcard domain matching and neutral fallback; expose preview in the workspace UI.
 - [x] Keep `BLOCKED` and `ALLOWED` descriptive only; do not enforce policy in this phase.
-- [ ] Apply migrations `0002_authentication.sql` through `0006_tool_classification.sql` in order.
-- [ ] Confirm catalog items, account/product mappings, context matches, wildcard domains, and unknown keys resolve as expected.
-- [ ] Confirm duplicate mappings conflict, product ownership boundaries hold, and product/account deletion removes scoped mappings.
-- [ ] Confirm account export includes mappings and the tools page can create, edit, remove, and preview mappings at runtime.
-- [ ] Review implementation and run the project's requested quality checks before marking Phase 6 complete. No tests or typechecks were run during this implementation turn.
+- [x] Apply the complete migration chain `0001`–`0015` on disposable PostgreSQL 18; verify `0002`–`0006` order and a clean migration precheck.
+- [x] Confirm catalog items, account/product mappings, context matches, wildcard domains, unknown keys, duplicate conflicts, and resolver precedence in live API/database tests.
+- [x] Confirm product ownership boundaries, product/account cascade deletion, and account export mapping isolation.
+- [x] Complete one consolidated tools-page browser review for create/edit/remove/preview behavior; P6-1–P6-5 PASS by explicit user report, 2026-10-10; fixture stopped and no failures observed.
+
+**Phase 6 COMPLETE, 2026-10-10.** The Windows-first disposable migration/API
+pass and Phase 3–6 regression suite passed. The user accepted the consolidated
+tools-page review with P6-1–P6-5 all PASS; no manual failures were reported and
+the fixture was stopped. Full evidence is in `PHASE_6_ACCEPTANCE.md`.
 
 ## Phase 7 acceptance checklist
 

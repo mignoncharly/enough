@@ -2,13 +2,18 @@ import { randomUUID } from "node:crypto";
 import { PRODUCT_STAGE_GUIDANCE, PRODUCT_STAGES } from "@enough/shared";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-const phase5 = process.env.ENOUGH_PHASE5_INTEGRATION === "1";
+const phase6 = process.env.ENOUGH_PHASE6_INTEGRATION === "1";
+const phase5 = process.env.ENOUGH_PHASE5_INTEGRATION === "1" || phase6;
 describe.skipIf(process.env.ENOUGH_PHASE4_INTEGRATION !== "1")(
   "Phase 4 products on disposable PostgreSQL, Redis and web proxy",
   () => {
     let pool: typeof import("@enough/db").pool;
     const ids: string[] = [];
-    const web = phase5 ? "http://127.0.0.1:3305" : "http://127.0.0.1:3304";
+    const web = phase6
+      ? "http://127.0.0.1:3306"
+      : phase5
+        ? "http://127.0.0.1:3305"
+        : "http://127.0.0.1:3304";
     const answers = {
       productDescription: "Clinic scheduling assistant",
       targetCustomer: "Independent clinics",
@@ -27,16 +32,24 @@ describe.skipIf(process.env.ENOUGH_PHASE4_INTEGRATION !== "1")(
       const target = new URL(process.env.DATABASE_URL ?? "http://invalid");
       expect([target.hostname, target.port, target.pathname, target.username]).toEqual([
         "127.0.0.1",
-        phase5 ? "55436" : "55435",
-        phase5 ? "/enough_phase5" : "/enough_phase4",
-        phase5 ? "enough_phase5" : "enough_phase4",
+        phase6 ? "55437" : phase5 ? "55436" : "55435",
+        phase6 ? "/enough_phase6" : phase5 ? "/enough_phase5" : "/enough_phase4",
+        phase6 ? "enough_phase6" : phase5 ? "enough_phase5" : "enough_phase4",
       ]);
       expect(process.env.REDIS_URL).toBe(
-        phase5 ? "redis://127.0.0.1:56387/0" : "redis://127.0.0.1:56385/0",
+        phase6
+          ? "redis://127.0.0.1:56389/0"
+          : phase5
+            ? "redis://127.0.0.1:56387/0"
+            : "redis://127.0.0.1:56385/0",
       );
       expect(process.env.APP_BASE_URL).toBe(web);
       expect(process.env.API_BASE_URL).toBe(
-        phase5 ? "http://127.0.0.1:4408" : "http://127.0.0.1:4406",
+        phase6
+          ? "http://127.0.0.1:4410"
+          : phase5
+            ? "http://127.0.0.1:4408"
+            : "http://127.0.0.1:4406",
       );
       ({ pool } = await import("@enough/db"));
     });

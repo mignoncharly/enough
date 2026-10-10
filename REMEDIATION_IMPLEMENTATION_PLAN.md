@@ -1,6 +1,6 @@
 # Remediation Implementation Plan
 
-Last consolidated: 2026-10-10 (Phase 5 engineering accepted; Phase 6 not started)
+Last consolidated: 2026-10-10 (Phase 5 checkpointed; Phase 6 COMPLETE, checkpoint approval pending)
 Source of truth for implementation order: this file. The historical scope remains in `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md`; historical implementation detail and evidence remain in `IMPLEMENTATION_HANDOFF.md`.
 
 ## Objective and current decision 
@@ -140,11 +140,21 @@ checkpoint commit/push still requires explicit approval. Overall launch remains
 
 ### Phase 6 — Tool Classification Engine
 
-**High**
+**High — COMPLETE, 2026-10-10.** Existing canonical source passed isolated
+PostgreSQL/API verification without application-source changes. The user
+accepted the consolidated tools-page session; P6-1–P6-5 all PASS. Phase 5 is
+checkpointed; no dependency/security changes or production operations were in
+scope. Detailed command output and results are recorded in
+`PHASE_6_ACCEPTANCE.md`.
 
-- [ ] Apply migrations `0002`–`0006` in order.
-- [ ] Exercise catalog items, account/product mappings, context matches, wildcard domains, unknown keys, duplicate conflicts, and resolver precedence.
-- [ ] Verify ownership boundaries, product/account deletion, export, and tools-page create/edit/remove/preview behavior.
+- [x] Apply migrations `0001`–`0015` in order on a disposable PostgreSQL 18 fixture; migration precheck passes with no pending migrations.
+- [x] Exercise catalog items, account/product mappings, context matches, wildcard domains, unknown keys, duplicate conflicts, and resolver precedence in five live integration tests.
+- [x] Verify ownership boundaries, product/account deletion, export, and CSRF/authorization boundaries in isolated API/database coverage.
+- [x] Complete one consolidated tools-page browser review for create/edit/remove/preview behavior; P6-1–P6-5 PASS by explicit user report, 2026-10-10. The isolated fixture stopped successfully; no manual failures reported.
+
+Phase 6 is formally COMPLETE with no remaining Phase 6 blocker. Phase 7 remains
+the next roadmap phase; do not start it or checkpoint Phase 6 without explicit
+authorization.
 
 ### Phase 7 — Rule Engine
 

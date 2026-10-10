@@ -1,10 +1,10 @@
 # Phase 27 — Full Product Launch Gate
 
-Last assessed: 2026-10-07
+Last assessed: 2026-10-10 (tool-classification capability row only; full launch gate not reassessed)
 
 ## Decision
 
-**NO-GO. Do not open the product to general users.** The required capabilities have not been accepted as one working production system. The project has no configured production host, database migrations `0002` through `0015` have not been applied in the recorded environment, Phase 26 production checks have not run, multiple critical user flows remain unverified, and several required integrations or release artifacts are missing.
+**NO-GO. Do not open the product to general users.** The required capabilities have not been accepted as one working production system. The project has no configured production host; migrations `0002` through `0015` have only been exercised in disposable development fixtures; Phase 26 production checks have not run; multiple critical user flows remain unverified; and required integrations or release artifacts are missing.
 
 This is a decision from the evidence recorded in this workspace, not a claim that the source implementation is absent. Source presence, unit tests, and successful bundle builds do not substitute for the launch gate's integrated runtime evidence.
 
@@ -15,7 +15,7 @@ This is a decision from the evidence recorded in this workspace, not a claim tha
 | Onboarding | UI/API source exists; migration and browser/runtime acceptance pending. | Not accepted |
 | Products and stages | Source exists; migrations, persistence, stage transitions, and runtime acceptance pending. | Not accepted |
 | Activity detection | Activity APIs and optional client event capture exist; ingestion, privacy, ordering, and aggregates lack runtime acceptance. | Not accepted |
-| Tool classification | Catalog, mappings, resolver, and UI exist; migration and runtime acceptance pending. | Not accepted |
+| Tool classification | Phase 6 COMPLETE: migrations, API/data boundaries, resolver, and tools-page create/edit/remove/preview accepted; P6-1–P6-5 PASS by user report. BLOCKED/ALLOWED are descriptive labels only. | Accepted (Phase 6 only) |
 | Build Credits | Ledger, reservations, refunds, and evidence-gated rewards exist in source; product-specific minute/session accounting is not connected to rule enforcement. DB and multi-device concurrency acceptance pending. Manual earn/adjust remain prototype controls. | Missing integration / not accepted |
 | Rules engine | Deterministic rules and overrides exist in source; database, schedules, client parity, and enforcement acceptance pending. | Not accepted |
 | Browser blocking | Chromium/Firefox extension source and store archives exist; browser installation, policy parity, offline behavior, and store publication are pending. | Not accepted |
