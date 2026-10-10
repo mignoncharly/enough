@@ -1,6 +1,6 @@
 # Security Status
 
-Last updated: 2026-10-09
+Last updated: 2026-10-10
 
 ## Current status
 
@@ -21,10 +21,28 @@ Phase 3 is COMPLETE: 18 isolated onboarding integration checks and 68 default
 tests pass, including ownership, forged IDs, CSRF/origins, invalid inputs and
 concurrent saves. The optimized web build and quality checks pass; P3-1–P3-6
 browser acceptance is PASS by explicit user report, 2026-10-09, in
-`PHASE_3_ACCEPTANCE.md`. Checkpoint approval remains pending. No dependencies,
+`PHASE_3_ACCEPTANCE.md`; checkpoint `e07f502a90aaa85a22ad2f70647b8ca9bd234a4d` is accepted. No dependencies,
 lockfile, existing credentials or protected runtime files changed. The 18 audit
 entries above remain open; no new audit or release waiver is claimed. The overall
 product remains **NO-GO**; later security/distribution/production work is required.
+
+**Phase 4 formally COMPLETE, 2026-10-10.** P4-1–P4-5 all PASS by explicit user
+report, with no browser acceptance failures. Twenty-six
+product integration checks plus all 18 onboarding regressions pass on disposable
+Windows PostgreSQL/WSL Redis with the live API/web proxy. They cover ownership,
+CSRF, validation/rollback, concurrent primary goals/traction, stale stage/goal/metric
+writes, export and deletion/cascades. Product changes now synchronize the linked
+onboarding profile in the same transaction. Optional expected-value fields preserve
+existing API callers; the dashboard sends expectations for stale-write rejection.
+These are value/status checks, not a new global versioning architecture.
+Guidance and ratios remain advisory. No policy-enforcement claim is added.
+Automated evidence and accepted browser results are in `PHASE_4_ACCEPTANCE.md`.
+All 11 source/manifest/lockfile fingerprints match at documentation-only closure;
+no manual checks were repeated. Checkpoint approval remains pending.
+All 18 findings remain OPEN at the existing Phase 20/23/24 gates; no fresh audit,
+dependency upgrade, suppression, waiver or production operation is claimed.
+Existing protected configuration/runtime/credentials and browser profiles were
+untouched. Phase 1–3 accepted records remain unchanged.
 
 ### Historical Phase 2 source-verification record
 

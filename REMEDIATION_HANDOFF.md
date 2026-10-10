@@ -1,6 +1,6 @@
 # Remediation Handoff
 
-Last updated: 2026-10-09
+Last updated: 2026-10-10
 Active plan: [REMEDIATION_IMPLEMENTATION_PLAN.md](REMEDIATION_IMPLEMENTATION_PLAN.md)  
 Historical detail: [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)  
 Current launch decision: **NO-GO**
@@ -10,6 +10,111 @@ Current launch decision: **NO-GO**
 Close the incomplete work from Phases 1–26 in dependency order, run the required automated, database, client, security, release, and operational checks, and repeat Phase 27 only after evidence is accepted. Do not restart feature implementation that already exists in source unless verification finds a defect or a launch requirement is missing.
 
 ## Current active work
+
+**Phase 4 formally COMPLETE — 2026-10-10; checkpoint approval pending.**
+The user explicitly reported the consolidated browser session completed
+successfully: **P4-1 PASS; P4-2 PASS; P4-3 PASS; P4-4 PASS; P4-5 PASS**, with no
+browser acceptance failures. These are accepted user-reported results, not
+assistant observations. All five checks are closed; do not reopen or repeat them.
+Accepted Phase 1–3 evidence remains unchanged. Full evidence is in
+[PHASE_4_ACCEPTANCE.md](PHASE_4_ACCEPTANCE.md).
+
+The accepted scope includes products, all nine stages and guidance/ratios/tasks,
+history, goals, metrics, onboarding synchronization, export, ownership,
+deletion/cascades and stale/invalid updates. Prior 44 integration checks (26 product
+and 18 onboarding), 68 default tests, quality checks and optimized web build remain
+valid. Closure fingerprint verification confirms all 11 source/manifest/lockfile
+anchors match. Accepted Phase 1–3 records and the lockfile have no diff. This is
+a documentation-only closure; no further formatting/lint/typecheck/test/build
+run is needed for unchanged tested source. Final commands/results are recorded
+in the acceptance record. Sandbox startup failures required approved retries.
+
+No Phase 4 blocker remains. **Next safe action: wait for explicit Phase 4
+checkpoint approval before any staging, commit or push.** Suggested message:
+`fix: complete phase 4 product and stage acceptance`. Do not start Phase 5 here.
+HEAD and recorded origin/main remain `e07f502a90aaa85a22ad2f70647b8ca9bd234a4d`
+on `main`; inventory is 13 modified tracked files and two untracked, nothing
+staged. All 15 paths to commit are listed in the acceptance record. No credentials,
+protected configuration/runtime or browser profiles were read or modified.
+Current fixture service state after the user's session is not inferred or changed.
+
+All **18 dependency-security findings remain OPEN** at their existing release
+gates (3 critical / 8 high / 7 moderate); no upgrade, suppression, waiver or
+production action. Production launch remains **NO-GO**.
+
+### Historical Phase 4 implementation pass (superseded by closure above)
+
+**Phase 4 resume reconciliation and implementation pass — 2026-10-09:**
+Implementation and automated verification are complete; **Phase 4 remains ACTIVE**
+until one consolidated browser session is accepted. See
+[PHASE_4_ACCEPTANCE.md](PHASE_4_ACCEPTANCE.md) for scope, commands, failures,
+retained/fresh evidence, source fingerprints and the P4-1–P4-5 session.
+
+Final continuation check, 2026-10-10: `git diff --check` PASS (exit 0),
+status/inventory unchanged, index empty, HEAD and recorded origin/main still
+match the Phase 3 checkpoint. No new manual acceptance report has arrived;
+P4-1–P4-5 remain pending. No further implementation change or test rerun was needed.
+
+The disconnect left 12 modified tracked files and the new product integration
+suite. Inspection found the completed 44-test integration log (26 product + 18
+onboarding, 15.33 s), earlier 68-test default-suite PASS and quality logs. Source
+timestamps precede the final integration run; no source changes were needed in
+this resume. The earlier runs and their failures are recorded as retained
+evidence, not newly executed tests. Final test corrections postdated the earlier
+format/typecheck logs, so those two checks were rerun and passed (exit 0).
+The new isolated optimized web build passed (exit 0, all 29 static pages).
+`node scripts/phase2-runtime.mjs prepare --phase4` passed (exit 0), creating only
+a synthetic TEMP account/product and revoking its setup session before shutdown.
+No existing credentials were read or printed.
+
+Scope fixes already present and reviewed: transactional product-to-onboarding
+metric/primary-goal/recommendation synchronization; completed-goal preservation;
+stale stage/status/metric checks sent by the dashboard; duplicate-name conflicts;
+equivalent-decimal observation deduplication; primary-goal UI and stage-selector
+refresh. All nine stages, history, guidance/ratios/tasks, multiple products,
+export, ownership, atomic validation, concurrency and deletion/cascades have
+automated coverage. Phase 1–3 accepted behavior/records are preserved.
+
+No implementation or provider blocker remains. Browser runtime setup reported
+`No browser is available`; documented read-only discovery returned `[]`. No UI,
+browser profile or client was touched. The only acceptance gap is P4-1–P4-5,
+delivered as ONE session after automation. No repeated Phase 1–3 manual checks.
+**Next safe action:** run `pnpm test:products:serve` and follow that consolidated
+session, then record the combined results. Do not mark Phase 4 complete before
+acceptance evidence; do not commit or push until explicit checkpoint approval.
+
+HEAD and recorded origin/main remain `e07f502a90aaa85a22ad2f70647b8ca9bd234a4d`
+on `main`. The working tree is deliberately uncommitted; exact inventory is in
+the acceptance record. No staging, commit, push, dependency change or production
+action. All 18 dependency findings remain OPEN; launch remains NO-GO.
+Final `git diff --check` passed; accepted Phase 1–3 records and lockfile have no
+diff, and the index is empty. Inventory: 13 tracked modifications and two new
+files. Fresh shutdown check found no Windows listeners on 55435/56385/4406/3304;
+a WSL bind probe confirmed Redis 56386 free. All fixture services are stopped.
+Repeated `helper_unknown_error` sandbox startup failures were resolved by
+approved retries. These were execution-environment failures before commands ran.
+
+### Phase 4 initial activation (superseded by the resume result above)
+
+**Phase 4 ACTIVE — 2026-10-09.** Phase 3 is accepted and checkpointed at
+`e07f502a90aaa85a22ad2f70647b8ca9bd234a4d`; initial inspection confirms clean
+`main` and matching recorded `origin/main`. This supersedes historical Phase 3
+checkpoint-pending directions below. Phase 1–3 acceptance remains closed.
+
+Scope and order follow the Phase 4 remediation checklist: products, all nine
+stages/history, goals/status/primary goals, metrics, ratios/task guidance,
+onboarding synchronization, export, ownership, deletion/cascades and invalid/stale
+updates. Existing source is being verified, not restarted. No architecture or
+policy-enforcement expansion. No external blocker found; source review identifies
+missing product-to-onboarding metric/primary-goal synchronization for regression
+verification. A dedicated TEMP/enough-phase4 fixture will use PostgreSQL 55435,
+Redis 56385/WSL 56386, API 4406 and web 3304. Protected configuration, `.runtime/`,
+credentials and profiles are not test targets. Windows-first, no Docker,
+GitHub Actions, production or unrelated dependency updates. All 18 findings
+remain OPEN and launch NO-GO. One consolidated browser session follows completed
+implementation/automation. Do not commit or push without Phase 4 approval.
+
+### Historical Phase 3 closure and checkpoint preparation
 
 **Phase 3 formally COMPLETE — 2026-10-09.** The user reported the consolidated
 browser session completed successfully, with no acceptance failures:

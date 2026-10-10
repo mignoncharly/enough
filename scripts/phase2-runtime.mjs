@@ -22,16 +22,19 @@ import { parseEnv } from "node:util";
 // Fixed, separately owned targets. Never loads the root .env or resets another service.
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const phase3 = process.argv.includes("--phase3");
-const fixture = phase3 ? join(tmpdir(), "enough-phase3") : join(root, ".runtime", "phase2");
-const pgPort = phase3 ? 55434 : 55433;
-const redisPort = phase3 ? 56383 : 56381;
-const wslRedisPort = phase3 ? "56384" : "56382";
-const apiPort = phase3 ? 4404 : 4402;
-const webPort = phase3 ? 3303 : 3302;
-const phaseFlag = phase3 ? "--phase3" : "--phase2";
+const phase4 = process.argv.includes("--phase4");
+const phase = phase4 ? "phase4" : phase3 ? "phase3" : "phase2";
+const fixture =
+  phase3 || phase4 ? join(tmpdir(), `enough-${phase}`) : join(root, ".runtime", phase);
+const pgPort = phase4 ? 55435 : phase3 ? 55434 : 55433;
+const redisPort = phase4 ? 56385 : phase3 ? 56383 : 56381;
+const wslRedisPort = phase4 ? "56386" : phase3 ? "56384" : "56382";
+const apiPort = phase4 ? 4406 : phase3 ? 4404 : 4402;
+const webPort = phase4 ? 3304 : phase3 ? 3303 : 3302;
+const phaseFlag = `--${phase}`;
 const mode = process.argv[2] ?? "test";
 assert.ok(["test", "serve", "prepare"].includes(mode), "Use test, serve or prepare.");
-const extensionOrigins = phase3 ? "" : (process.argv[3] ?? "");
+const extensionOrigins = phase3 || phase4 ? "" : (process.argv[3] ?? "");
 assert.ok(
   extensionOrigins
     .split(",")
@@ -155,13 +158,11 @@ try {
   environment.NEXT_TELEMETRY_DISABLED = "1";
   environment.CI = "1";
   environment.AUTH_ALLOWED_ORIGINS = extensionOrigins;
-  environment.ENOUGH_PHASE2_INTEGRATION = phase3 ? "0" : "1";
-  environment.ENOUGH_PHASE3_INTEGRATION = phase3 ? "1" : "0";
+  environment.ENOUGH_PHASE2_INTEGRATION = phase3 || phase4 ? "0" : "1";
+  environment.ENOUGH_PHASE3_INTEGRATION = phase3 || phase4 ? "1" : "0";
+  environment.ENOUGH_PHASE4_INTEGRATION = phase4 ? "1" : "0";
   // The generated fixture explicitly blanks all provider credentials; no root env file is loaded.
-  assert.equal(
-    new URL(environment.DATABASE_URL).pathname,
-    phase3 ? "/enough_phase3" : "/enough_phase2",
-  );
+  assert.equal(new URL(environment.DATABASE_URL).pathname, `/enough_${phase}`);
   assert.equal(new URL(environment.DATABASE_URL).port, String(pgPort));
   assert.equal(environment.REDIS_URL, `redis://127.0.0.1:${redisPort}/0`);
   const redis = launch("wsl", [
@@ -320,11 +321,12 @@ try {
   console.info(`Isolated API/web ready at ${apiPort}/${webPort}; other runtimes untouched.`);
   if (mode === "test") {
     await runNode(
-      phase3
+      phase3 || phase4
         ? [
             join(root, "node_modules", "vitest", "vitest.mjs"),
             "run",
             "apps/api/src/onboarding.integration.test.ts",
+            ...(phase4 ? ["apps/api/src/products.integration.test.ts"] : []),
             "--hookTimeout=60000",
             "--testTimeout=60000",
             "--maxWorkers=1",
@@ -337,7 +339,11 @@ try {
       [
         "--import",
         "tsx",
-        join(root, "scripts", phase3 ? "phase3-manual-account.mjs" : "phase2-manual-account.mjs"),
+        join(
+          root,
+          "scripts",
+          phase3 || phase4 ? "phase3-manual-account.mjs" : "phase2-manual-account.mjs",
+        ),
       ],
       {
         cwd: join(root, "apps", "api"),
@@ -348,8 +354,8 @@ try {
       console.info("Manual fixture preparation verified; stopping fixture services.");
     } else {
       console.info(
-        phase3
-          ? "Fixture serving. Ctrl+C stops this fixture; data stays in TEMP/enough-phase3."
+        phase3 || phase4
+          ? `Fixture serving. Ctrl+C stops this fixture; data stays in TEMP/enough-${phase}.`
           : "Fixture serving. Ctrl+C stops only this fixture; data stays in ignored .runtime/phase2.",
       );
       await Promise.race([once(api, "exit"), once(web, "exit"), once(redis, "exit")]);

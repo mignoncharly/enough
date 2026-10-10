@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { checkRateLimit } from "@enough/auth";
-import { pool } from "@enough/db";
+import { type DbClient, pool } from "@enough/db";
 import {
   isLaunchedProductStage,
   PRODUCT_STAGE_GUIDANCE,
@@ -12,6 +12,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { requireCsrf, requireSession } from "./api-auth.js";
 import { insertNotification } from "./notifications.js";
+import { initialRecommendation } from "./onboarding.js";
 
 const goalTypes = [
   "PROBLEM_RESEARCH",
@@ -94,6 +95,7 @@ const createProductSchema = z
 
 const stageChangeSchema = z.object({
   productStage: z.enum(PRODUCT_STAGES),
+  expectedStage: z.enum(PRODUCT_STAGES).optional(),
   reason: z.string().trim().max(500).optional(),
 });
 
@@ -111,13 +113,25 @@ const createGoalSchema = z.object({
   dueAt: z.string().datetime().nullable().optional(),
 });
 
-const updateGoalSchema = z.object({ status: z.enum(goalStatuses) });
+const updateGoalSchema = z.object({
+  status: z.enum(goalStatuses),
+  expectedStatus: z.enum(goalStatuses).optional(),
+});
 
 const createMetricSchema = z.object({
   metricKey: z.string().regex(/^[a-z][a-z0-9_]{0,49}$/),
   displayName: z.string().trim().min(2).max(100),
   value: z.string().regex(/^-?(?:0|[1-9]\d{0,13})(?:\.\d{1,4})?$/),
   unit: z.string().trim().min(1).max(32),
+  expectedValue: z
+    .string()
+    .regex(/^-?(?:0|[1-9]\d{0,13})(?:\.\d{1,4})?$/)
+    .nullable()
+    .optional(),
+  expectedCurrency: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .optional(),
 });
 
 function productResponse(product: ProductRow) {
@@ -186,6 +200,60 @@ async function findOwnedProduct(productId: string, userId: string): Promise<Prod
     [productId, userId],
   );
   return result.rows[0] ?? null;
+}
+
+// Call under the account/product write locks, within the same transaction.
+// With no active primary, next_goal remains the last onboarding answer; status
+// lives on the canonical goal and an unchanged wizard save must not reopen it.
+async function syncOnboardingProfile(client: DbClient, productId: string, userId: string) {
+  const result = await client.query<ProductRow & { next_goal: string; build_tools: string[] }>(
+    `SELECT product.*, profile.build_tools,
+       COALESCE((SELECT title FROM enough.product_goals
+         WHERE product_id = product.id AND user_id = $2 AND is_primary AND status = 'ACTIVE'),
+         profile.next_goal) AS next_goal
+     FROM enough.products product JOIN enough.onboarding_profiles profile
+       ON profile.product_id = product.id AND profile.user_id = product.user_id
+     WHERE product.id = $1 AND product.user_id = $2`,
+    [productId, userId],
+  );
+  const product = result.rows[0];
+  if (!product) return;
+  const recommendation = initialRecommendation({
+    productDescription: product.name,
+    targetCustomer: product.target_customer,
+    problemStatement: product.problem_statement,
+    productStage: product.product_stage,
+    hasLaunched: product.has_launched,
+    userCount: product.user_count,
+    payingUserCount: product.paying_user_count,
+    currentRevenue: product.current_revenue,
+    revenueCurrency: product.revenue_currency.trim(),
+    nextGoal: product.next_goal,
+    buildTools: product.build_tools,
+  });
+  await client.query(
+    `UPDATE enough.onboarding_profiles SET product_description = $3,
+       target_customer = $4, problem_statement = $5, product_stage = $6,
+       has_launched = $7, user_count = $8, paying_user_count = $9,
+       current_revenue = $10, revenue_currency = $11, next_goal = $12,
+       recommended_config = $13::jsonb, updated_at = now()
+     WHERE product_id = $1 AND user_id = $2`,
+    [
+      productId,
+      userId,
+      product.name,
+      product.target_customer,
+      product.problem_statement,
+      product.product_stage,
+      product.has_launched,
+      product.user_count,
+      product.paying_user_count,
+      product.current_revenue,
+      product.revenue_currency,
+      product.next_goal,
+      JSON.stringify(recommendation),
+    ],
+  );
 }
 
 async function loadProductDetail(productId: string, userId: string) {
@@ -319,6 +387,13 @@ export async function registerProductRoutes(app: FastifyInstance): Promise<void>
       return reply.code(201).send({ product: productResponse(product) });
     } catch (error) {
       await client.query("ROLLBACK");
+      if (
+        (error as { code?: string; constraint?: string }).code === "23505" &&
+        (error as { constraint?: string }).constraint === "products_user_name_idx"
+      )
+        return reply
+          .code(409)
+          .send({ error: "A product with this name already exists. Choose another name." });
       request.log.error({ err: error }, "Could not create product");
       return reply
         .code(503)
@@ -356,6 +431,7 @@ export async function registerProductRoutes(app: FastifyInstance): Promise<void>
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
+      await client.query("SELECT id FROM enough.auth_users WHERE id = $1 FOR UPDATE", [session.id]);
       const current = await client.query<{ product_stage: ProductStage; name: string }>(
         "SELECT product_stage, name FROM enough.products WHERE id = $1 AND user_id = $2 FOR UPDATE",
         [productId, session.id],
@@ -364,6 +440,12 @@ export async function registerProductRoutes(app: FastifyInstance): Promise<void>
       if (!previousStage) {
         await client.query("ROLLBACK");
         return reply.code(404).send({ error: "Product not found." });
+      }
+      if (parsed.data.expectedStage !== undefined && parsed.data.expectedStage !== previousStage) {
+        await client.query("ROLLBACK");
+        return reply
+          .code(409)
+          .send({ error: "The product stage changed. Refresh and review before trying again." });
       }
       if (previousStage === parsed.data.productStage) {
         await client.query("COMMIT");
@@ -400,33 +482,7 @@ export async function registerProductRoutes(app: FastifyInstance): Promise<void>
         ],
       );
       const guidance = PRODUCT_STAGE_GUIDANCE[parsed.data.productStage];
-      const configUpdate = {
-        version: 2,
-        productStage: parsed.data.productStage,
-        headline: guidance.headline,
-        firstAction: guidance.tasks[0],
-        priorities: guidance.priorities,
-        signalsToNotice: guidance.signals,
-        tasks: guidance.tasks,
-        recommendedRatio: {
-          buildPercent: guidance.buildPercent,
-          marketPercent: guidance.marketPercent,
-        },
-      };
-      await client.query(
-        `UPDATE enough.onboarding_profiles
-         SET product_stage = $2,
-             has_launched = has_launched OR $4::boolean,
-             recommended_config = COALESCE(recommended_config, '{}'::jsonb) || $3::jsonb,
-             updated_at = now()
-         WHERE product_id = $1`,
-        [
-          productId,
-          parsed.data.productStage,
-          JSON.stringify(configUpdate),
-          isLaunchedProductStage(parsed.data.productStage),
-        ],
-      );
+      await syncOnboardingProfile(client, productId, session.id);
       await client.query(
         `INSERT INTO enough.auth_audit_events (id, user_id, device_id, event_type)
          VALUES ($1, $2, $3, 'product.stage_changed')`,
@@ -488,6 +544,7 @@ export async function registerProductRoutes(app: FastifyInstance): Promise<void>
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
+      await client.query("SELECT id FROM enough.auth_users WHERE id = $1 FOR UPDATE", [session.id]);
       const product = await client.query(
         "SELECT id FROM enough.products WHERE id = $1 AND user_id = $2 FOR UPDATE",
         [productId, session.id],
@@ -520,6 +577,7 @@ export async function registerProductRoutes(app: FastifyInstance): Promise<void>
           goal.dueAt ?? null,
         ],
       );
+      await syncOnboardingProfile(client, productId, session.id);
       await client.query(
         `INSERT INTO enough.auth_audit_events (id, user_id, device_id, event_type)
          VALUES ($1, $2, $3, 'product.goal_created')`,
@@ -554,6 +612,28 @@ export async function registerProductRoutes(app: FastifyInstance): Promise<void>
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
+      await client.query("SELECT id FROM enough.auth_users WHERE id = $1 FOR UPDATE", [session.id]);
+      await client.query(
+        "SELECT id FROM enough.products WHERE id = $1 AND user_id = $2 FOR UPDATE",
+        [productId, session.id],
+      );
+      const current = await client.query<GoalRow>(
+        "SELECT * FROM enough.product_goals WHERE id = $1 AND product_id = $2 AND user_id = $3 FOR UPDATE",
+        [goalId.data, productId, session.id],
+      );
+      if (!current.rowCount) {
+        await client.query("ROLLBACK");
+        return reply.code(404).send({ error: "Goal not found." });
+      }
+      if (
+        parsed.data.expectedStatus !== undefined &&
+        parsed.data.expectedStatus !== current.rows[0].status
+      ) {
+        await client.query("ROLLBACK");
+        return reply
+          .code(409)
+          .send({ error: "The goal status changed. Refresh and review before trying again." });
+      }
       const result = await client.query<GoalRow>(
         `UPDATE enough.product_goals AS goal
          SET status = $4, is_primary = CASE WHEN $4 = 'ACTIVE' THEN is_primary ELSE false END,
@@ -569,6 +649,7 @@ export async function registerProductRoutes(app: FastifyInstance): Promise<void>
         await client.query("ROLLBACK");
         return reply.code(404).send({ error: "Goal not found." });
       }
+      await syncOnboardingProfile(client, productId, session.id);
       await client.query(
         `INSERT INTO enough.auth_audit_events (id, user_id, device_id, event_type)
          VALUES ($1, $2, $3, 'product.goal_updated')`,
@@ -602,6 +683,7 @@ export async function registerProductRoutes(app: FastifyInstance): Promise<void>
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
+      await client.query("SELECT id FROM enough.auth_users WHERE id = $1 FOR UPDATE", [session.id]);
       const found = await client.query<ProductRow>(
         "SELECT * FROM enough.products WHERE id = $1 AND user_id = $2 FOR UPDATE",
         [productId, session.id],
@@ -612,6 +694,28 @@ export async function registerProductRoutes(app: FastifyInstance): Promise<void>
         return reply.code(404).send({ error: "Product not found." });
       }
       const metricKey = metric.metricKey;
+      const canonicalValue =
+        metricKey === "total_users"
+          ? product.user_count
+          : metricKey === "paying_users"
+            ? product.paying_user_count
+            : metricKey === "current_revenue"
+              ? product.current_revenue
+              : undefined;
+      if (
+        canonicalValue !== undefined &&
+        metric.expectedValue !== undefined &&
+        ((canonicalValue === null) !== (metric.expectedValue === null) ||
+          Number(canonicalValue) !== Number(metric.expectedValue) ||
+          (metricKey === "current_revenue" &&
+            metric.expectedCurrency !== undefined &&
+            metric.expectedCurrency !== product.revenue_currency.trim()))
+      ) {
+        await client.query("ROLLBACK");
+        return reply
+          .code(409)
+          .send({ error: "The product metric changed. Refresh and review before trying again." });
+      }
       let displayName = metric.displayName;
       let value = metric.value;
       let unit = metric.unit;
@@ -668,6 +772,7 @@ export async function registerProductRoutes(app: FastifyInstance): Promise<void>
          RETURNING id, metric_key, display_name, value::text AS value, unit, recorded_at`,
         [randomUUID(), productId, metricKey, displayName, value, unit],
       );
+      await syncOnboardingProfile(client, productId, session.id);
       await client.query(
         `INSERT INTO enough.auth_audit_events (id, user_id, device_id, event_type)
          VALUES ($1, $2, $3, 'product.metric_recorded')`,

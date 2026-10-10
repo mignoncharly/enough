@@ -75,7 +75,7 @@ function profileResponse(row: OnboardingRow) {
   };
 }
 
-function initialRecommendation(answers: z.infer<typeof onboardingSchema>) {
+export function initialRecommendation(answers: z.infer<typeof onboardingSchema>) {
   const stage = PRODUCT_STAGE_GUIDANCE[answers.productStage];
   let firstAction = stage.priorities[0] ?? stage.headline;
   if (Number(answers.currentRevenue ?? "0") > 0) {
@@ -152,8 +152,8 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
       // Serialize profile writes for this account so simultaneous first saves cannot
       // create duplicate products or goals.
       await client.query("SELECT id FROM enough.auth_users WHERE id = $1 FOR UPDATE", [session.id]);
-      const existingProfile = await client.query<{ product_id: string | null }>(
-        "SELECT product_id FROM enough.onboarding_profiles WHERE user_id = $1 FOR UPDATE",
+      const existingProfile = await client.query<{ product_id: string | null; next_goal: string }>(
+        "SELECT product_id, next_goal FROM enough.onboarding_profiles WHERE user_id = $1 FOR UPDATE",
         [session.id],
       );
       let productId = existingProfile.rows[0]?.product_id ?? null;
@@ -281,7 +281,8 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
         if (
           answers.currentRevenue !== null &&
           previousProduct &&
-          (previousProduct.current_revenue !== answers.currentRevenue ||
+          (previousProduct.current_revenue === null ||
+            Number(previousProduct.current_revenue) !== Number(answers.currentRevenue) ||
             previousProduct.revenue_currency.trim() !== answers.revenueCurrency)
         ) {
           await client.query(
@@ -295,7 +296,11 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
            WHERE product_id = $1 AND user_id = $2 AND status = 'ACTIVE' AND is_primary`,
           [productId, session.id, answers.nextGoal],
         );
-        if (!activePrimaryGoal.rowCount) {
+        // An unchanged onboarding answer must not recreate a completed/cancelled goal.
+        if (
+          !activePrimaryGoal.rowCount &&
+          existingProfile.rows[0]?.next_goal !== answers.nextGoal
+        ) {
           await client.query(
             `INSERT INTO enough.product_goals
                (id, product_id, user_id, goal_type, title, status, is_primary)
@@ -354,6 +359,13 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
       return reply.send(profileResponse(saved.rows[0]));
     } catch (error) {
       await client.query("ROLLBACK");
+      if (
+        (error as { code?: string; constraint?: string }).code === "23505" &&
+        (error as { constraint?: string }).constraint === "products_user_name_idx"
+      )
+        return reply
+          .code(409)
+          .send({ error: "A product with this name already exists. Choose another name." });
       request.log.error({ err: error }, "Could not save onboarding profile");
       return reply.code(503).send({ error: "Your answers could not be saved. Try again shortly." });
     } finally {

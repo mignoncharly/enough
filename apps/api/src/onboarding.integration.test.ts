@@ -4,13 +4,14 @@ import { isLaunchedProductStage, PRODUCT_STAGE_GUIDANCE, PRODUCT_STAGES } from "
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const enabled = process.env.ENOUGH_PHASE3_INTEGRATION === "1";
+const phase4 = process.env.ENOUGH_PHASE4_INTEGRATION === "1";
 describe.skipIf(!enabled)(
   "Phase 3 onboarding with disposable PostgreSQL, Redis and web proxy",
   () => {
     let pool: typeof import("@enough/db").pool;
     const ids: string[] = [];
-    const web = "http://127.0.0.1:3303";
-    const api = "http://127.0.0.1:4404";
+    const web = phase4 ? "http://127.0.0.1:3304" : "http://127.0.0.1:3303";
+    const api = phase4 ? "http://127.0.0.1:4406" : "http://127.0.0.1:4404";
     const baseline = {
       productDescription: "A scheduling tool for clinics",
       targetCustomer: "Independent clinics",
@@ -29,11 +30,13 @@ describe.skipIf(!enabled)(
       const target = new URL(process.env.DATABASE_URL ?? "http://invalid");
       expect([target.hostname, target.port, target.pathname, target.username]).toEqual([
         "127.0.0.1",
-        "55434",
-        "/enough_phase3",
-        "enough_phase3",
+        phase4 ? "55435" : "55434",
+        phase4 ? "/enough_phase4" : "/enough_phase3",
+        phase4 ? "enough_phase4" : "enough_phase3",
       ]);
-      expect(process.env.REDIS_URL).toBe("redis://127.0.0.1:56383/0");
+      expect(process.env.REDIS_URL).toBe(
+        phase4 ? "redis://127.0.0.1:56385/0" : "redis://127.0.0.1:56383/0",
+      );
       expect(process.env.APP_BASE_URL).toBe(web);
       expect(process.env.API_BASE_URL).toBe(api);
       ({ pool } = await import("@enough/db"));

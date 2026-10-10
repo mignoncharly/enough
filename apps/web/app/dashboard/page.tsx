@@ -173,6 +173,7 @@ export default function DashboardPage() {
         detail.product.id,
         String(form.get("productStage")) as ProductStage,
         String(form.get("reason") ?? ""),
+        detail.product.productStage,
       );
       await refreshWorkspace();
       setNotice(
@@ -198,7 +199,7 @@ export default function DashboardPage() {
     setSaving(true);
     setActionError("");
     try {
-      await createProductGoal(detail.product.id, title);
+      await createProductGoal(detail.product.id, title, form.get("isPrimary") === "on");
       formElement.reset();
       await refreshWorkspace();
       setNotice("Goal added.");
@@ -214,7 +215,7 @@ export default function DashboardPage() {
     setSaving(true);
     setActionError("");
     try {
-      await updateProductGoal(detail.product.id, goal.id, status);
+      await updateProductGoal(detail.product.id, goal.id, status, goal.status);
       await refreshWorkspace();
       setNotice(status === "COMPLETED" ? "Goal marked complete." : "Goal cancelled.");
     } catch (cause) {
@@ -237,6 +238,15 @@ export default function DashboardPage() {
         displayName: String(form.get("displayName") ?? ""),
         value: String(form.get("value") ?? ""),
         unit: String(form.get("unit") ?? ""),
+        expectedValue:
+          form.get("metricKey") === "total_users"
+            ? String(detail.product.userCount)
+            : form.get("metricKey") === "paying_users"
+              ? String(detail.product.payingUserCount)
+              : form.get("metricKey") === "current_revenue"
+                ? detail.product.currentRevenue
+                : undefined,
+        expectedCurrency: detail.product.revenueCurrency,
       });
       formElement.reset();
       await refreshWorkspace();
@@ -295,7 +305,11 @@ export default function DashboardPage() {
             {products.length > 1 ? (
               <label className="product-select">
                 Product
-                <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>
+                <select
+                  value={selectedId}
+                  disabled={saving}
+                  onChange={(event) => setSelectedId(event.target.value)}
+                >
                   {products.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.name}
@@ -480,7 +494,11 @@ export default function DashboardPage() {
               <section className="account-card">
                 <p className="eyebrow">Update stage</p>
                 <h2>Choose your current stage</h2>
-                <form className="product-form" onSubmit={submitStage}>
+                <form
+                  key={`${product.id}:${product.productStage}`}
+                  className="product-form"
+                  onSubmit={submitStage}
+                >
                   <label>
                     Stage
                     <select name="productStage" defaultValue={product.productStage}>
@@ -519,6 +537,10 @@ export default function DashboardPage() {
                     maxLength={250}
                     placeholder="Interview five likely customers"
                   />
+                </label>
+                <label className="check-row">
+                  <input type="checkbox" name="isPrimary" />
+                  Make this the primary goal
                 </label>
                 <button className="secondary-button" type="submit" disabled={saving}>
                   Add goal

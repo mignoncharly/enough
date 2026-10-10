@@ -776,23 +776,38 @@ export function changeProductStage(
   productId: string,
   productStage: ProductStage,
   reason: string,
+  expectedStage?: ProductStage,
 ): Promise<{ changed: boolean }> {
-  return postProductAction(`/api/products/${productId}/stage`, { productStage, reason });
+  return postProductAction(`/api/products/${productId}/stage`, {
+    productStage,
+    reason,
+    expectedStage,
+  });
 }
 
 export function createProductGoal(
   productId: string,
   title: string,
+  isPrimary = false,
 ): Promise<{ goal: ProductGoal }> {
-  return postProductAction(`/api/products/${productId}/goals`, { title, goalType: "CUSTOM" });
+  return postProductAction(`/api/products/${productId}/goals`, {
+    title,
+    goalType: "CUSTOM",
+    isPrimary,
+  });
 }
 
 export function updateProductGoal(
   productId: string,
   goalId: string,
   status: ProductGoal["status"],
+  expectedStatus?: ProductGoal["status"],
 ): Promise<{ goal: ProductGoal }> {
-  return postProductAction(`/api/products/${productId}/goals/${goalId}`, { status }, "PATCH");
+  return postProductAction(
+    `/api/products/${productId}/goals/${goalId}`,
+    { status, expectedStatus },
+    "PATCH",
+  );
 }
 
 export async function loadGrowthTasks(productId: string): Promise<GrowthTaskWorkspace> {
@@ -1001,6 +1016,8 @@ export function recordProductMetric(
     displayName: string;
     value: string;
     unit: string;
+    expectedValue?: string | null;
+    expectedCurrency?: string;
   },
 ): Promise<{ metric: ProductMetric }> {
   return postProductAction(`/api/products/${productId}/metrics`, body);

@@ -1,6 +1,6 @@
 # Remediation Implementation Plan
 
-Last consolidated: 2026-10-09 (Phase 2 checkpoint accepted; Phase 3 COMPLETE, checkpoint approval pending)
+Last consolidated: 2026-10-10 (Phase 4 COMPLETE; checkpoint approval pending)
 Source of truth for implementation order: this file. The historical scope remains in `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md`; historical implementation detail and evidence remain in `IMPLEMENTATION_HANDOFF.md`.
 
 ## Objective and current decision 
@@ -77,7 +77,7 @@ Dependencies run forward: do not test later phases against an unapplied or unver
 
 ### Phase 3 — Product Onboarding
 
-**High — COMPLETE, 2026-10-09. Checkpoint approval pending.**
+**High — COMPLETE, checkpoint `e07f502a90aaa85a22ad2f70647b8ca9bd234a4d`.**
 
 Completed execution: reconcile existing source; verify ordered migrations on a separate
 TEMP fixture; exercise all ten answers and nine stages through the live web/API;
@@ -92,19 +92,33 @@ does not accept those later phases. No architecture expansion or new policies.
 - [x] Check authenticated ownership boundaries and validation errors. Cross-account read/write/export, CSRF/origin rejection, invalid values and numeric bounds PASS on disposable services.
 - [x] Complete and record the single browser session in `PHASE_3_ACCEPTANCE.md`: P3-1, P3-2, P3-3, P3-4, P3-5 and P3-6 all PASS by explicit user report; no failures observed. Do not reopen or repeat these checks.
 
-Phase 3 is formally COMPLETE with no remaining phase blocker. Await explicit
-user checkpoint approval before commit/push. Phase 1/2 evidence remains accepted;
-Phase 4 is not started by this closure. All 18 dependency findings remain open
+Phase 3 is formally COMPLETE and checkpointed with no remaining phase blocker.
+Phase 1/2 evidence remains accepted; Phase 4 is now authorized. All 18 dependency findings remain open
 release obligations; production launch remains NO-GO.
 
 ### Phase 4 — Product and Stage Engine
 
-**High**
+**High — COMPLETE, accepted 2026-10-10; checkpoint approval pending.**
 
-- [ ] Apply migrations `0002`–`0004` in order.
-- [ ] Verify onboarding/profile updates stay synchronized with canonical products, primary goals, stage history, and metrics.
-- [ ] Exercise all nine stages, stage changes/history, multiple products, goal status, metric updates, and account export.
-- [ ] Verify ownership, deletion/cascade behavior, and invalid/stale updates against PostgreSQL.
+Sequence: inspect existing scope/source and accepted evidence; apply migrations
+in a new disposable TEMP fixture; test products, nine stages/history, goals,
+metrics, onboarding synchronization, export, ownership, cascades and invalid/stale
+writes; fix demonstrated defects; verify regressions/quality/build; then one
+consolidated browser session. Existing notification/export dependencies require
+later tables but do not accept those phases. Stage guidance remains advisory
+under the accepted architecture; policy enforcement is not added here. No
+external blocker found. No commit/push until explicit Phase 4 checkpoint approval.
+
+- [x] Apply migrations `0002`–`0004` in order. Retained fresh-fixture log records all 15 existing migrations in order; checksum/order tests and precheck pass. Later tables support existing notifications/export, not acceptance of later phases.
+- [x] Verify onboarding/profile updates stay synchronized with canonical products, primary goals, stage history, and metrics. Live tests cover both directions, concurrent writes and unchanged saves after completion; recommendations now use the same calculation.
+- [x] Exercise all nine stages, stage changes/history, multiple products, goal status, metric updates, and account export. 26 product + 18 onboarding integration checks PASS; 68 default tests, quality checks and isolated optimized web build PASS. Evidence: `PHASE_4_ACCEPTANCE.md`.
+- [x] Verify ownership, deletion/cascade behavior, and invalid/stale updates against PostgreSQL. Stale stage/goal/canonical metric writes return 409 when expectations are supplied; current dashboard supplies them. Cross-owner/CSRF, atomic validation, account deletion and product-child cascades pass.
+- [x] Single consolidated browser session P4-1, P4-2, P4-3, P4-4 and P4-5 PASS by explicit user report, 2026-10-10; no browser acceptance failures observed. Evidence: `PHASE_4_ACCEPTANCE.md`. Do not reopen or repeat these accepted checks.
+
+Phase 4 is formally COMPLETE with no remaining phase blocker. Accepted Phase 1–3
+evidence is preserved; all 11 tested source/manifest/lockfile fingerprints match
+at closure. Wait for explicit checkpoint approval before commit/push. Phase 5
+is not started by this closure. All 18 findings remain OPEN; launch remains NO-GO.
 
 ### Phase 5 — Activity Event Platform
 
