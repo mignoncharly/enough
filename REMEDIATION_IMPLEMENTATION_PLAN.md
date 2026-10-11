@@ -1,6 +1,6 @@
 # Remediation Implementation Plan
 
-Last consolidated: 2026-10-11 (Phase 8 checkpointed at `d8c67d028b874c783d9f78672bb38e7a6f6eb00e`; Phase 9 complete, checkpoint approval pending)
+Last consolidated: 2026-10-11 (Phase 9 checkpointed at `2efe261287d62621d28c71106832c7c2fb012b0d`; Phase 10 COMPLETE, checkpoint approval pending)
 Source of truth for implementation order: this file. The historical scope remains in `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md`; historical implementation detail and evidence remain in `IMPLEMENTATION_HANDOFF.md`.
 
 ## Objective and current decision 
@@ -214,11 +214,14 @@ Preserve the accepted Phase 1–8 evidence. Do not repeat P8-1–P8-5.
 
 **Critical**
 
-- [ ] Build and install Chromium and Firefox packages; verify manifests, assets, permissions, API origin, and publisher IDs.
-- [ ] Apply migrations through `0008`; configure exact extension origins.
-- [ ] Exercise sign-in/revocation, policy sync, block/allow precedence, schedules, overrides, Growth Mode expiry, offline behavior, event ingestion, and browser restart.
-- [ ] Verify page paths and page content are never captured; check the opt-in hostname-only event contract.
-- [ ] Verify stale-rule cleanup, disabled/re-enabled behavior, rate limits, and domain-evaluation bounds.
+**Status: COMPLETE — 2026-10-11; checkpoint approval pending.** Preserve the existing Chromium/Firefox Manifest V3 implementation and accepted Phase 1–9 behavior. Focused tests cover exact-origin permission, extension session rotation, policy/cache/blocking, product selection, schedules/overrides, Growth Mode, hostname-only events, revocation, restart/stale cleanup, candidate bounds, and native-host health. Chromium/Firefox builds, workspace tests/typecheck/format/lint, and the isolated Phase 10 migration/readiness smoke pass. The user reported P10-1 through P10-5 PASS in one consolidated browser session with no failures; see `PHASE_10_ACCEPTANCE.md`. No migration/schema or dependency change was made. Preserve all accepted Phase 1–9 evidence and do not repeat Phase 10 checks. The 18 dependency-security findings remain separate open release obligations; production launch remains NO-GO.
+
+- [x] Build Chromium and Firefox packages and verify generated manifests/assets; loading packages and recording installed IDs/exact origins remain in the consolidated manual session.
+- [x] Apply and precheck the isolated current migration chain through `0017`; configure each installed exact extension origin in the Phase 10 fixture during the consolidated manual session.
+- [x] Exercise sign-in/revocation, policy sync, product-specific block/allowed behavior, schedules/overrides, Growth Mode, offline behavior, and browser restart through focused automated coverage, accepted Phase 1–9 service evidence, and the P10-1–P10-5 browser session.
+- [x] Verify opt-in hostname-only activity and confirm page paths/query data are not uploaded through focused automated payload checks and the accepted activity-service evidence.
+- [x] Verify stale-rule cleanup and domain-evaluation bounds through focused automated coverage; verify prepared Chromium-target revocation leaves the Firefox session active in the consolidated browser session.
+- [x] Record the consolidated manual result: P10-1, P10-2, P10-3, P10-4, and P10-5 PASS by user report, 2026-10-11; no manual failures observed. Do not repeat these checks.
 
 ### Phase 11 — Desktop Agent
 

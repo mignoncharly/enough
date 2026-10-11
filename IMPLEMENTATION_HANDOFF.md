@@ -3,8 +3,8 @@
 Historical implementation record. The active remediation plan and current execution handoff are now [REMEDIATION_IMPLEMENTATION_PLAN.md](REMEDIATION_IMPLEMENTATION_PLAN.md) and [REMEDIATION_HANDOFF.md](REMEDIATION_HANDOFF.md).
 
 Last updated: 2026-10-11
-Current phase: Phase 9 - Web Application (COMPLETE; checkpoint approval pending)
-Status: Phase 8 is COMPLETE and checkpointed at `d8c67d028b874c783d9f78672bb38e7a6f6eb00e`; P8-1–P8-5 and all earlier Phase 1–8 evidence remain accepted and unchanged. Phase 9 isolated migration/full-stack/route checks and automated quality checks pass; P9-1–P9-5 consolidated browser acceptance passed by user report on 2026-10-11, with no manual failures. No Phase 9 acceptance blockers remain; do not reopen or repeat its checks. Production launch remains NO-GO because the 18 dependency-security findings remain open; see `LAUNCH_READINESS.md` and `SECURITY_STATUS.md`.
+Current phase: Phase 10 - Browser Extension (COMPLETE; checkpoint approval pending)
+Status: Phase 9 is COMPLETE and checkpointed at `2efe261287d62621d28c71106832c7c2fb012b0d`; P9-1–P9-5 and all accepted Phase 1–9 evidence remain closed and unchanged. Phase 10 is COMPLETE after the consolidated Chromium/Firefox browser session reported P10-1–P10-5 PASS; checkpoint approval is pending. Production launch remains NO-GO because the 18 dependency-security findings remain open; see `LAUNCH_READINESS.md` and `SECURITY_STATUS.md`.
 
 ## Current objective
 
@@ -139,9 +139,9 @@ No schema migration was added in Phase 9. Evidence and subscription billing were
 - `apps/extension/src/block.ts` and `src/popup.ts`: policy block page, 60-minute Growth Mode allowlist, opt-in hostname-only event recording, queue/health reporting, and native-host probe.
 - `apps/extension/README.md`, `packages/auth/README.md`, and `.env.example`: build/load instructions, exact `AUTH_ALLOWED_ORIGINS` setup, extension token handling, and privacy behavior.
 
-No migration was added. The extension requests access only to its configured API origin; blocking uses `declarativeNetRequest` and does not request access to every site. It caches policy data and evaluates the shared policy logic locally. Activity capture is opt-in and stores only hostnames and policy metadata. Phase 11 now supplies a source native host; installation and browser health reporting remain unverified. Extension compilation, browser installation, policy parity, and offline behavior have not been verified.
+No migration was added. The extension requests access only to its configured API origin; blocking uses `declarativeNetRequest` and does not request access to every site. It caches policy data and evaluates the shared policy logic locally. Activity capture is opt-in and stores only hostnames and policy metadata. Chromium and Firefox builds, policy parity, offline behavior, and the consolidated browser acceptance session passed; P10-1–P10-5 were reported PASS on 2026-10-11. The Phase 11 native host is not installed; its unavailable health state was confirmed without interrupting extension enforcement.
 
-Implemented flows include email/password signup and login, email verification, magic links, password reset, Google/GitHub OAuth, browser cookies, bearer sessions, session rotation, session/device revocation, password change, account export, account deletion, and audit events. Passkeys were deferred as impractical for this phase. The extension and desktop app use the bearer API contract; their end-to-end acceptance is pending.
+Implemented flows include email/password signup and login, email verification, magic links, password reset, Google/GitHub OAuth, browser cookies, bearer sessions, session rotation, session/device revocation, password change, account export, account deletion, and audit events. Passkeys were deferred as impractical for this phase. The extension uses the bearer API contract and passed its Phase 10 end-to-end acceptance; desktop-app acceptance remains in Phase 11.
 
 ## Phase 2 acceptance checklist
 
@@ -244,15 +244,24 @@ the fixture was stopped. Full evidence is in `PHASE_6_ACCEPTANCE.md`.
 
 ## Phase 10 acceptance checklist
 
+**Phase 10 COMPLETE — 2026-10-11; checkpoint approval pending.** The canonical
+Phase 10 scope and automated verification are recorded in
+`PHASE_10_ACCEPTANCE.md`. The user reported P10-1 through P10-5 PASS in one
+consolidated Chromium/Firefox session with no failures. Do not reopen or repeat
+Phase 10 checks or accepted Phase 1–9 checks. Production launch remains NO-GO
+while the 18 dependency-security findings remain open.
+
 - [x] Add Chromium and Firefox Manifest V3 build definitions and a browser API compatibility layer.
 - [x] Add extension bearer sign-in, local policy/classification cache, product selection, and periodic policy synchronization.
 - [x] Add dynamic top-level domain blocking, focus page, timed Growth Mode allowlist, and persisted offline policy.
 - [x] Add opt-in hostname-only activity capture with bounded offline queue and extension health status.
 - [x] Add a native messaging connection probe; Phase 11 now supplies the host source, with installation acceptance tracked there.
-- [ ] Install dependencies, build both packages, and inspect generated manifests/assets in Chromium and Firefox.
-- [ ] Add the installed extension origin to `AUTH_ALLOWED_ORIGINS`; apply migrations and exercise auth, revocation, sync, ownership, block/allow precedence, schedules, overrides, Growth Mode expiry, offline use, and event ingestion.
-- [ ] Confirm page paths/content are never captured and test policy updates and revoked sessions across browser restarts.
-- [ ] Review implementation and complete the project's quality checks before marking Phase 10 complete. No tests, builds, or typechecks were run during this implementation turn.
+- [x] Add focused extension tests for exact API-origin permission, session rotation, product-specific rules, schedules/overrides, top-level blocking/focus redirect, Growth Mode duration/allowlist/expiry, hostname-only opt-in events, candidate bounds, offline/stale behavior, revocation, worker restart, and native-host health failure.
+- [x] Build Chromium and Firefox bundles/manifests; complete workspace typecheck, default tests, formatting, and lint. Results: `PHASE_10_ACCEPTANCE.md`.
+- [x] Run the isolated Phase 10 migration/readiness smoke against TEMP PostgreSQL/Redis/API/worker/web; migrations through `0017` and readiness passed, and services stopped successfully.
+- [x] Load Chromium and Firefox packages, grant the exact local API origin, connect both extensions, and complete the consolidated browser session; P10-1–P10-5 PASS by user report.
+- [x] Verify product-specific blocking/allowed behavior, Growth/Build, reload and policy recovery, native-host unavailable health, opt-in hostname-only activity, and Chromium-targeted session revocation while Firefox remains active.
+- [x] Record Phase 10 COMPLETE. Preserve accepted Phase 1–9 evidence and do not reopen or repeat those checks.
 
 ## Phase 11 implementation map
 

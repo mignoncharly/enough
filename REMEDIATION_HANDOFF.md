@@ -1,6 +1,6 @@
 # Remediation Handoff
 
-Last updated: 2026-10-11 (Phase 8 checkpointed; Phase 9 COMPLETE, checkpoint approval pending)
+Last updated: 2026-10-11 (Phase 9 COMPLETE and checkpointed at `2efe261287d62621d28c71106832c7c2fb012b0d`; Phase 10 COMPLETE, checkpoint approval pending)
 Active plan: [REMEDIATION_IMPLEMENTATION_PLAN.md](REMEDIATION_IMPLEMENTATION_PLAN.md)  
 Historical detail: [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)  
 Current launch decision: **NO-GO**
@@ -63,9 +63,30 @@ shutdown for only the fixture-owned WSL port before stopping child processes.
 The corrected runtime smoke and account preparation both pass. These were
 fixture-harness corrections, not product defects.
 
-**Next safe action:** prepare the Phase 9 checkpoint review and wait for the
-user's explicit approval before committing or pushing. Phase 9 is COMPLETE; do
-not reopen or repeat P9-1–P9-5. Phase 10 has not started.
+**Phase 10 — Browser Extension: COMPLETE; checkpoint approval pending.** Phase 9 is COMPLETE and checkpointed
+at `2efe261287d62621d28c71106832c7c2fb012b0d`; do not reopen or repeat
+P9-1–P9-5. Phase 10 follows the canonical Chromium/Firefox Manifest V3 scope:
+exact-origin bearer access, shared policy sync/cache, top-level domain blocking
+and focus page, timed Growth Mode, opt-in hostname-only activity, bounded queue
+and health state, and native-host probing. Execution order: isolated TEMP-only
+fixture and focused runtime coverage; fix demonstrated defects; verify Chromium
+and Firefox builds plus relevant workspace quality checks; then give the user
+one consolidated browser acceptance session. No Docker, GitHub Actions,
+production deployment, `.env`/`.runtime` access, dependency upgrade, or Phase
+1–9 acceptance repeat. The 18 dependency findings remain open release gates.
+The focused Phase 10 extension suite passes, covering exact-origin permission,
+session rotation, product selection, schedule/override evaluation, top-level
+blocking, Growth Mode, hostname-only events, the 900-candidate bound,
+offline/stale cleanup, revocation, restart, and native-host health. Workspace
+tests, typecheck, format, lint, and Chromium/Firefox builds pass. The isolated
+Phase 10 service smoke applied/prechecked migrations through `0017`, verified
+PostgreSQL/Redis/API/worker/web readiness on dedicated TEMP/loopback targets,
+and stopped successfully. The user reported P10-1 PASS, P10-2 PASS, P10-3 PASS,
+P10-4 PASS, and P10-5 PASS in the single consolidated browser session, with no
+failures; browser version was not
+separately recorded for Chromium and Firefox was 157.0.1. See
+`PHASE_10_ACCEPTANCE.md`. Phase 10 is COMPLETE. The 18 dependency-security
+findings remain open release obligations; production remains NO-GO.
 The Phase 6 checkpoint is
 `236b1b1585d29900a3b6e509254a8114e3f19f5a`; local `main` and `origin/main`
 matched and the working tree was clean at Phase 7 start. Canonical scope is

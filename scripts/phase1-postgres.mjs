@@ -15,7 +15,8 @@ const phase6 = process.argv.includes("--phase6");
 const phase7 = process.argv.includes("--phase7");
 const phase8 = process.argv.includes("--phase8");
 const phase9 = process.argv.includes("--phase9");
-const phase = phase9
+const phase10 = process.argv.includes("--phase10");
+const basePhase = phase9
   ? "phase9"
   : phase8
     ? "phase8"
@@ -32,12 +33,14 @@ const phase = phase9
               : phase2
                 ? "phase2"
                 : "phase1";
-const fixture =
+const phase = phase10 ? "phase10" : basePhase;
+const baseFixture =
   phase3 || phase4 || phase5 || phase6 || phase7 || phase8 || phase9
-    ? join(tmpdir(), `enough-${phase}`)
-    : join(root, ".runtime", phase);
+    ? join(tmpdir(), `enough-${basePhase}`)
+    : join(root, ".runtime", basePhase);
+const fixture = phase10 ? join(tmpdir(), "enough-phase10") : baseFixture;
 const data = join(fixture, "pgdata");
-const port = phase9
+const basePort = phase9
   ? "55440"
   : phase8
     ? "55439"
@@ -54,9 +57,10 @@ const port = phase9
               : phase2
                 ? "55433"
                 : "55432";
+const port = phase10 ? "55441" : basePort;
 const admin = `enough_${phase}_admin`;
 const database = `enough_${phase}`;
-const redisPort = phase9
+const baseRedisPort = phase9
   ? "56397"
   : phase8
     ? "56393"
@@ -73,7 +77,8 @@ const redisPort = phase9
               : phase2
                 ? "56381"
                 : "56379";
-const webPort = phase9
+const redisPort = phase10 ? "56401" : baseRedisPort;
+const baseWebPort = phase9
   ? "3309"
   : phase8
     ? "3308"
@@ -90,7 +95,8 @@ const webPort = phase9
               : phase2
                 ? "3302"
                 : "3301";
-const apiPort = phase9
+const webPort = phase10 ? "3310" : baseWebPort;
+const baseApiPort = phase9
   ? "4416"
   : phase8
     ? "4414"
@@ -107,6 +113,7 @@ const apiPort = phase9
               : phase2
                 ? "4402"
                 : "4400";
+const apiPort = phase10 ? "4418" : baseApiPort;
 const credentialPath = join(fixture, "credentials.json");
 const action = process.argv[2] ?? "start";
 if (!["start", "stop", "status"].includes(action)) throw new Error("Use start, stop or status.");
@@ -212,7 +219,7 @@ if (action !== "start") {
       `REDIS_URL=redis://127.0.0.1:${redisPort}/0`,
       `WEB_PORT=${webPort}`,
       `API_PORT=${apiPort}`,
-      `WORKER_PORT=${phase9 ? "4417" : phase8 ? "4415" : phase7 ? "4413" : phase6 ? "4411" : phase5 ? "4409" : phase4 ? "4407" : phase3 ? "4405" : phase2 ? "4403" : "4401"}`,
+      `WORKER_PORT=${phase10 ? "4419" : phase9 ? "4417" : phase8 ? "4415" : phase7 ? "4413" : phase6 ? "4411" : phase5 ? "4409" : phase4 ? "4407" : phase3 ? "4405" : phase2 ? "4403" : "4401"}`,
       `APP_BASE_URL=http://127.0.0.1:${webPort}`,
       `API_BASE_URL=http://127.0.0.1:${apiPort}`,
       `AUTH_SECRET=${credentials.auth}`,

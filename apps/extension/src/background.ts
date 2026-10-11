@@ -6,7 +6,7 @@ import {
   normalizeApiOrigin,
   pruneExpiredEvents,
 } from "../../../packages/shared/src/client-runtime.ts";
-import { evaluatePolicyRules } from "../../../packages/shared/src/policy-rules.ts";
+import { evaluatePolicyRules, type PolicyRule } from "../../../packages/shared/src/policy-rules.ts";
 import {
   normalizeToolKey,
   resolveToolClassification,
@@ -54,19 +54,7 @@ function serializeEventQueue<T>(operation: () => Promise<T>): Promise<T> {
   return task as Promise<T>;
 }
 
-type ExtensionRule = {
-  id: string;
-  version: number;
-  name: string;
-  enabled: boolean;
-  priority: number;
-  productId: string | null;
-  deviceId: string | null;
-  action: "ALLOW" | "BLOCK" | "WARN" | "REQUIRE_OVERRIDE";
-  conditions: Record<string, unknown>;
-  schedule: Record<string, unknown> | null;
-  archivedAt?: string | null;
-};
+type ExtensionRule = PolicyRule;
 type ExtensionOverride = {
   id: string;
   productId: string | null;
