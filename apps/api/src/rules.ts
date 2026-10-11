@@ -668,38 +668,36 @@ export async function registerRuleRoutes(app: FastifyInstance): Promise<void> {
         await client.query("ROLLBACK");
         return reply.code(404).send({ error: "Product or active device not found." });
       }
-      const [ruleResult, overrideResult, mappingResult, catalogResult] = await Promise.all([
-        client.query<RuleRow>(
-          "SELECT * FROM enough.policy_rules WHERE user_id = $1 AND archived_at IS NULL",
-          [session.id],
-        ),
-        client.query<OverrideRow>(
-          "SELECT * FROM enough.policy_overrides WHERE user_id = $1 AND revoked_at IS NULL",
-          [session.id],
-        ),
-        client.query<{
-          tool_kind: ToolKind;
-          tool_key: string;
-          display_name: string;
-          classification: ToolClassification;
-          product_id: string | null;
-          context_key: string;
-          context_value: string;
-        }>(
-          `SELECT tool_kind, tool_key, display_name, classification, product_id, context_key, context_value
-           FROM enough.tool_classification_mappings
-           WHERE user_id = $1 AND (product_id IS NULL OR product_id = $2)`,
-          [session.id, body.productId],
-        ),
-        client.query<{
-          tool_kind: ToolKind;
-          tool_key: string;
-          display_name: string;
-          classification: ToolClassification;
-        }>(
-          "SELECT tool_kind, tool_key, display_name, classification FROM enough.tool_classification_catalog",
-        ),
-      ]);
+      const ruleResult = await client.query<RuleRow>(
+        "SELECT * FROM enough.policy_rules WHERE user_id = $1 AND archived_at IS NULL",
+        [session.id],
+      );
+      const overrideResult = await client.query<OverrideRow>(
+        "SELECT * FROM enough.policy_overrides WHERE user_id = $1 AND revoked_at IS NULL",
+        [session.id],
+      );
+      const mappingResult = await client.query<{
+        tool_kind: ToolKind;
+        tool_key: string;
+        display_name: string;
+        classification: ToolClassification;
+        product_id: string | null;
+        context_key: string;
+        context_value: string;
+      }>(
+        `SELECT tool_kind, tool_key, display_name, classification, product_id, context_key, context_value
+         FROM enough.tool_classification_mappings
+         WHERE user_id = $1 AND (product_id IS NULL OR product_id = $2)`,
+        [session.id, body.productId],
+      );
+      const catalogResult = await client.query<{
+        tool_kind: ToolKind;
+        tool_key: string;
+        display_name: string;
+        classification: ToolClassification;
+      }>(
+        "SELECT tool_kind, tool_key, display_name, classification FROM enough.tool_classification_catalog",
+      );
       const catalogEntries: ToolClassificationEntry[] = catalogResult.rows.map((row) => ({
         toolKind: row.tool_kind,
         toolKey: row.tool_key,

@@ -1,6 +1,6 @@
 # Remediation Handoff
 
-Last updated: 2026-10-10
+Last updated: 2026-10-11 (Phase 7 formally complete; checkpoint approval pending)
 Active plan: [REMEDIATION_IMPLEMENTATION_PLAN.md](REMEDIATION_IMPLEMENTATION_PLAN.md)  
 Historical detail: [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)  
 Current launch decision: **NO-GO**
@@ -10,6 +10,82 @@ Current launch decision: **NO-GO**
 Close the incomplete work from Phases 1–26 in dependency order, run the required automated, database, client, security, release, and operational checks, and repeat Phase 27 only after evidence is accepted. Do not restart feature implementation that already exists in source unless verification finds a defect or a launch requirement is missing.
 
 ## Current active work
+
+**Phase 7 — Rule Engine: COMPLETE.** The Phase 6 checkpoint is
+`236b1b1585d29900a3b6e509254a8114e3f19f5a`; local `main` and `origin/main`
+matched and the working tree was clean at Phase 7 start. Canonical scope is
+conditions, actions, priorities, schedules, product/device scopes, versions,
+overrides, and deterministic decisions. Existing evaluator, migration, API,
+and workspace source were present. Deterministic, migration/API,
+ownership/version/history/override/export/deletion, client-parity, route-smoke,
+and automated quality checks now pass on the isolated Windows-first fixture.
+The user reported P7-1 through P7-5 PASS on 2026-10-11, including creation and
+schedule, BLOCK v1 and WARN v2 previews, temporary ALLOW override and
+revocation, archive/history, DEFAULT fallback, narrow layout, and keyboard
+usability. The fixture stopped successfully; no manual failures were observed.
+Browser/version was not supplied. No production services, Docker, GitHub
+Actions, root `.env`, `.runtime/`, or browser profiles were used. Generated
+synthetic login data remains only in `%TEMP%\enough-phase7`; no credentials are
+recorded here. No commit or push is authorized.
+
+**Execution completed in dependency order:** (1) added evaluator condition,
+scope, tie-break, timezone/DST, expiry/revocation, default, and fixed-snapshot
+byte-repeatability cases; (2) added a separately ported TEMP Phase 7 fixture and
+five live rules integration checks through ordered migrations; (3) verified
+ownership, concurrent expected-version handling, history, export/deletion,
+temporary override lifecycle, shared evaluator parity, and rules route bundle;
+(4) passed the final test/typecheck/format/lint commands below; (5) prepared one
+synthetic manual account and stopped the fixture; (6) recorded the user's
+consolidated P7-1–P7-5 PASS report. Do not repeat Phase 7 manual checks.
+
+**Blockers:** no Phase 7 blocker remains. Phase 7 is formally COMPLETE; Phase 8
+has not started. Checkpoint approval is pending. All 18 dependency-security
+findings remain open release obligations and production launch remains
+**NO-GO**.
+
+**Final verification (Node `v24.19.0`, pnpm `11.20.0`):**
+`pnpm test -- packages/shared/src/policy-rules.test.ts` PASS (16/16);
+`pnpm test:rules:integration` PASS (5/5; PostgreSQL 18 precheck passed with no
+pending migrations; fixture applied `0001`–`0015` in order); `pnpm test` PASS
+(72 passed, 131 integration tests skipped by default); `pnpm typecheck` PASS
+(11 workspace projects); `pnpm format:check` PASS (160 files); `pnpm lint` exit
+0 (124 warnings and one informational diagnostic); and
+`node scripts/phase2-runtime.mjs prepare --phase7` PASS (synthetic account
+written only to `%TEMP%\enough-phase7\manual-account.json`, fixture services
+stopped). Exact details and the single manual session are in
+[`PHASE_7_ACCEPTANCE.md`](PHASE_7_ACCEPTANCE.md).
+
+Initial Phase 7 harness failures and corrections are retained in the acceptance
+record. After recording P7-1–P7-5, the stale-status search across the phase
+trackers found no remaining Phase 7 ACTIVE or browser-review-pending status;
+checkpoint approval is the only pending action. Final `git diff --check` PASS
+(exit 0; no whitespace errors; Git emitted only CRLF-to-LF normalization
+warnings for the two remediation Markdown files). `git diff --cached --name-only`
+is empty; no files are staged. Exact `git status --short` after the
+documentation updates:
+
+```text
+ M IMPLEMENTATION_HANDOFF.md
+ M IMPLEMENTATION_PLAN.md
+ M LAUNCH_READINESS.md
+ M REMEDIATION_HANDOFF.md
+ M REMEDIATION_IMPLEMENTATION_PLAN.md
+ M SECURITY_STATUS.md
+ M apps/api/src/rules.ts
+ M package.json
+ M packages/shared/src/policy-rules.test.ts
+ M scripts/phase1-postgres.mjs
+ M scripts/phase2-runtime.mjs
+?? PHASE_7_ACCEPTANCE.md
+?? apps/api/src/rules.integration.test.ts
+?? scripts/phase7-manual-account.mjs
+```
+
+No `.env`, `.runtime/`, credentials, browser profiles, generated artifacts,
+dependencies, or production configuration were changed. No commit or push was
+performed.
+
+### Previous Phase 5–6 checkpoint record (preserved)
 
 **Phase 5 COMPLETE and checkpointed** at
 `28cdbedc8afed3d0735e86d461d283447d878532` (`feat(activity): complete phase 5
@@ -42,8 +118,9 @@ stopped successfully, and no manual acceptance failures were observed. These
 are user-reported results; no Phase 6 checks were rerun. Full evidence is in
 [`PHASE_6_ACCEPTANCE.md`](PHASE_6_ACCEPTANCE.md). No Phase 6 blocker remains.
 
-**Next safe item:** wait for explicit Phase 6 checkpoint approval. Do not
-commit, push, or begin Phase 7 before authorization.
+The original Phase 6 handoff below predates the approved checkpoint and Phase 7
+start; it is retained as historical evidence and is superseded by the active
+Phase 7 objective above.
 
 **Verification record (Node `v24.19.0`, pnpm `11.20.0`):**
 `pnpm test:classification:integration` PASS (77/77 across classification,

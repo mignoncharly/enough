@@ -1,6 +1,6 @@
 # Remediation Implementation Plan
 
-Last consolidated: 2026-10-10 (Phase 5 checkpointed; Phase 6 COMPLETE, checkpoint approval pending)
+Last consolidated: 2026-10-11 (Phase 7 formally complete; checkpoint approval pending)
 Source of truth for implementation order: this file. The historical scope remains in `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md`; historical implementation detail and evidence remain in `IMPLEMENTATION_HANDOFF.md`.
 
 ## Objective and current decision 
@@ -160,10 +160,19 @@ authorization.
 
 **Critical**
 
-- [ ] Add deterministic unit/property cases for condition combinations, scope, priorities/ties, schedules/time zones, override expiry/revocation, version conflicts, and defaults.
-- [ ] Apply migrations `0002`–`0007` in order.
-- [ ] Verify byte-for-byte repeatable decisions for identical policy snapshots and timestamps.
-- [ ] Exercise ownership isolation, stale-version conflicts, archive history, schedule boundaries/DST, override expiry/revocation, export, deletion, and client policy parity.
+**Status: COMPLETE — 2026-10-11.** Existing evaluator, migration,
+authenticated API, and rules workspace passed automated acceptance and the
+user-reported consolidated browser review. Phase 7 is complete; checkpoint
+approval is pending. Phase 8 has not started.
+
+- [x] Add deterministic unit/property cases for condition combinations, scope, priorities/ties, schedules/time zones/DST, override expiry/revocation, version conflicts, defaults, and byte-for-byte repeatability.
+- [x] Apply migrations `0002`–`0007` in order on an isolated PostgreSQL 18 fixture; precheck passes with no pending migrations.
+- [x] Exercise ownership isolation, concurrent stale-version conflicts, archive history, schedule boundaries/DST, override expiry/revocation, export, deletion cascades, and shared-evaluator client parity.
+- [x] Complete one consolidated browser review of rule creation/edit/version history, scheduled evaluation, temporary override precedence/revocation, archive/default behavior, and narrow/keyboard usability; P7-1–P7-5 PASS by explicit user report, 2026-10-11. Fixture stopped; no failures reported (`PHASE_7_ACCEPTANCE.md`).
+
+Phase 7 is formally COMPLETE with no remaining Phase 7 blocker. All 18
+dependency-security findings remain open release obligations; production
+launch remains **NO-GO**. Preserve the accepted Phase 1–6 evidence.
 
 ### Phase 8 — Build Credit Engine
 

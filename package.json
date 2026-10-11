@@ -40,6 +40,8 @@
     "test:activity:integration": "node scripts/phase2-runtime.mjs test --phase5",
     "test:classification:integration": "node scripts/phase2-runtime.mjs test --phase6",
     "test:classification:serve": "node scripts/phase2-runtime.mjs serve --phase6",
+    "test:rules:integration": "node scripts/phase2-runtime.mjs test --phase7",
+    "test:rules:serve": "node scripts/phase2-runtime.mjs serve --phase7",
     "db:phase5:migration-check": "node scripts/phase5-migration-check.mjs"
   },
   "devDependencies": {

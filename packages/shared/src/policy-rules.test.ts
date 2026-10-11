@@ -73,6 +73,45 @@ describe("evaluatePolicyRules defaults and matching", () => {
     expect(result.source).toBe("DEFAULT");
   });
 
+  it("requires every supplied classification, tool, and context condition to match", () => {
+    const constrained = rule({
+      conditions: {
+        classifications: ["GROWTH"],
+        toolKind: "DOMAIN",
+        toolKeys: ["*.example.com"],
+        contextKey: "purpose",
+        contextValue: "work",
+      },
+    });
+    const matchingInput = {
+      ...input,
+      contextKey: "Purpose",
+      contextValue: " WORK ",
+    };
+    expect(evaluatePolicyRules(matchingInput, [constrained], []).source).toBe("RULE");
+    for (const mismatch of [
+      { ...matchingInput, classification: "NEUTRAL" as const },
+      { ...matchingInput, toolKind: "APPLICATION" as const },
+      { ...matchingInput, toolKey: "other.example.test" },
+      { ...matchingInput, contextKey: "purpose", contextValue: "personal" },
+      { ...matchingInput, contextKey: undefined, contextValue: undefined },
+    ]) {
+      expect(evaluatePolicyRules(mismatch, [constrained], []).source).toBe("DEFAULT");
+    }
+  });
+
+  it("applies product and device scopes only to their matching identities", () => {
+    const scoped = rule({ productId: "product-1", deviceId: "device-1" });
+    expect(evaluatePolicyRules(input, [scoped], []).source).toBe("RULE");
+    expect(evaluatePolicyRules({ ...input, productId: "product-2" }, [scoped], []).source).toBe(
+      "DEFAULT",
+    );
+    expect(evaluatePolicyRules({ ...input, deviceId: "device-2" }, [scoped], []).source).toBe(
+      "DEFAULT",
+    );
+    expect(evaluatePolicyRules({ ...input, productId: null }, [scoped], []).source).toBe("DEFAULT");
+  });
+
   it("orders matching rules by priority, then specificity, then restrictiveness, then id", () => {
     expect(
       evaluatePolicyRules(
@@ -131,6 +170,21 @@ describe("evaluatePolicyRules defaults and matching", () => {
         const rotated = [...rules.slice(shift), ...rules.slice(0, shift)];
         expect(evaluatePolicyRules(input, rotated, []).matchedRuleId).toBe(expected.matchedRuleId);
       }
+    }
+  });
+
+  it("serializes identical decisions byte-for-byte for a fixed snapshot and timestamp", () => {
+    const snapshot = [
+      rule({ id: "fixed-block", priority: 4, action: "BLOCK" }),
+      rule({ id: "fixed-allow", priority: 4, action: "ALLOW", productId: "product-1" }),
+    ];
+    const overrides = [override({ id: "fixed-override", action: "ALLOW" })];
+    const evaluatedInput = { ...input, evaluatedAt };
+    const decisionBytes = JSON.stringify(evaluatePolicyRules(evaluatedInput, snapshot, overrides));
+    for (let repetition = 0; repetition < 20; repetition += 1) {
+      expect(JSON.stringify(evaluatePolicyRules(evaluatedInput, snapshot, overrides))).toBe(
+        decisionBytes,
+      );
     }
   });
 
@@ -214,6 +268,42 @@ describe("policy schedules", () => {
     expect(evaluatePolicyRules(input, [scheduled], []).source).toBe("RULE");
     expect(
       evaluatePolicyRules({ ...input, evaluatedAt: "2026-05-01T13:00:00Z" }, [scheduled], [])
+        .source,
+    ).toBe("DEFAULT");
+  });
+
+  it("evaluates wall-clock schedules consistently across daylight-saving transitions", () => {
+    const fallBack = rule({
+      schedule: {
+        timezone: "Europe/Berlin",
+        daysOfWeek: [0],
+        startTime: "02:00",
+        endTime: "03:00",
+      },
+    });
+    for (const instant of ["2026-10-25T00:30:00Z", "2026-10-25T01:30:00Z"]) {
+      expect(evaluatePolicyRules({ ...input, evaluatedAt: instant }, [fallBack], []).source).toBe(
+        "RULE",
+      );
+    }
+    expect(
+      evaluatePolicyRules({ ...input, evaluatedAt: "2026-10-25T02:00:00Z" }, [fallBack], []).source,
+    ).toBe("DEFAULT");
+
+    const springForward = rule({
+      schedule: {
+        timezone: "Europe/Berlin",
+        daysOfWeek: [0],
+        startTime: "03:00",
+        endTime: "04:00",
+      },
+    });
+    expect(
+      evaluatePolicyRules({ ...input, evaluatedAt: "2026-03-29T01:30:00Z" }, [springForward], [])
+        .source,
+    ).toBe("RULE");
+    expect(
+      evaluatePolicyRules({ ...input, evaluatedAt: "2026-03-29T00:30:00Z" }, [springForward], [])
         .source,
     ).toBe("DEFAULT");
   });

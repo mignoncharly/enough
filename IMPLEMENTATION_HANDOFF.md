@@ -2,13 +2,13 @@
 
 Historical implementation record. The active remediation plan and current execution handoff are now [REMEDIATION_IMPLEMENTATION_PLAN.md](REMEDIATION_IMPLEMENTATION_PLAN.md) and [REMEDIATION_HANDOFF.md](REMEDIATION_HANDOFF.md).
 
-Last updated: 2026-10-07
-Current phase: Phase 27 - Full Product Launch Gate
-Status: Phase 27 is partial and the launch decision is NO-GO. The capability-by-capability assessment is recorded in `LAUNCH_READINESS.md`. Phases 25 and 26 remain partial: there is no configured production host and no production integration verification. Phase 24 remains partial with signed desktop installers and store/runtime acceptance outstanding.
+Last updated: 2026-10-11
+Current phase: Phase 7 - Rule Engine
+Status: Phase 7 is COMPLETE. Automated acceptance and P7-1–P7-5 consolidated rules-page browser review pass by explicit user report, 2026-10-11. Phases 1–6 remain accepted. Phase 8 has not started. No commit or push is authorized. Production launch remains NO-GO; see `LAUNCH_READINESS.md` and `SECURITY_STATUS.md`.
 
 ## Current objective
 
-Continue the implementation plan in `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md`. The Phase 27 launch decision is NO-GO until the blockers in `LAUNCH_READINESS.md` are resolved and verified. Source through Phase 25 is present, but runtime acceptance for Phases 2 through 26 remains pending. Migrations `0002_authentication.sql` through `0015_admin_console.sql` have not been applied. Provider, web, extension, desktop, packaging, native-host, task-reward, evidence privacy, event signature, verification, AI provider, report aggregation, notification delivery, Stripe billing, privacy, security, edge-case, admin, and production infrastructure flows remain unverified. The API does not yet issue signed policy snapshots, so encrypted desktop cache freshness is advisory rather than cryptographically verifiable. Offline policy is usable for at most 24 hours after sync; a stale or clock-inconsistent cache pauses local enforcement. Phase 14 currently authenticates owner-controlled event sources; provider-specific OAuth and vendor signature adapters remain follow-up work. Phase 15 provides an optional advisory interface; model behavior and the local fallback have not been accepted at runtime. Phase 16 reports use reported focus duration, source-supplied integration events, and the product wallet ledger; their browser and database behavior has not been accepted. Phase 17 supports persisted web inbox items, desktop alert polling, and opt-in Resend delivery; notification runtime behavior has not been accepted. Phase 18 adds configurable Stripe subscriptions; live/test account setup, pricing and feature mapping, webhooks, and runtime behavior remain unaccepted. Phase 19 adds user privacy controls, but its migration, external Stripe deletion path, retention scheduler, consent gates, and UI have not been accepted against a running environment.
+The following objective narrative is a historical snapshot from the earlier remediation pass. Current phase status and verified evidence are maintained in `REMEDIATION_HANDOFF.md`, `REMEDIATION_IMPLEMENTATION_PLAN.md`, and `PHASE_7_ACCEPTANCE.md`.
 Phase 22's Admin Console source is present; migration `0015_admin_console.sql` and admin runtime acceptance remain pending. Phase 23 has 65 passing unit/property/contract tests and successful desktop/extension source builds; live database, runtime, concurrency, load, and broad security acceptance remain pending. Phase 24 adds installer/update configuration and extension store archive generation. `pnpm install --frozen-lockfile` now succeeds with the reviewed `electron-winstaller` install hook enabled, but local electron-builder packaging stops when Node receives `EPERM` reading the linked `dotenv` package. No signed desktop installers, browser store submissions, or end-user update installation have been accepted.
 
 Do not restart Phase 1 implementation. Its baseline work is complete; only its runtime acceptance remains unresolved in this environment.
@@ -212,12 +212,13 @@ the fixture was stopped. Full evidence is in `PHASE_6_ACCEPTANCE.md`.
 - [x] Add deterministic shared evaluation for a fixed input, policy snapshot, and evaluation timestamp, with explicit tie-breaking and neutral classifier integration.
 - [x] Add authenticated rule create/update/archive, version history, override create/revoke, and policy-evaluation routes with CSRF protection on writes.
 - [x] Add workspace UI for rules, schedules, conditions, version history, overrides, and decision previews; include rule data in account export.
-- [ ] Add deterministic test cases for condition combinations, scope selection, priorities/ties, schedules/time zones, override expiry/revocation, version conflicts, and default decisions.
-- [ ] Apply migrations `0002_authentication.sql` through `0007_rule_engine.sql` in order.
-- [ ] Confirm repeated evaluation against the same input, policy snapshot, and timestamp produces byte-for-byte equivalent decision fields.
-- [ ] Exercise user/product/device isolation, stale-version conflicts, archive history, schedule boundaries, and temporary override expiry/revocation against a development database.
-- [ ] Confirm account export/deletion includes/removes rule data and the workspace works after migrations are applied.
-- [ ] Review implementation and complete the project's quality checks before marking Phase 7 complete. No tests or typechecks were run during this implementation turn.
+- [x] Add deterministic test cases for condition combinations, scope selection, priorities/ties, schedules/time zones/DST, override expiry/revocation, version conflicts, default decisions, and repeatable fixed-snapshot output.
+- [x] Apply migrations `0002_authentication.sql` through `0007_rule_engine.sql` in order on the isolated PostgreSQL 18 fixture; all migrations through `0015` applied and the migration precheck found none pending.
+- [x] Confirm repeated evaluation against the same input, policy snapshot, and timestamp produces byte-for-byte equivalent decision fields.
+- [x] Exercise user/product/device isolation, concurrent stale-version conflicts, archive history, schedule boundaries, override expiry/revocation, export/deletion cascades, and API/shared-evaluator parity against the development fixture.
+- [x] Confirm account export/deletion includes/removes rule data and the migrated workspace route/client bundle serves in the isolated web runtime.
+- [x] Review implementation and complete quality checks: default tests, typecheck, format, lint, and the targeted PostgreSQL/API suite all pass; repository lint warnings remain documented.
+- [x] Complete one consolidated user browser review of the rules workspace; P7-1–P7-5 PASS by explicit user report, 2026-10-11. Fixture stopped and no failures reported (`PHASE_7_ACCEPTANCE.md`).
 
 ## Phase 8 acceptance checklist
 

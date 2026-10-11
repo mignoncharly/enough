@@ -1,6 +1,6 @@
 # Security Status
 
-Last updated: 2026-10-10
+Last updated: 2026-10-11
 
 ## Current status
 
@@ -64,6 +64,18 @@ tools-page review; the fixture stopped and no failures were observed.
 `BLOCKED` and `ALLOWED` remain labels only, not access enforcement. Evidence is
 in `PHASE_6_ACCEPTANCE.md`. All 18 dependency findings remain open release
 obligations; production launch remains NO-GO.
+
+**Phase 7 Rule Engine COMPLETE, 2026-10-11.** The isolated PostgreSQL 18/API
+acceptance verifies authenticated and CSRF-protected rule writes, product/device
+ownership, concurrent version conflicts, immutable version history, schedules
+and DST behavior, override expiry/revocation, account export/deletion cascades,
+and equality with the shared evaluator used by extension/desktop clients. The
+rules route and client bundle also serve in the disposable web fixture. The user
+reported P7-1–P7-5 PASS, including rule/version previews, override precedence and
+revocation, archive/history, default fallback, narrow layout, and keyboard
+usability; the fixture stopped with no failures. No client enforcement or
+production acceptance is claimed. No dependency or protected configuration was
+changed. All 18 dependency findings remain open; launch remains **NO-GO**.
 
 ### Historical Phase 2 source-verification record
 
