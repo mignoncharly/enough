@@ -11,6 +11,18 @@ export function healthResponse(service: string, status: HealthStatus = "ok"): Se
 }
 
 export type {
+  BuildSessionMeter,
+  BuildSessionStatus,
+  BuildSessionTransition,
+} from "./build-session.ts";
+export {
+  BUILD_SESSION_HEARTBEAT_TIMEOUT_SECONDS,
+  heartbeatBuildSession,
+  MAX_BUILD_SESSION_RESERVE_MINUTES,
+  resumeBuildSession,
+  settleBuildSession,
+} from "./build-session.ts";
+export type {
   GrowthModeState,
   OfflinePolicyCacheState,
   TimestampedQueueItem,

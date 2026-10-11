@@ -900,6 +900,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       creditReservationAllocations,
       creditTransactionAllocations,
       creditRefundAllocations,
+      buildSessions,
+      buildSessionCommands,
       notificationPreferences,
       notifications,
     ] = await Promise.all([
@@ -1077,7 +1079,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         [session.id],
       ),
       pool.query(
-        `SELECT id, reservation_id, lot_id, account_id, amount, status, created_at
+        `SELECT id, reservation_id, lot_id, account_id, amount, remaining_amount, status, created_at
          FROM enough.credit_reservation_allocations WHERE user_id = $1 ORDER BY created_at`,
         [session.id],
       ),
@@ -1089,6 +1091,17 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       pool.query(
         `SELECT id, refund_transaction_id, source_allocation_id, account_id, amount, created_at
          FROM enough.credit_refund_allocations WHERE user_id = $1 ORDER BY created_at`,
+        [session.id],
+      ),
+      pool.query(
+        `SELECT id, account_id, product_id, reservation_id, device_id, status, reserved_minutes,
+                active_milliseconds, lease_version, last_heartbeat_at, expires_at, created_at, updated_at, ended_at
+         FROM enough.build_sessions WHERE user_id = $1 ORDER BY created_at`,
+        [session.id],
+      ),
+      pool.query(
+        `SELECT id, session_id, account_id, idempotency_key, request_hash, response, created_at
+         FROM enough.build_session_commands WHERE user_id = $1 ORDER BY created_at`,
         [session.id],
       ),
       pool.query(
@@ -1160,6 +1173,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       creditReservationAllocations: creditReservationAllocations.rows,
       creditTransactionAllocations: creditTransactionAllocations.rows,
       creditRefundAllocations: creditRefundAllocations.rows,
+      buildSessions: buildSessions.rows,
+      buildSessionCommands: buildSessionCommands.rows,
       notificationPreferences: notificationPreferences.rows[0] ?? null,
       notifications: notifications.rows,
       privacyPreferences: privacyPreferences.rows[0] ?? null,

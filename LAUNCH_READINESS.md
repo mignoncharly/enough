@@ -1,6 +1,6 @@
 # Phase 27 — Full Product Launch Gate
 
-Last assessed: 2026-10-10 (tool-classification capability row only; full launch gate not reassessed)
+Last assessed: 2026-10-11 (Phase 8 development status only; full launch gate not reassessed)
 
 ## Decision
 
@@ -16,7 +16,7 @@ This is a decision from the evidence recorded in this workspace, not a claim tha
 | Products and stages | Source exists; migrations, persistence, stage transitions, and runtime acceptance pending. | Not accepted |
 | Activity detection | Activity APIs and optional client event capture exist; ingestion, privacy, ordering, and aggregates lack runtime acceptance. | Not accepted |
 | Tool classification | Phase 6 COMPLETE: migrations, API/data boundaries, resolver, and tools-page create/edit/remove/preview accepted; P6-1–P6-5 PASS by user report. BLOCKED/ALLOWED are descriptive labels only. | Accepted (Phase 6 only) |
-| Build Credits | Ledger, reservations, refunds, and evidence-gated rewards exist in source; product-specific minute/session accounting is not connected to rule enforcement. DB and multi-device concurrency acceptance pending. Manual earn/adjust remain prototype controls. | Missing integration / not accepted |
+| Build Credits | Phase 8 COMPLETE: PostgreSQL concurrency/idempotency, migration compatibility, server-authoritative product-minute sessions, and P8-1–P8-5 user-reported browser acceptance PASS. The first P8-4 attempt correctly charged two minutes after crossing the 60-second boundary; the immediate retest charged one and released two. Offline work is not authorized; manual earn/adjust are default-off and unavailable in production. | Phase 8 accepted; launch not accepted |
 | Rules engine | Phase 7 COMPLETE: deterministic evaluator, migration/API ownership/version/history/override/export/deletion, shared-evaluator parity, isolated route/bundle checks, and P7-1–P7-5 user-reported browser review pass. Extension/desktop policy enforcement and production acceptance remain unaccepted. | Phase 7 accepted; launch not accepted |
 | Browser blocking | Chromium/Firefox extension source and store archives exist; browser installation, policy parity, offline behavior, and store publication are pending. | Not accepted |
 | Native desktop blocking | Desktop agent and native-host source exist; signed packages, platform behavior, identity limits, policy sync, and runtime acceptance are pending. | Not accepted |
@@ -52,7 +52,7 @@ This is a decision from the evidence recorded in this workspace, not a claim tha
 6. Produce and sign desktop packages, submit browser extensions, publish a reachable update feed, and verify installation and update on supported platforms. No signing or store credentials are configured here.
 7. Expand automated coverage for database migrations, critical cross-service flows, two-device convergence, browser/Electron runtime, restore, load, and security. Preserve the existing 65 passing tests as a baseline; they do not clear these gaps.
 8. Close product and operational policy decisions: signed desktop policy freshness, the fail-open enforcement cases, independent-evidence expectations, data retention/deletion behavior, launch support ownership, and external alert response.
-9. Implement the original build-credit product loop: shared build/grow states, product minute reservations, session metering/settlement and bounded offline spend. Passing manual wallet routes and static policy evaluation is insufficient.
+9. Complete the remaining build-credit product loop: connect wallet/session status to shared build/grow enforcement and implement signed, scoped, bounded offline spend. Phase 8 supplies online product reservations, server metering, settlement, and release only; passing the wallet review does not prove enforcement or offline behavior.
 
 ## Gate process
 

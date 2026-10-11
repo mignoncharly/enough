@@ -2,6 +2,7 @@
 
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
+  type BuildSessionRecord,
   type CreditReservation,
   type CreditTransaction,
   type CreditWorkspace,
@@ -34,6 +35,7 @@ export default function CreditsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [reserveMinutes, setReserveMinutes] = useState("5");
   const pendingKeys = useRef(new Map<string, string>());
 
   const refresh = useCallback(
@@ -162,6 +164,61 @@ export default function CreditsPage() {
     if (result) formElement.reset();
   }
 
+  async function startBuildSession(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!productId) {
+      setError("Select a product before starting a metered build session.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      await postCreditAction<{ buildSession: BuildSessionRecord }>(
+        "/api/credits/build-sessions/start",
+        {
+          productId,
+          reserveMinutes: Number(reserveMinutes),
+          idempotencyKey: createCreditIdempotencyKey(),
+        },
+      );
+      setNotice("Build session started. Server heartbeats determine billable minutes.");
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The build session could not be started.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function runBuildSessionCommand(action: "heartbeat" | "resume" | "settle") {
+    const active = workspace?.buildSessions.find(
+      (item) => item.status === "ACTIVE" || item.status === "PAUSED",
+    );
+    if (!active) return;
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      await postCreditAction<{ session: BuildSessionRecord }>(
+        `/api/credits/build-sessions/${active.id}/${action}`,
+        { idempotencyKey: createCreditIdempotencyKey(), leaseVersion: active.leaseVersion },
+      );
+      setNotice(
+        action === "heartbeat"
+          ? "Server heartbeat recorded."
+          : action === "resume"
+            ? "Session lease recovered on this device."
+            : "Build session settled; unused reserved credits were released.",
+      );
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The build-session command failed.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function changeScope(nextProductId: string) {
     setProductId(nextProductId);
     setLoading(true);
@@ -184,6 +241,15 @@ export default function CreditsPage() {
     );
 
   const wallet = workspace?.account;
+  const openBuildSession = (workspace?.buildSessions ?? []).find(
+    (item) => item.status === "ACTIVE" || item.status === "PAUSED",
+  );
+  const buildReservationIds = new Set(
+    (workspace?.buildSessions ?? []).map((item) => item.reservationId),
+  );
+  const visibleReservations = (workspace?.reservations ?? []).filter(
+    (item) => item.status === "ACTIVE" && !buildReservationIds.has(item.id),
+  );
   const refundableTransactions = (workspace?.transactions ?? []).filter(
     (item) => item.action === "SPEND" && item.amount > item.refundedAmount,
   );
@@ -196,9 +262,8 @@ export default function CreditsPage() {
           <p className="eyebrow">Build Credits</p>
           <h1>Credit wallet</h1>
           <p>
-            Task rewards enter the product wallet after evidence is manually verified. These
-            owner-managed earn and adjustment controls are prototype tools, not billing or proof of
-            completed work.
+            One product credit represents one build minute. Only server-observed session time is
+            charged; product wallets remain isolated from one another.
           </p>
         </div>
 
@@ -267,32 +332,112 @@ export default function CreditsPage() {
           </article>
         </section>
 
+        <section className="account-card">
+          <p className="eyebrow">Product build time</p>
+          <h2>Server-authoritative build session</h2>
+          <p>
+            Reserve 1–60 product minutes. Usage is measured between server heartbeats, rounded up to
+            the next whole minute, and never trusted from a client clock. A heartbeat gap over 90
+            seconds pauses metering; recovery increments the device lease.
+          </p>
+          {openBuildSession ? (
+            <div className="product-form">
+              <p role="status">
+                Session {openBuildSession.status.toLowerCase()} · {openBuildSession.activeSeconds}s
+                observed · {openBuildSession.billableMinutes} billable minutes · lease v
+                {openBuildSession.leaseVersion}
+              </p>
+              <p>Session expires {dateLabel(openBuildSession.expiresAt)}.</p>
+              <div className="goal-actions">
+                {openBuildSession.status === "ACTIVE" ? (
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void runBuildSessionCommand("heartbeat")}
+                  >
+                    Record heartbeat
+                  </button>
+                ) : null}
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void runBuildSessionCommand("resume")}
+                >
+                  Recover session lease
+                </button>
+                <button
+                  className="primary-button"
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void runBuildSessionCommand("settle")}
+                >
+                  Settle and release unused minutes
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form className="product-form" onSubmit={(event) => void startBuildSession(event)}>
+              <label>
+                Product minutes to reserve
+                <input
+                  name="reserveMinutes"
+                  type="number"
+                  min="1"
+                  max="60"
+                  step="1"
+                  value={reserveMinutes}
+                  onChange={(event) => setReserveMinutes(event.target.value)}
+                  required
+                />
+              </label>
+              {!productId ? (
+                <p className="muted-copy">Select a product wallet above first.</p>
+              ) : null}
+              <button className="primary-button" type="submit" disabled={saving || !productId}>
+                Reserve and start session
+              </button>
+            </form>
+          )}
+          <p className="muted-copy">
+            Offline work is not authorized by this session. Server metering pauses after missed
+            heartbeats, and session reservations expire within 60 minutes.
+          </p>
+        </section>
+
         <div className="dashboard-columns">
           <section className="account-card">
             <p className="eyebrow">Earn</p>
             <h2>Grant credits</h2>
-            <form
-              className="product-form"
-              onSubmit={(event) =>
-                void submitForm(event, "/api/credits/earn", "Credit grant recorded.", true)
-              }
-            >
-              <label>
-                Amount
-                <input name="amount" type="number" min="1" max="1000000000" step="1" required />
-              </label>
-              <label>
-                Expires at (optional)
-                <input name="expiresAt" type="datetime-local" />
-              </label>
-              <label>
-                Reason (optional)
-                <input name="reason" maxLength={300} />
-              </label>
-              <button className="primary-button" type="submit" disabled={saving}>
-                Earn credits
-              </button>
-            </form>
+            {workspace?.manualControlsEnabled ? (
+              <form
+                className="product-form"
+                onSubmit={(event) =>
+                  void submitForm(event, "/api/credits/earn", "Credit grant recorded.", true)
+                }
+              >
+                <label>
+                  Amount
+                  <input name="amount" type="number" min="1" max="1000000000" step="1" required />
+                </label>
+                <label>
+                  Expires at (optional)
+                  <input name="expiresAt" type="datetime-local" />
+                </label>
+                <label>
+                  Reason (optional)
+                  <input name="reason" maxLength={300} />
+                </label>
+                <button className="primary-button" type="submit" disabled={saving}>
+                  Earn credits
+                </button>
+              </form>
+            ) : (
+              <p className="muted-copy">
+                Manual grants are disabled; only verified rewards can fund this wallet.
+              </p>
+            )}
           </section>
           <section className="account-card">
             <p className="eyebrow">Spend</p>
@@ -346,35 +491,39 @@ export default function CreditsPage() {
           <section className="account-card">
             <p className="eyebrow">Adjust</p>
             <h2>Correct a balance</h2>
-            <form
-              className="product-form"
-              onSubmit={(event) =>
-                void submitForm(event, "/api/credits/adjust", "Credit adjustment recorded.", true)
-              }
-            >
-              <label>
-                Adjustment
-                <select name="direction" defaultValue="CREDIT">
-                  <option value="CREDIT">Add credits</option>
-                  <option value="DEBIT">Remove available credits</option>
-                </select>
-              </label>
-              <label>
-                Amount
-                <input name="amount" type="number" min="1" max="1000000000" step="1" required />
-              </label>
-              <label>
-                Expires at (optional, added credits only)
-                <input name="expiresAt" type="datetime-local" />
-              </label>
-              <label>
-                Reason
-                <input name="reason" minLength={2} maxLength={300} required />
-              </label>
-              <button className="secondary-button" type="submit" disabled={saving}>
-                Apply adjustment
-              </button>
-            </form>
+            {workspace?.manualControlsEnabled ? (
+              <form
+                className="product-form"
+                onSubmit={(event) =>
+                  void submitForm(event, "/api/credits/adjust", "Credit adjustment recorded.", true)
+                }
+              >
+                <label>
+                  Adjustment
+                  <select name="direction" defaultValue="CREDIT">
+                    <option value="CREDIT">Add credits</option>
+                    <option value="DEBIT">Remove available credits</option>
+                  </select>
+                </label>
+                <label>
+                  Amount
+                  <input name="amount" type="number" min="1" max="1000000000" step="1" required />
+                </label>
+                <label>
+                  Expires at (optional, added credits only)
+                  <input name="expiresAt" type="datetime-local" />
+                </label>
+                <label>
+                  Reason
+                  <input name="reason" minLength={2} maxLength={300} required />
+                </label>
+                <button className="secondary-button" type="submit" disabled={saving}>
+                  Apply adjustment
+                </button>
+              </form>
+            ) : (
+              <p className="muted-copy">Manual adjustments are disabled in this runtime.</p>
+            )}
           </section>
         </div>
 
@@ -414,34 +563,32 @@ export default function CreditsPage() {
           <section className="account-card">
             <p className="eyebrow">Reservations</p>
             <h2>Held credits</h2>
-            {workspace?.reservations.length ? (
+            {visibleReservations.length ? (
               <ul className="goal-list">
-                {workspace.reservations
-                  .filter((item) => item.status === "ACTIVE")
-                  .map((reservation) => (
-                    <li key={reservation.id}>
-                      <div>
-                        <strong>{reservation.remainingAmount} credits active</strong>
-                        <span>Expires {dateLabel(reservation.expiresAt)}</span>
-                      </div>
-                      <div className="goal-actions">
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => void reservationAction(reservation, "release")}
-                        >
-                          Release
-                        </button>
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => void reservationAction(reservation, "spend")}
-                        >
-                          Spend
-                        </button>
-                      </div>
-                    </li>
-                  ))}
+                {visibleReservations.map((reservation) => (
+                  <li key={reservation.id}>
+                    <div>
+                      <strong>{reservation.remainingAmount} credits active</strong>
+                      <span>Expires {dateLabel(reservation.expiresAt)}</span>
+                    </div>
+                    <div className="goal-actions">
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => void reservationAction(reservation, "release")}
+                      >
+                        Release
+                      </button>
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => void reservationAction(reservation, "spend")}
+                      >
+                        Spend
+                      </button>
+                    </div>
+                  </li>
+                ))}
               </ul>
             ) : (
               <p className="muted-copy">There are no active reservations.</p>

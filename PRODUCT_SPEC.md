@@ -37,7 +37,7 @@ Exact OS/browser versions are release acceptance inputs, not implied compatibili
 5. Complete a market task, submit evidence, obtain the applicable verification, and grant the reward exactly once.
 6. Reconcile usage and release unused reservation budget. Allow the next session when policy and available credits permit.
 
-Unit: one Build Credit represents one building minute, matching the original examples. Fractional usage, rounding, offline reservations and heartbeat/release rules must be specified and tested before this mechanism is accepted. Global wallet prototype controls do not substitute for product-specific session budgets. Implement the missing connection between the credit ledger, session accounting and shared evaluator during remediation.
+Unit: one Build Credit represents one building minute, matching the original examples. Phase 8 defines server-observed millisecond metering rounded up to a whole minute, a maximum 60-minute online reservation, a 90-second heartbeat gap pause, and atomic settlement/release. Offline allowance is zero until signed, scoped reservations and policy enforcement are implemented and accepted. Global wallet prototype controls do not substitute for product-specific session budgets. The rules evaluator still does not enforce wallet balances; that integration remains a separate product-loop acceptance item.
 
 ## Safety and evidence contract
 

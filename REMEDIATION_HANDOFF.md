@@ -1,6 +1,6 @@
 # Remediation Handoff
 
-Last updated: 2026-10-11 (Phase 7 formally complete; checkpoint approval pending)
+Last updated: 2026-10-11 (Phase 8 COMPLETE; checkpoint approval pending)
 Active plan: [REMEDIATION_IMPLEMENTATION_PLAN.md](REMEDIATION_IMPLEMENTATION_PLAN.md)  
 Historical detail: [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)  
 Current launch decision: **NO-GO**
@@ -11,7 +11,13 @@ Close the incomplete work from Phases 1–26 in dependency order, run the requir
 
 ## Current active work
 
-**Phase 7 — Rule Engine: COMPLETE.** The Phase 6 checkpoint is
+**Phase 7 — Rule Engine: COMPLETE.** Checkpointed at
+`f6e42b66a1c78c50317a4584258e40accff90ee8`; local `main` and `origin/main`
+match and the worktree was clean at Phase 8 start. Its accepted evidence remains
+below. **Phase 8 — Build Credit Engine: COMPLETE.** The user reported P8-1
+through P8-5 PASS on 2026-10-11. Phase 9 has not started; checkpoint approval is
+pending, and no commit or push is authorized.
+The Phase 6 checkpoint is
 `236b1b1585d29900a3b6e509254a8114e3f19f5a`; local `main` and `origin/main`
 matched and the working tree was clean at Phase 7 start. Canonical scope is
 conditions, actions, priorities, schedules, product/device scopes, versions,
@@ -38,22 +44,97 @@ temporary override lifecycle, shared evaluator parity, and rules route bundle;
 synthetic manual account and stopped the fixture; (6) recorded the user's
 consolidated P7-1–P7-5 PASS report. Do not repeat Phase 7 manual checks.
 
-**Blockers:** no Phase 7 blocker remains. Phase 7 is formally COMPLETE; Phase 8
-has not started. Checkpoint approval is pending. All 18 dependency-security
-findings remain open release obligations and production launch remains
-**NO-GO**.
+**Phase 8 execution order:** (1) preserved the existing ledger and product
+wallet behavior; (2) added deterministic metering, a 60-minute bounded
+server-owned session and append-only command records; (3) added ordered
+migrations `0016`–`0017` and isolated PostgreSQL tests for wallet operations,
+idempotency, concurrency, product ownership, export and recovery; (4) added a
+production-disabled manual-control gate and wallet session UI; (5) passed the
+Node.js 24 automated checks. The user then reported the consolidated P8-1–P8-5
+browser review PASS. On the first P8-4 attempt the active session crossed the
+60-second boundary and correctly charged two minutes; the immediate fresh
+three-minute reservation retest, heartbeat after about 2–3 seconds, and prompt
+settlement charged one minute and released the remaining two. This is a timing
+observation against the checklist expectation, not a product defect; the retest
+is accepted evidence. No production services, Docker, GitHub Actions, `.env`,
+`.runtime/`, credentials, or browser profiles were used.
 
-**Final verification (Node `v24.19.0`, pnpm `11.20.0`):**
-`pnpm test -- packages/shared/src/policy-rules.test.ts` PASS (16/16);
-`pnpm test:rules:integration` PASS (5/5; PostgreSQL 18 precheck passed with no
-pending migrations; fixture applied `0001`–`0015` in order); `pnpm test` PASS
-(72 passed, 131 integration tests skipped by default); `pnpm typecheck` PASS
-(11 workspace projects); `pnpm format:check` PASS (160 files); `pnpm lint` exit
-0 (124 warnings and one informational diagnostic); and
-`node scripts/phase2-runtime.mjs prepare --phase7` PASS (synthetic account
-written only to `%TEMP%\enough-phase7\manual-account.json`, fixture services
-stopped). Exact details and the single manual session are in
-[`PHASE_7_ACCEPTANCE.md`](PHASE_7_ACCEPTANCE.md).
+**Phase 8 safe decisions:** one credit is one build minute; charge the ceiling
+of server-observed active milliseconds per 60 seconds at settlement. Bound a
+session reservation to 60 minutes; heartbeat gaps over 90 seconds pause
+metering, and an authenticated device may recover via an incremented lease
+version. Offline use is not authorized (zero offline allowance) pending signed,
+scoped policy support. Manual earn/adjust remain prototype controls, disabled
+by default and rejected in production; only the disposable test fixture opts
+in. They are not task evidence, verified rewards, or billing.
+
+**Phase 8 blocker/manual state:** no Phase 8 blocker remains. P8-1–P8-5 are
+accepted and closed; do not reopen or repeat these manual checks. Evidence and
+the P8-4 timing observation are in `PHASE_8_ACCEPTANCE.md`. Phase 9 has not
+started and remains outside this checkpoint review.
+
+**Phase 8 automated verification (Node `v24.19.0`, pnpm `11.20.0`):**
+`pnpm test` PASS (80 passed, 137 skipped; opt-in integration files skipped);
+`pnpm test:credits:integration` PASS (6/6 on disposable PostgreSQL 18/Redis/API/web;
+migration precheck clean, legacy allocation backfill and seconds-to-milliseconds
+upgrade verified, services stopped); `pnpm typecheck` PASS across 11 workspace
+projects; `pnpm format:check` PASS (166 files); `pnpm lint` PASS (124 existing
+warnings, one informational diagnostic, no errors); `git diff --check` PASS
+(exit 0; only CRLF-to-LF normalization notices for remediation Markdown).
+All 18 dependency findings remain open release obligations; production launch
+remains **NO-GO**. Final documentation/source consistency checks on 2026-10-11:
+`rg -n "Phase 8|P8-1|P8-2|P8-3|P8-4|P8-5"` across the acceptance and active
+trackers confirms COMPLETE status and the five PASS records; the acceptance
+row count is 5. The stale-status search for Phase 8 ACTIVE/pending acceptance
+markers returned no matches (exit 1, expected). Source readback with
+`rg -n "build-sessions|manual.*(earn|adjust)|production"` confirms the API/UI
+session routes and production rejection of manual credit controls.
+`rg -n "CREATE TABLE|build_session|milliseconds|allocation"` on migrations
+`0016`–`0017` confirms durable sessions/commands and the seconds-to-milliseconds
+conversion. `git diff --check` PASS (exit 0, no whitespace errors; Git emitted
+only CRLF-to-LF normalization notices for the two remediation Markdown files).
+No manual checks or automated suites were rerun.
+
+**Phase 8 working tree at pause:** `git status --short --branch` reports
+`main...origin/main`; `git diff --cached --name-only` is empty. Exact status:
+
+```text
+## main...origin/main
+ M .env.example
+ M ARCHITECTURE.md
+ M DOMAIN_MODEL.md
+ M IMPLEMENTATION_HANDOFF.md
+ M IMPLEMENTATION_PLAN.md
+ M LAUNCH_READINESS.md
+ M PRODUCT_SPEC.md
+ M REMEDIATION_HANDOFF.md
+ M REMEDIATION_IMPLEMENTATION_PLAN.md
+ M SECURITY_STATUS.md
+ M apps/api/src/credits.ts
+ M apps/web/app/credits/page.tsx
+ M apps/web/app/workspace-data.ts
+ M package.json
+ M packages/auth/src/routes.ts
+ M packages/config/src/index.ts
+ M packages/shared/src/index.ts
+ M scripts/phase1-postgres.mjs
+ M scripts/phase2-runtime.mjs
+?? PHASE_8_ACCEPTANCE.md
+?? apps/api/src/credits.integration.test.ts
+?? packages/config/src/index.test.ts
+?? packages/db/migrations/0016_build_session_lifecycle.sql
+?? packages/db/migrations/0017_precise_build_session_meter.sql
+?? packages/shared/src/build-session.test.ts
+?? packages/shared/src/build-session.ts
+?? scripts/phase8-manual-account.mjs
+?? scripts/phase8-migration-check.mjs
+```
+
+No commit or push was made. No `.env`, `.runtime/`, credentials, browser
+profiles, generated artifacts, dependencies, or production configuration were
+modified. Phase 8 is formally complete. The working tree is ready for checkpoint
+review; wait for explicit user approval before committing or pushing. Phase 9
+is not started here.
 
 Initial Phase 7 harness failures and corrections are retained in the acceptance
 record. After recording P7-1–P7-5, the stale-status search across the phase

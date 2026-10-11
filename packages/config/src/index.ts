@@ -43,6 +43,11 @@ const environmentSchema = z
         typeof value === "string" ? ["true", "1", "yes"].includes(value.toLowerCase()) : value,
       z.boolean().default(false),
     ),
+    CREDITS_MANUAL_CONTROLS_ENABLED: z.preprocess(
+      (value) =>
+        typeof value === "string" ? ["true", "1", "yes"].includes(value.toLowerCase()) : value,
+      z.boolean().default(false),
+    ),
     AUTH_ALLOWED_ORIGINS: z.string().default(""),
     ADMIN_EMAILS: z.string().default(""),
     RESEND_API_KEY: optionalEnvironmentString,
@@ -165,6 +170,13 @@ const environmentSchema = z
           code: "custom",
           message: "Development email link previews must be disabled in production",
           path: ["AUTH_DEV_SHOW_EMAIL_LINKS"],
+        });
+      }
+      if (value.CREDITS_MANUAL_CONTROLS_ENABLED) {
+        context.addIssue({
+          code: "custom",
+          message: "Manual credit issuance and adjustment controls must be disabled in production",
+          path: ["CREDITS_MANUAL_CONTROLS_ENABLED"],
         });
       }
     }

@@ -1,6 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
 import { checkRateLimit } from "@enough/auth";
+import { env } from "@enough/config";
 import { type DbClient, pool } from "@enough/db";
+import {
+  type BuildSessionMeter,
+  type BuildSessionStatus,
+  heartbeatBuildSession,
+  MAX_BUILD_SESSION_RESERVE_MINUTES,
+  resumeBuildSession,
+  settleBuildSession,
+} from "@enough/shared";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { requireCsrf, requireSession } from "./api-auth.js";
@@ -61,6 +70,16 @@ const adjustSchema = z
     message: "Only credit adjustments can have an expiration.",
   });
 const expireSchema = z.object({ ...productScope, idempotencyKey: idempotencySchema }).strict();
+const buildSessionStartSchema = z
+  .object({
+    productId: z.string().uuid(),
+    reserveMinutes: z.number().int().positive().max(MAX_BUILD_SESSION_RESERVE_MINUTES),
+    idempotencyKey: idempotencySchema,
+  })
+  .strict();
+const buildSessionCommandSchema = z
+  .object({ idempotencyKey: idempotencySchema, leaseVersion: z.number().int().positive() })
+  .strict();
 
 interface AccountRow {
   id: string;
@@ -106,6 +125,24 @@ interface ReservationRow {
   expires_at: Date | null;
   created_at: Date;
   updated_at: Date;
+}
+
+interface BuildSessionRow {
+  id: string;
+  account_id: string;
+  user_id: string;
+  product_id: string;
+  reservation_id: string;
+  device_id: string | null;
+  status: BuildSessionStatus;
+  active_milliseconds: string;
+  reserved_minutes: number;
+  lease_version: number;
+  last_heartbeat_at: Date;
+  expires_at: Date;
+  created_at: Date;
+  updated_at: Date;
+  ended_at: Date | null;
 }
 
 class CreditError extends Error {
@@ -257,6 +294,7 @@ async function expireAccount(
 ): Promise<TransactionRow | null> {
   const clock = await client.query<{ now: Date }>("SELECT clock_timestamp() AS now");
   const now = clock.rows[0].now;
+  await settleExpiredBuildSessions(client, account, now, deviceId);
   const expiredLots = await client.query<LotRow>(
     `SELECT id, available_amount::text, reserved_amount::text, expires_at
      FROM enough.credit_lots
@@ -271,17 +309,26 @@ async function expireAccount(
   for (const lot of expiredLots.rows) {
     expiredAvailable += integer(lot.available_amount);
     expiredReserved += integer(lot.reserved_amount);
-    const allocations = await client.query<{ reservation_id: string; amount: string }>(
-      `UPDATE enough.credit_reservation_allocations
-       SET status = 'EXPIRED'
-       WHERE lot_id = $1 AND status = 'ACTIVE'
-       RETURNING reservation_id, amount::text`,
+    const allocations = await client.query<{
+      id: string;
+      reservation_id: string;
+      remaining_amount: string;
+    }>(
+      `SELECT id, reservation_id, remaining_amount::text
+       FROM enough.credit_reservation_allocations
+       WHERE lot_id = $1 AND status = 'ACTIVE' FOR UPDATE`,
       [lot.id],
     );
     for (const allocation of allocations.rows) {
       expiredByReservation.set(
         allocation.reservation_id,
-        (expiredByReservation.get(allocation.reservation_id) ?? 0) + integer(allocation.amount),
+        (expiredByReservation.get(allocation.reservation_id) ?? 0) +
+          integer(allocation.remaining_amount),
+      );
+      await client.query(
+        `UPDATE enough.credit_reservation_allocations
+         SET status = 'EXPIRED', remaining_amount = 0 WHERE id = $1`,
+        [allocation.id],
       );
     }
     await client.query(
@@ -313,10 +360,10 @@ async function expireAccount(
     const allocations = await client.query<{
       id: string;
       lot_id: string;
-      amount: string;
+      remaining_amount: string;
       expires_at: Date | null;
     }>(
-      `SELECT allocation.id, allocation.lot_id, allocation.amount::text, lot.expires_at
+      `SELECT allocation.id, allocation.lot_id, allocation.remaining_amount::text, lot.expires_at
        FROM enough.credit_reservation_allocations allocation
        JOIN enough.credit_lots lot ON lot.id = allocation.lot_id
        WHERE allocation.reservation_id = $1 AND allocation.status = 'ACTIVE'
@@ -326,7 +373,7 @@ async function expireAccount(
     );
     let reservationRelease = 0;
     for (const allocation of allocations.rows) {
-      const amount = integer(allocation.amount);
+      const amount = integer(allocation.remaining_amount);
       const stillValid = allocation.expires_at === null || allocation.expires_at > now;
       if (stillValid) {
         await client.query(
@@ -338,7 +385,8 @@ async function expireAccount(
         returnedAvailable += amount;
       }
       await client.query(
-        "UPDATE enough.credit_reservation_allocations SET status = $2 WHERE id = $1",
+        `UPDATE enough.credit_reservation_allocations
+         SET status = $2, remaining_amount = 0 WHERE id = $1`,
         [allocation.id, stillValid ? "RELEASED" : "EXPIRED"],
       );
       reservationRelease += amount;
@@ -532,6 +580,224 @@ function reservationResponse(row: ReservationRow) {
   };
 }
 
+function meterForBuildSession(row: BuildSessionRow): BuildSessionMeter {
+  return {
+    status: row.status,
+    reservedMinutes: row.reserved_minutes,
+    activeMilliseconds: integer(row.active_milliseconds),
+    lastHeartbeatAt: row.last_heartbeat_at,
+    expiresAt: row.expires_at,
+    leaseVersion: row.lease_version,
+  };
+}
+
+function buildSessionResponse(row: BuildSessionRow) {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    reservationId: row.reservation_id,
+    status: row.status,
+    reservedMinutes: row.reserved_minutes,
+    activeMilliseconds: integer(row.active_milliseconds),
+    activeSeconds: Math.floor(integer(row.active_milliseconds) / 1000),
+    billableMinutes: Math.ceil(integer(row.active_milliseconds) / 60_000),
+    leaseVersion: row.lease_version,
+    lastHeartbeatAt: row.last_heartbeat_at.toISOString(),
+    expiresAt: row.expires_at.toISOString(),
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
+    endedAt: row.ended_at?.toISOString() ?? null,
+  };
+}
+
+async function loadBuildSession(
+  client: DbClient,
+  sessionId: string,
+  accountId: string,
+  lock = false,
+): Promise<BuildSessionRow | null> {
+  const result = await client.query<BuildSessionRow>(
+    `SELECT id, account_id, user_id, product_id, reservation_id, device_id, status,
+            reserved_minutes, active_milliseconds::text, lease_version, last_heartbeat_at, expires_at,
+            created_at, updated_at, ended_at
+     FROM enough.build_sessions WHERE id = $1 AND account_id = $2 ${lock ? "FOR UPDATE" : ""}`,
+    [sessionId, accountId],
+  );
+  return result.rows[0] ?? null;
+}
+
+async function settleBuildSessionReservation(
+  client: DbClient,
+  account: AccountRow,
+  row: BuildSessionRow,
+  result: ReturnType<typeof settleBuildSession>,
+  deviceId: string | null,
+  settlementInstant: Date,
+): Promise<BuildSessionRow> {
+  if (row.status !== "ACTIVE" && row.status !== "PAUSED") return row;
+
+  const reservationResult = await client.query<ReservationRow>(
+    `SELECT id, status, amount::text, remaining_amount::text, expires_at, created_at, updated_at
+     FROM enough.credit_reservations WHERE id = $1 AND account_id = $2 AND user_id = $3 FOR UPDATE`,
+    [row.reservation_id, account.id, account.user_id],
+  );
+  const reservation = reservationResult.rows[0];
+  if (reservation?.status !== "ACTIVE") {
+    throw new CreditError(409, "The build-session reservation is no longer active.");
+  }
+  const allocationRows = await client.query<{
+    id: string;
+    lot_id: string;
+    remaining_amount: string;
+    expires_at: Date | null;
+  }>(
+    `SELECT allocation.id, allocation.lot_id, allocation.remaining_amount::text, lot.expires_at
+     FROM enough.credit_reservation_allocations allocation
+     JOIN enough.credit_lots lot ON lot.id = allocation.lot_id
+     WHERE allocation.reservation_id = $1 AND allocation.status = 'ACTIVE'
+     ORDER BY lot.expires_at ASC NULLS LAST, lot.created_at, lot.id
+     FOR UPDATE OF allocation, lot`,
+    [reservation.id],
+  );
+  const targetSpend = Math.min(result.billableMinutes, integer(reservation.remaining_amount));
+  let spendRemaining = targetSpend;
+  let spent = 0;
+  let returned = 0;
+  let reservedDebit = 0;
+  const transactionAllocations: Array<{ lotId: string; amount: number }> = [];
+
+  for (const allocation of allocationRows.rows) {
+    const allocated = integer(allocation.remaining_amount);
+    const consumed = Math.min(allocated, spendRemaining);
+    const unused = allocated - consumed;
+    const stillValid = allocation.expires_at === null || allocation.expires_at > settlementInstant;
+    const debitFromReserved = stillValid ? allocated : consumed;
+    if (debitFromReserved > 0) {
+      await client.query(
+        `UPDATE enough.credit_lots SET reserved_amount = reserved_amount - $2,
+           available_amount = available_amount + $3 WHERE id = $1`,
+        [allocation.lot_id, debitFromReserved, stillValid ? unused : 0],
+      );
+      reservedDebit += debitFromReserved;
+    }
+    if (consumed > 0) {
+      transactionAllocations.push({ lotId: allocation.lot_id, amount: consumed });
+      spent += consumed;
+      spendRemaining -= consumed;
+    }
+    if (stillValid) returned += unused;
+    await client.query(
+      `UPDATE enough.credit_reservation_allocations
+       SET remaining_amount = 0, status = $2 WHERE id = $1`,
+      [allocation.id, !stillValid ? "EXPIRED" : consumed > 0 ? "SPENT" : "RELEASED"],
+    );
+  }
+
+  if (spendRemaining > 0) throw new CreditError(409, "The session reservation is missing credits.");
+  if (reservedDebit > 0 || returned > 0 || spent > 0) {
+    const updatedAccount = await client.query(
+      `UPDATE enough.credit_accounts
+       SET available_balance = available_balance + $2,
+           reserved_balance = reserved_balance - $3,
+           lifetime_spent = lifetime_spent + $4,
+           updated_at = clock_timestamp()
+       WHERE id = $1 AND reserved_balance >= $3`,
+      [account.id, returned, reservedDebit, spent],
+    );
+    if (updatedAccount.rowCount !== 1)
+      throw new CreditError(409, "The reserved wallet balance changed unexpectedly.");
+  }
+  const reservationStatus =
+    result.status === "EXPIRED" ? "EXPIRED" : spent > 0 ? "SPENT" : "RELEASED";
+  await client.query(
+    `UPDATE enough.credit_reservations
+     SET status = $2, remaining_amount = 0, updated_at = clock_timestamp()
+     WHERE id = $1 AND status = 'ACTIVE'`,
+    [reservation.id, reservationStatus],
+  );
+
+  if (spent > 0 || returned > 0) {
+    const transaction = await writeTransaction(client, {
+      account,
+      deviceId,
+      action: spent > 0 ? "SPEND" : "RELEASE",
+      amount: spent > 0 ? spent : returned,
+      availableDelta: returned,
+      reservedDelta: -reservedDebit,
+      idempotencyKey: `build-session:${row.id}:settle`,
+      requestHash: digest({
+        action: "BUILD_SESSION_SETTLE",
+        sessionId: row.id,
+        activeMilliseconds: result.activeMilliseconds,
+        spent,
+        returned,
+        status: result.status,
+      }),
+      reservationId: reservation.id,
+      metadata: {
+        buildSessionId: row.id,
+        reservedMinutes: row.reserved_minutes,
+        activeSeconds: result.activeSeconds,
+        activeMilliseconds: result.activeMilliseconds,
+        billableMinutes: spent,
+        releasedMinutes: returned,
+        rounding: "ceil(active_milliseconds / 60000)",
+      },
+    });
+    if (spent > 0) {
+      for (const allocation of transactionAllocations) {
+        await client.query(
+          `INSERT INTO enough.credit_transaction_allocations
+             (id, transaction_id, lot_id, account_id, user_id, amount)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            randomUUID(),
+            transaction.id,
+            allocation.lotId,
+            account.id,
+            account.user_id,
+            allocation.amount,
+          ],
+        );
+      }
+    }
+  }
+
+  const updated = await client.query<BuildSessionRow>(
+    `UPDATE enough.build_sessions
+     SET status = $2, active_milliseconds = $3, last_heartbeat_at = $4,
+         updated_at = clock_timestamp(),
+         ended_at = CASE WHEN $2 IN ('COMPLETED', 'EXHAUSTED', 'EXPIRED') THEN clock_timestamp() ELSE NULL END
+     WHERE id = $1
+     RETURNING id, account_id, user_id, product_id, reservation_id, device_id, status,
+       reserved_minutes, active_milliseconds::text, lease_version, last_heartbeat_at, expires_at,
+       created_at, updated_at, ended_at`,
+    [row.id, result.status, result.activeMilliseconds, result.lastHeartbeatAt],
+  );
+  return updated.rows[0];
+}
+
+async function settleExpiredBuildSessions(
+  client: DbClient,
+  account: AccountRow,
+  now: Date,
+  deviceId: string | null,
+): Promise<void> {
+  const expired = await client.query<BuildSessionRow>(
+    `SELECT id, account_id, user_id, product_id, reservation_id, device_id, status,
+            reserved_minutes, active_milliseconds::text, lease_version, last_heartbeat_at, expires_at,
+            created_at, updated_at, ended_at
+     FROM enough.build_sessions
+     WHERE account_id = $1 AND status IN ('ACTIVE', 'PAUSED') AND expires_at <= $2
+     ORDER BY expires_at, id FOR UPDATE`,
+    [account.id, now],
+  );
+  for (const row of expired.rows) {
+    const result = settleBuildSession(meterForBuildSession(row), now);
+    await settleBuildSessionReservation(client, account, row, result, deviceId, row.expires_at);
+  }
+}
+
 function sendCreditError(request: FastifyRequest, reply: FastifyReply, error: unknown) {
   if (error instanceof CreditError)
     return reply.code(error.statusCode).send({ error: error.message });
@@ -672,6 +938,138 @@ export async function grantVerifiedTaskRewardInTransaction(
   return transaction.id;
 }
 
+type BuildSessionCommandAction = "heartbeat" | "resume" | "settle";
+
+async function runBuildSessionCommand(
+  userId: string,
+  deviceId: string | null,
+  sessionId: string,
+  action: BuildSessionCommandAction,
+  body: z.infer<typeof buildSessionCommandSchema>,
+) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const scope = await client.query<{ product_id: string }>(
+      `SELECT product_id FROM enough.build_sessions WHERE id = $1 AND user_id = $2`,
+      [sessionId, userId],
+    );
+    if (!scope.rows[0]) throw new CreditError(404, "Build session not found.");
+    const account = await ownedAccount(client, userId, scope.rows[0].product_id);
+    await expireAccount(client, account, deviceId);
+    const row = await loadBuildSession(client, sessionId, account.id, true);
+    if (!row || row.user_id !== userId || row.product_id !== scope.rows[0].product_id)
+      throw new CreditError(404, "Build session not found.");
+
+    const requestHash = digest({ action, sessionId, leaseVersion: body.leaseVersion });
+    const prior = await client.query<{ request_hash: string; response: Record<string, unknown> }>(
+      `SELECT request_hash, response FROM enough.build_session_commands
+       WHERE session_id = $1 AND idempotency_key = $2`,
+      [sessionId, body.idempotencyKey],
+    );
+    if (prior.rows[0]) {
+      if (prior.rows[0].request_hash !== requestHash)
+        throw new CreditError(
+          409,
+          "This session command key was already used for another request.",
+        );
+      await client.query("COMMIT");
+      return prior.rows[0].response;
+    }
+
+    if (body.leaseVersion !== row.lease_version)
+      throw new CreditError(409, "This build-session lease has been replaced.");
+    const clock = await client.query<{ now: Date }>("SELECT clock_timestamp() AS now");
+    const now = clock.rows[0].now;
+    let updated = row;
+
+    if (action === "heartbeat") {
+      if (row.status !== "ACTIVE" || row.device_id !== deviceId)
+        throw new CreditError(409, "This device no longer owns the active build-session lease.");
+      let result: ReturnType<typeof heartbeatBuildSession>;
+      try {
+        result = heartbeatBuildSession(meterForBuildSession(row), now);
+      } catch (error) {
+        throw new CreditError(409, error instanceof Error ? error.message : "Heartbeat rejected.");
+      }
+      if (["COMPLETED", "EXHAUSTED", "EXPIRED"].includes(result.status)) {
+        updated = await settleBuildSessionReservation(client, account, row, result, deviceId, now);
+      } else {
+        const changed = await client.query<BuildSessionRow>(
+          `UPDATE enough.build_sessions
+           SET status = $2, active_milliseconds = $3, last_heartbeat_at = $4, updated_at = clock_timestamp()
+           WHERE id = $1
+           RETURNING id, account_id, user_id, product_id, reservation_id, device_id, status,
+             reserved_minutes, active_milliseconds::text, lease_version, last_heartbeat_at, expires_at,
+             created_at, updated_at, ended_at`,
+          [row.id, result.status, result.activeMilliseconds, result.lastHeartbeatAt],
+        );
+        updated = changed.rows[0];
+      }
+    } else if (action === "resume") {
+      let result: ReturnType<typeof resumeBuildSession>;
+      try {
+        result = resumeBuildSession(meterForBuildSession(row), now);
+      } catch (error) {
+        throw new CreditError(409, error instanceof Error ? error.message : "Resume rejected.");
+      }
+      if (result.status === "EXPIRED") {
+        updated = await settleBuildSessionReservation(client, account, row, result, deviceId, now);
+      } else {
+        const changed = await client.query<BuildSessionRow>(
+          `UPDATE enough.build_sessions
+           SET status = 'ACTIVE', device_id = $2, lease_version = $3,
+               last_heartbeat_at = $4, updated_at = clock_timestamp()
+           WHERE id = $1
+           RETURNING id, account_id, user_id, product_id, reservation_id, device_id, status,
+             reserved_minutes, active_milliseconds::text, lease_version, last_heartbeat_at, expires_at,
+             created_at, updated_at, ended_at`,
+          [row.id, deviceId, result.leaseVersion, result.lastHeartbeatAt],
+        );
+        updated = changed.rows[0];
+      }
+    } else if (row.status === "ACTIVE" || row.status === "PAUSED") {
+      if (row.status === "ACTIVE" && row.device_id !== deviceId)
+        throw new CreditError(409, "This device no longer owns the active build-session lease.");
+      const result = settleBuildSession(meterForBuildSession(row), now);
+      updated = await settleBuildSessionReservation(client, account, row, result, deviceId, now);
+    }
+
+    const currentAccount = await client.query<AccountRow>(
+      `SELECT id, user_id, product_id, available_balance::text, reserved_balance::text,
+              lifetime_earned::text, lifetime_spent::text, created_at, updated_at
+       FROM enough.credit_accounts WHERE id = $1`,
+      [account.id],
+    );
+    const finalSession = await loadBuildSession(client, sessionId, account.id);
+    const response = {
+      session: buildSessionResponse(finalSession ?? updated),
+      account: accountResponse(currentAccount.rows[0]),
+    };
+    await client.query(
+      `INSERT INTO enough.build_session_commands
+         (id, session_id, account_id, user_id, idempotency_key, request_hash, response)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
+      [
+        randomUUID(),
+        sessionId,
+        account.id,
+        userId,
+        body.idempotencyKey,
+        requestHash,
+        JSON.stringify(response),
+      ],
+    );
+    await client.query("COMMIT");
+    return response;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function registerCreditRoutes(app: FastifyInstance): Promise<void> {
   app.get("/credits", async (request, reply) => {
     const session = await requireSession(request, reply);
@@ -687,31 +1085,39 @@ export async function registerCreditRoutes(app: FastifyInstance): Promise<void> 
       await client.query("BEGIN");
       const account = await ownedAccount(client, session.id, parsedQuery.data.productId);
       await expireAccount(client, account, session.deviceId);
-      const [current, transactions, reservations] = await Promise.all([
-        client.query<AccountRow>(
-          `SELECT id, user_id, product_id, available_balance::text, reserved_balance::text,
-                  lifetime_earned::text, lifetime_spent::text, created_at, updated_at
-           FROM enough.credit_accounts WHERE id = $1`,
-          [account.id],
-        ),
-        client.query<TransactionRow>(
-          `SELECT id, action, amount::text, available_delta::text, reserved_delta::text,
-                  balance_after_available::text, balance_after_reserved::text, idempotency_key,
-                  reservation_id, related_transaction_id, refunded_amount::text, metadata, created_at
-           FROM enough.credit_transactions WHERE account_id = $1 ORDER BY created_at DESC, id DESC LIMIT 100`,
-          [account.id],
-        ),
-        client.query<ReservationRow>(
-          `SELECT id, status, amount::text, remaining_amount::text, expires_at, created_at, updated_at
-           FROM enough.credit_reservations WHERE account_id = $1 ORDER BY created_at DESC LIMIT 100`,
-          [account.id],
-        ),
-      ]);
+      const current = await client.query<AccountRow>(
+        `SELECT id, user_id, product_id, available_balance::text, reserved_balance::text,
+                lifetime_earned::text, lifetime_spent::text, created_at, updated_at
+         FROM enough.credit_accounts WHERE id = $1`,
+        [account.id],
+      );
+      const transactions = await client.query<TransactionRow>(
+        `SELECT id, action, amount::text, available_delta::text, reserved_delta::text,
+                balance_after_available::text, balance_after_reserved::text, idempotency_key,
+                reservation_id, related_transaction_id, refunded_amount::text, metadata, created_at
+         FROM enough.credit_transactions WHERE account_id = $1 ORDER BY created_at DESC, id DESC LIMIT 100`,
+        [account.id],
+      );
+      const reservations = await client.query<ReservationRow>(
+        `SELECT id, status, amount::text, remaining_amount::text, expires_at, created_at, updated_at
+         FROM enough.credit_reservations WHERE account_id = $1 ORDER BY created_at DESC LIMIT 100`,
+        [account.id],
+      );
+      const buildSessions = await client.query<BuildSessionRow>(
+        `SELECT id, account_id, user_id, product_id, reservation_id, device_id, status,
+                reserved_minutes, active_milliseconds::text, lease_version, last_heartbeat_at, expires_at,
+                created_at, updated_at, ended_at
+         FROM enough.build_sessions WHERE account_id = $1
+         ORDER BY created_at DESC, id DESC LIMIT 50`,
+        [account.id],
+      );
       await client.query("COMMIT");
       return reply.send({
         account: accountResponse(current.rows[0]),
         transactions: transactions.rows.map(transactionResponse),
         reservations: reservations.rows.map(reservationResponse),
+        buildSessions: buildSessions.rows.map(buildSessionResponse),
+        manualControlsEnabled: env.CREDITS_MANUAL_CONTROLS_ENABLED,
       });
     } catch (error) {
       await client.query("ROLLBACK");
@@ -721,6 +1127,191 @@ export async function registerCreditRoutes(app: FastifyInstance): Promise<void> 
     }
   });
 
+  app.post("/credits/build-sessions/start", async (request, reply) => {
+    const session = await requireSession(request, reply);
+    if (
+      !session ||
+      !requireCsrf(request, reply, session) ||
+      !(await allowCreditWrite(request, reply, session.id))
+    )
+      return;
+    const parsed = buildSessionStartSchema.safeParse(request.body);
+    if (!parsed.success)
+      return bodyError(
+        reply,
+        parsed.error.issues[0]?.message ?? "Review the build-session request.",
+      );
+    const body = parsed.data;
+    const requestHash = digest({
+      action: "BUILD_SESSION_START",
+      productId: body.productId,
+      reserveMinutes: body.reserveMinutes,
+    });
+    const transactionIdempotencyKey = `build:start:${digest({
+      userId: session.id,
+      productId: body.productId,
+      idempotencyKey: body.idempotencyKey,
+    })}`;
+    try {
+      const result = await runMutation(
+        session.id,
+        session.deviceId,
+        body.productId,
+        transactionIdempotencyKey,
+        requestHash,
+        async (client, account, now) => {
+          const open = await client.query<{ id: string }>(
+            `SELECT id FROM enough.build_sessions
+             WHERE account_id = $1 AND status IN ('ACTIVE', 'PAUSED') FOR UPDATE`,
+            [account.id],
+          );
+          if (open.rows[0])
+            throw new CreditError(409, "This product already has an open build session.");
+          const allocations = await takeAvailable(
+            client,
+            account.id,
+            body.reserveMinutes,
+            true,
+            now,
+          );
+          const expiryResult = await client.query<{ expires_at: Date | null }>(
+            `SELECT MIN(expires_at) AS expires_at FROM enough.credit_lots
+             WHERE id = ANY($1::uuid[])`,
+            [allocations.map((allocation) => allocation.lotId)],
+          );
+          const sessionExpiresAt = new Date(now.getTime() + 60 * 60 * 1000);
+          const earliestLotExpiry = expiryResult.rows[0]?.expires_at;
+          if (earliestLotExpiry && earliestLotExpiry < sessionExpiresAt)
+            sessionExpiresAt.setTime(earliestLotExpiry.getTime());
+          if (sessionExpiresAt <= now)
+            throw new CreditError(409, "The selected credits expire before a session can start.");
+
+          const reservationId = randomUUID();
+          const reservationResult = await client.query<ReservationRow>(
+            `INSERT INTO enough.credit_reservations
+               (id, account_id, user_id, status, amount, remaining_amount, expires_at)
+             VALUES ($1, $2, $3, 'ACTIVE', $4, $4, $5)
+             RETURNING id, status, amount::text, remaining_amount::text, expires_at, created_at, updated_at`,
+            [reservationId, account.id, account.user_id, body.reserveMinutes, sessionExpiresAt],
+          );
+          for (const allocation of allocations) {
+            await client.query(
+              `INSERT INTO enough.credit_reservation_allocations
+                 (id, reservation_id, lot_id, account_id, user_id, amount, remaining_amount, status)
+               VALUES ($1, $2, $3, $4, $5, $6, $6, 'ACTIVE')`,
+              [
+                randomUUID(),
+                reservationId,
+                allocation.lotId,
+                account.id,
+                account.user_id,
+                allocation.amount,
+              ],
+            );
+          }
+          const balanceUpdate = await client.query(
+            `UPDATE enough.credit_accounts
+             SET available_balance = available_balance - $2,
+                 reserved_balance = reserved_balance + $2, updated_at = clock_timestamp()
+             WHERE id = $1 AND available_balance >= $2`,
+            [account.id, body.reserveMinutes],
+          );
+          if (balanceUpdate.rowCount !== 1)
+            throw new CreditError(
+              409,
+              "There are not enough product credits to start this session.",
+            );
+          const transaction = await writeTransaction(client, {
+            account,
+            deviceId: session.deviceId,
+            action: "RESERVE",
+            amount: body.reserveMinutes,
+            availableDelta: -body.reserveMinutes,
+            reservedDelta: body.reserveMinutes,
+            idempotencyKey: transactionIdempotencyKey,
+            requestHash,
+            reservationId,
+            metadata: {
+              source: "BUILD_SESSION",
+              reservedMinutes: body.reserveMinutes,
+              expiresAt: sessionExpiresAt.toISOString(),
+            },
+          });
+          const sessionId = randomUUID();
+          await client.query(
+            `INSERT INTO enough.build_sessions
+               (id, account_id, user_id, product_id, reservation_id, device_id, status,
+                reserved_minutes, active_milliseconds, lease_version, last_heartbeat_at, expires_at)
+             VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE', $7, 0, 1, $8, $9)`,
+            [
+              sessionId,
+              account.id,
+              account.user_id,
+              body.productId,
+              reservationId,
+              session.deviceId,
+              body.reserveMinutes,
+              now,
+              sessionExpiresAt,
+            ],
+          );
+          return { transaction, reservation: reservationResult.rows[0] };
+        },
+      );
+      const reservationId = result.reservation?.id;
+      if (!reservationId) throw new CreditError(503, "The build session could not be recovered.");
+      const current = await pool.query<BuildSessionRow>(
+        `SELECT id, account_id, user_id, product_id, reservation_id, device_id, status,
+                reserved_minutes, active_milliseconds::text, lease_version, last_heartbeat_at, expires_at,
+                created_at, updated_at, ended_at
+         FROM enough.build_sessions WHERE reservation_id = $1 AND user_id = $2`,
+        [reservationId, session.id],
+      );
+      if (!current.rows[0]) throw new CreditError(503, "The build session could not be recovered.");
+      return reply.code(result.replayed ? 200 : 201).send({
+        ...result,
+        buildSession: buildSessionResponse(current.rows[0]),
+      });
+    } catch (error) {
+      return sendCreditError(request, reply, error);
+    }
+  });
+
+  for (const action of ["heartbeat", "resume", "settle"] as const) {
+    app.post(`/credits/build-sessions/:sessionId/${action}`, async (request, reply) => {
+      const session = await requireSession(request, reply);
+      if (
+        !session ||
+        !requireCsrf(request, reply, session) ||
+        !(await allowCreditWrite(request, reply, session.id))
+      )
+        return;
+      const sessionId = z
+        .string()
+        .uuid()
+        .safeParse((request.params as { sessionId?: string }).sessionId);
+      if (!sessionId.success) return bodyError(reply, "Invalid build-session ID.");
+      const parsed = buildSessionCommandSchema.safeParse(request.body);
+      if (!parsed.success)
+        return bodyError(
+          reply,
+          parsed.error.issues[0]?.message ?? "Invalid build-session command.",
+        );
+      try {
+        const result = await runBuildSessionCommand(
+          session.id,
+          session.deviceId,
+          sessionId.data,
+          action,
+          parsed.data,
+        );
+        return reply.send(result);
+      } catch (error) {
+        return sendCreditError(request, reply, error);
+      }
+    });
+  }
+
   app.post("/credits/earn", async (request, reply) => {
     const session = await requireSession(request, reply);
     if (
@@ -729,6 +1320,8 @@ export async function registerCreditRoutes(app: FastifyInstance): Promise<void> 
       !(await allowCreditWrite(request, reply, session.id, true))
     )
       return;
+    if (!env.CREDITS_MANUAL_CONTROLS_ENABLED)
+      return reply.code(404).send({ error: "Manual credit controls are disabled." });
     const parsed = earnSchema.safeParse(request.body);
     if (!parsed.success)
       return bodyError(reply, parsed.error.issues[0]?.message ?? "Review the credit grant.");
@@ -876,8 +1469,8 @@ export async function registerCreditRoutes(app: FastifyInstance): Promise<void> 
           for (const allocation of allocations) {
             await client.query(
               `INSERT INTO enough.credit_reservation_allocations
-                 (id, reservation_id, lot_id, account_id, user_id, amount, status)
-               VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE')`,
+                 (id, reservation_id, lot_id, account_id, user_id, amount, remaining_amount, status)
+               VALUES ($1, $2, $3, $4, $5, $6, $6, 'ACTIVE')`,
               [
                 randomUUID(),
                 reservationId,
@@ -950,14 +1543,28 @@ export async function registerCreditRoutes(app: FastifyInstance): Promise<void> 
               session.id,
               reservationId.data,
             );
-            const allocations = await client.query<{ id: string; lot_id: string; amount: string }>(
-              `SELECT id, lot_id, amount::text FROM enough.credit_reservation_allocations
+            const managedSession = await client.query(
+              `SELECT 1 FROM enough.build_sessions
+               WHERE reservation_id = $1 AND status IN ('ACTIVE', 'PAUSED')`,
+              [reservation.id],
+            );
+            if (managedSession.rowCount)
+              throw new CreditError(
+                409,
+                "Build-session reservations must be closed through their session.",
+              );
+            const allocations = await client.query<{
+              id: string;
+              lot_id: string;
+              remaining_amount: string;
+            }>(
+              `SELECT id, lot_id, remaining_amount::text FROM enough.credit_reservation_allocations
              WHERE reservation_id = $1 AND status = 'ACTIVE' ORDER BY lot_id FOR UPDATE`,
               [reservation.id],
             );
             const amount = integer(reservation.remaining_amount);
             for (const allocation of allocations.rows) {
-              const portion = integer(allocation.amount);
+              const portion = integer(allocation.remaining_amount);
               if (action === "RELEASE") {
                 await client.query(
                   `UPDATE enough.credit_lots SET available_amount = available_amount + $2,
@@ -971,7 +1578,8 @@ export async function registerCreditRoutes(app: FastifyInstance): Promise<void> 
                 );
               }
               await client.query(
-                "UPDATE enough.credit_reservation_allocations SET status = $2 WHERE id = $1",
+                `UPDATE enough.credit_reservation_allocations
+                 SET status = $2, remaining_amount = 0 WHERE id = $1`,
                 [allocation.id, action === "RELEASE" ? "RELEASED" : "SPENT"],
               );
             }
@@ -1010,7 +1618,7 @@ export async function registerCreditRoutes(app: FastifyInstance): Promise<void> 
                     allocation.lot_id,
                     account.id,
                     account.user_id,
-                    integer(allocation.amount),
+                    integer(allocation.remaining_amount),
                   ],
                 );
               }
@@ -1165,6 +1773,8 @@ export async function registerCreditRoutes(app: FastifyInstance): Promise<void> 
       !(await allowCreditWrite(request, reply, session.id, true))
     )
       return;
+    if (!env.CREDITS_MANUAL_CONTROLS_ENABLED)
+      return reply.code(404).send({ error: "Manual credit controls are disabled." });
     const parsed = adjustSchema.safeParse(request.body);
     if (!parsed.success)
       return bodyError(reply, parsed.error.issues[0]?.message ?? "Review the adjustment.");

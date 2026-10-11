@@ -26,82 +26,95 @@ const phase4 = process.argv.includes("--phase4");
 const phase5 = process.argv.includes("--phase5");
 const phase6 = process.argv.includes("--phase6");
 const phase7 = process.argv.includes("--phase7");
-const phase = phase7
-  ? "phase7"
-  : phase6
-    ? "phase6"
-    : phase5
-      ? "phase5"
-      : phase4
-        ? "phase4"
-        : phase3
-          ? "phase3"
-          : "phase2";
+const phase8 = process.argv.includes("--phase8");
+const phase = phase8
+  ? "phase8"
+  : phase7
+    ? "phase7"
+    : phase6
+      ? "phase6"
+      : phase5
+        ? "phase5"
+        : phase4
+          ? "phase4"
+          : phase3
+            ? "phase3"
+            : "phase2";
 const fixture =
-  phase3 || phase4 || phase5 || phase6 || phase7
+  phase3 || phase4 || phase5 || phase6 || phase7 || phase8
     ? join(tmpdir(), `enough-${phase}`)
     : join(root, ".runtime", phase);
-const pgPort = phase7
-  ? 55438
-  : phase6
-    ? 55437
-    : phase5
-      ? 55436
-      : phase4
-        ? 55435
-        : phase3
-          ? 55434
-          : 55433;
-const redisPort = phase7
-  ? 56391
-  : phase6
-    ? 56389
-    : phase5
-      ? 56387
-      : phase4
-        ? 56385
-        : phase3
-          ? 56383
-          : 56381;
-const wslRedisPort = phase7
-  ? "56394"
-  : phase6
-    ? "56390"
-    : phase5
-      ? "56388"
-      : phase4
-        ? "56386"
-        : phase3
-          ? "56384"
-          : "56382";
-const apiPort = phase7
-  ? 4412
-  : phase6
-    ? 4410
-    : phase5
-      ? 4408
-      : phase4
-        ? 4406
-        : phase3
-          ? 4404
-          : 4402;
-const webPort = phase7
-  ? 3307
-  : phase6
-    ? 3306
-    : phase5
-      ? 3305
-      : phase4
-        ? 3304
-        : phase3
-          ? 3303
-          : 3302;
+const pgPort = phase8
+  ? 55439
+  : phase7
+    ? 55438
+    : phase6
+      ? 55437
+      : phase5
+        ? 55436
+        : phase4
+          ? 55435
+          : phase3
+            ? 55434
+            : 55433;
+const redisPort = phase8
+  ? 56393
+  : phase7
+    ? 56391
+    : phase6
+      ? 56389
+      : phase5
+        ? 56387
+        : phase4
+          ? 56385
+          : phase3
+            ? 56383
+            : 56381;
+const wslRedisPort = phase8
+  ? "56396"
+  : phase7
+    ? "56394"
+    : phase6
+      ? "56390"
+      : phase5
+        ? "56388"
+        : phase4
+          ? "56386"
+          : phase3
+            ? "56384"
+            : "56382";
+const apiPort = phase8
+  ? 4414
+  : phase7
+    ? 4412
+    : phase6
+      ? 4410
+      : phase5
+        ? 4408
+        : phase4
+          ? 4406
+          : phase3
+            ? 4404
+            : 4402;
+const webPort = phase8
+  ? 3308
+  : phase7
+    ? 3307
+    : phase6
+      ? 3306
+      : phase5
+        ? 3305
+        : phase4
+          ? 3304
+          : phase3
+            ? 3303
+            : 3302;
 const phaseFlag = `--${phase}`;
 const mode = process.argv[2] ?? "test";
 assert.ok(["test", "serve", "prepare"].includes(mode), "Use test, serve or prepare.");
 assert.ok(!phase5 || mode === "test", "Phase 5 is an automated ingestion fixture.");
 const extensionOrigins =
-  phase3 || phase4 || phase5 || phase6 || phase7 ? "" : (process.argv[3] ?? "");
+  phase3 || phase4 || phase5 || phase6 || phase7 || phase8 ? "" : (process.argv[3] ?? "");
 assert.ok(
   extensionOrigins
     .split(",")
@@ -226,13 +239,16 @@ try {
   environment.CI = "1";
   environment.AUTH_ALLOWED_ORIGINS = extensionOrigins;
   environment.ENOUGH_PHASE2_INTEGRATION =
-    phase3 || phase4 || phase5 || phase6 || phase7 ? "0" : "1";
+    phase3 || phase4 || phase5 || phase6 || phase7 || phase8 ? "0" : "1";
   environment.ENOUGH_PHASE3_INTEGRATION =
-    phase3 || phase4 || phase5 || phase6 || phase7 ? "1" : "0";
-  environment.ENOUGH_PHASE4_INTEGRATION = phase4 || phase5 || phase6 || phase7 ? "1" : "0";
-  environment.ENOUGH_PHASE5_INTEGRATION = phase5 || phase6 || phase7 ? "1" : "0";
-  environment.ENOUGH_PHASE6_INTEGRATION = phase6 || phase7 ? "1" : "0";
-  environment.ENOUGH_PHASE7_INTEGRATION = phase7 ? "1" : "0";
+    phase3 || phase4 || phase5 || phase6 || phase7 || phase8 ? "1" : "0";
+  environment.ENOUGH_PHASE4_INTEGRATION =
+    phase4 || phase5 || phase6 || phase7 || phase8 ? "1" : "0";
+  environment.ENOUGH_PHASE5_INTEGRATION = phase5 || phase6 || phase7 || phase8 ? "1" : "0";
+  environment.ENOUGH_PHASE6_INTEGRATION = phase6 || phase7 || phase8 ? "1" : "0";
+  environment.ENOUGH_PHASE7_INTEGRATION = phase7 || phase8 ? "1" : "0";
+  environment.ENOUGH_PHASE8_INTEGRATION = phase8 ? "1" : "0";
+  environment.CREDITS_MANUAL_CONTROLS_ENABLED = phase8 ? "true" : "false";
   // The generated fixture explicitly blanks all provider credentials; no root env file is loaded.
   assert.equal(new URL(environment.DATABASE_URL).pathname, `/enough_${phase}`);
   assert.equal(new URL(environment.DATABASE_URL).port, String(pgPort));
@@ -392,30 +408,44 @@ try {
   await ready(`http://127.0.0.1:${webPort}/api/ready`, web);
   console.info(`Isolated API/web ready at ${apiPort}/${webPort}; other runtimes untouched.`);
   if (mode === "test") {
+    if (phase8) {
+      await runNode([join(root, "scripts", "phase8-migration-check.mjs")], { env: environment });
+    }
     await runNode(
-      phase7
+      phase8
         ? [
             join(root, "node_modules", "vitest", "vitest.mjs"),
             "run",
-            "apps/api/src/rules.integration.test.ts",
+            "apps/api/src/credits.integration.test.ts",
             "--hookTimeout=60000",
             "--testTimeout=60000",
             "--maxWorkers=1",
           ]
-        : phase3 || phase4 || phase5 || phase6
+        : phase7
           ? [
               join(root, "node_modules", "vitest", "vitest.mjs"),
               "run",
-              "apps/api/src/onboarding.integration.test.ts",
-              ...(phase4 || phase5 || phase6 ? ["apps/api/src/products.integration.test.ts"] : []),
-              ...(phase5 || phase6 ? ["apps/api/src/activity.integration.test.ts"] : []),
-              ...(phase6 || phase7 ? ["apps/api/src/classification.integration.test.ts"] : []),
-              ...(phase7 ? ["apps/api/src/rules.integration.test.ts"] : []),
+              "apps/api/src/rules.integration.test.ts",
               "--hookTimeout=60000",
               "--testTimeout=60000",
               "--maxWorkers=1",
             ]
-          : ["scripts/phase2-auth-tests.mjs"],
+          : phase3 || phase4 || phase5 || phase6
+            ? [
+                join(root, "node_modules", "vitest", "vitest.mjs"),
+                "run",
+                "apps/api/src/onboarding.integration.test.ts",
+                ...(phase4 || phase5 || phase6
+                  ? ["apps/api/src/products.integration.test.ts"]
+                  : []),
+                ...(phase5 || phase6 ? ["apps/api/src/activity.integration.test.ts"] : []),
+                ...(phase6 || phase7 ? ["apps/api/src/classification.integration.test.ts"] : []),
+                ...(phase7 ? ["apps/api/src/rules.integration.test.ts"] : []),
+                "--hookTimeout=60000",
+                "--testTimeout=60000",
+                "--maxWorkers=1",
+              ]
+            : ["scripts/phase2-auth-tests.mjs"],
       { env: environment },
     );
   } else {
@@ -426,13 +456,15 @@ try {
         join(
           root,
           "scripts",
-          phase7
-            ? "phase7-manual-account.mjs"
-            : phase6
-              ? "phase6-manual-account.mjs"
-              : phase3 || phase4
-                ? "phase3-manual-account.mjs"
-                : "phase2-manual-account.mjs",
+          phase8
+            ? "phase8-manual-account.mjs"
+            : phase7
+              ? "phase7-manual-account.mjs"
+              : phase6
+                ? "phase6-manual-account.mjs"
+                : phase3 || phase4
+                  ? "phase3-manual-account.mjs"
+                  : "phase2-manual-account.mjs",
         ),
       ],
       {
@@ -444,7 +476,7 @@ try {
       console.info("Manual fixture preparation verified; stopping fixture services.");
     } else {
       console.info(
-        phase3 || phase4 || phase6 || phase7
+        phase3 || phase4 || phase6 || phase7 || phase8
           ? `Fixture serving. Ctrl+C stops this fixture; data stays in TEMP/enough-${phase}.`
           : "Fixture serving. Ctrl+C stops only this fixture; data stays in ignored .runtime/phase2.",
       );

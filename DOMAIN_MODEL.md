@@ -14,7 +14,7 @@ Status: agreed Phase 0 contract, 2026-10-07. Persisted identifiers below match c
 | Rule/guard | Versioned deterministic policy. A guard is a policy condition/enforcement constraint, not an additional independently authoritative engine |
 | Override | Scoped, expiring ALLOW/BLOCK exception with reason, revocation and audit |
 | Build Credit | Integer unit of one minute; product-scoped ledger with grant lots, expiry and reservations; not money or a subscription entitlement |
-| Build session | Required authoritative reservation and metered usage lifecycle shared across devices; integration is currently missing |
+| Build session | Product-scoped server-authoritative reservation with active/paused/settled/expired lifecycle, server-observed millisecond usage, whole-minute rounding, idempotent commands, and lease-fenced cross-device recovery; offline use is not authorized |
 | Growth task | Stage-specific or custom market action with an occurrence, reward and completion record |
 | Evidence | Private submission supporting a completion; provenance, review outcome and source trust are separate fields |
 | Market signal | Measured growth outcome with identified source/trust; a user claim is not provider-authenticated truth |
@@ -45,4 +45,4 @@ These are derived product journey states, not replacements for every existing SQ
 
 Additional dimensions: `PAUSED`, `EMERGENCY_BYPASS`, `OFFLINE_ENFORCEMENT`, `INTEGRATION_ERROR`, `POLICY_DISABLED`. Connectivity, evidence progress and enforcement are separate dimensions; a provider error must not imply that an existing task is verified. Emergency bypass is locally available and bounded. Invalid/expired policy yields visibly paused enforcement, not a fabricated ALLOW decision from a trusted engine.
 
-The server/session contract and shared reducer must define legal transitions, reservation recovery, rounding, repeated/out-of-order events and audit output. Current code implements rules and task/ledger pieces, not this complete state machine. Add parity tests before clients adopt it.
+Phase 8 defines server session transitions, reservation recovery, minute rounding, idempotent commands, and lease fencing. The shared reducer and rules evaluator still do not consume wallet balances or enforce these sessions; signed offline policy and cross-client parity remain future work before clients can claim that enforcement.

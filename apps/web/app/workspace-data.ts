@@ -522,10 +522,29 @@ export interface CreditReservation {
   updatedAt: string;
 }
 
+export interface BuildSessionRecord {
+  id: string;
+  productId: string;
+  reservationId: string;
+  status: "ACTIVE" | "PAUSED" | "COMPLETED" | "EXHAUSTED" | "EXPIRED";
+  reservedMinutes: number;
+  activeMilliseconds: number;
+  activeSeconds: number;
+  billableMinutes: number;
+  leaseVersion: number;
+  lastHeartbeatAt: string;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+  endedAt: string | null;
+}
+
 export interface CreditWorkspace {
   account: CreditAccount;
   transactions: CreditTransaction[];
   reservations: CreditReservation[];
+  buildSessions: BuildSessionRecord[];
+  manualControlsEnabled: boolean;
 }
 
 export interface ActivityEventRecord {

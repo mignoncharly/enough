@@ -39,7 +39,7 @@ Private evidence storage must disable public access, use least-privilege service
 
 ## Missing architectural work
 
-Implement a server-authoritative build-session/reservation lifecycle and shared state reducer; signed policy snapshots with issuer/key rotation, owner/device/product scope and expiry; bounded offline spend; required vendor adapters and refresh/revocation; end-to-end consent boundaries and concurrency tests. The current rules evaluator does not use wallet balances or consume session credits.
+Phase 8 now supplies a server-authoritative build-session/reservation lifecycle, PostgreSQL idempotency, bounded online reservations, lease recovery, and precise minute settlement. Offline spend remains disabled until signed policy snapshots with issuer/key rotation, owner/device/product scope and expiry are implemented; the current rules evaluator does not consume wallet balances or session credits. Required vendor adapters/refresh-revocation and end-to-end consent boundaries also remain future work.
 
 Existing worker timers schedule email delivery and privacy retention; the BullMQ handler currently accepts `healthcheck` only. Retention and Stripe customer cleanup exist in source and require runtime/recovery acceptance. Do not reimplement them based on old limitation wording.
 

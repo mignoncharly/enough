@@ -3,12 +3,12 @@
 Historical implementation record. The active remediation plan and current execution handoff are now [REMEDIATION_IMPLEMENTATION_PLAN.md](REMEDIATION_IMPLEMENTATION_PLAN.md) and [REMEDIATION_HANDOFF.md](REMEDIATION_HANDOFF.md).
 
 Last updated: 2026-10-11
-Current phase: Phase 7 - Rule Engine
-Status: Phase 7 is COMPLETE. Automated acceptance and P7-1–P7-5 consolidated rules-page browser review pass by explicit user report, 2026-10-11. Phases 1–6 remain accepted. Phase 8 has not started. No commit or push is authorized. Production launch remains NO-GO; see `LAUNCH_READINESS.md` and `SECURITY_STATUS.md`.
+Current phase: Phase 8 - Build Credit Engine (COMPLETE; checkpoint approval pending)
+Status: Phase 7 is COMPLETE and checkpointed at `f6e42b66a1c78c50317a4584258e40accff90ee8`. Phase 8 implementation, automated acceptance, and user-reported P8-1–P8-5 browser acceptance are complete. Phases 1–7 remain accepted. No commit or push is authorized pending explicit checkpoint approval. Production launch remains NO-GO; see `LAUNCH_READINESS.md` and `SECURITY_STATUS.md`.
 
 ## Current objective
 
-The following objective narrative is a historical snapshot from the earlier remediation pass. Current phase status and verified evidence are maintained in `REMEDIATION_HANDOFF.md`, `REMEDIATION_IMPLEMENTATION_PLAN.md`, and `PHASE_7_ACCEPTANCE.md`.
+The following objective narrative is a historical snapshot from the earlier remediation pass. Current phase status and verified evidence are maintained in `REMEDIATION_HANDOFF.md`, `REMEDIATION_IMPLEMENTATION_PLAN.md`, and `PHASE_8_ACCEPTANCE.md`.
 Phase 22's Admin Console source is present; migration `0015_admin_console.sql` and admin runtime acceptance remain pending. Phase 23 has 65 passing unit/property/contract tests and successful desktop/extension source builds; live database, runtime, concurrency, load, and broad security acceptance remain pending. Phase 24 adds installer/update configuration and extension store archive generation. `pnpm install --frozen-lockfile` now succeeds with the reviewed `electron-winstaller` install hook enabled, but local electron-builder packaging stops when Node receives `EPERM` reading the linked `dotenv` package. No signed desktop installers, browser store submissions, or end-user update installation have been accepted.
 
 Do not restart Phase 1 implementation. Its baseline work is complete; only its runtime acceptance remains unresolved in this environment.
@@ -111,13 +111,14 @@ Rule conditions are conjunctive across supplied fields; multiple classifications
 ## Phase 8 implementation map
 
 - `packages/db/migrations/0008_credit_engine.sql`: global and product-scoped accounts, an append-oriented transaction ledger with refund totals, expiring grant lots, reservations with per-lot allocations, spend allocations, and refund allocation history. Product/account deletion cascades through the wallet data.
-- `apps/api/src/credits.ts`: authenticated wallet reads and earn, spend, reserve, release, reserved spend, refund, expire, and adjust operations. Writes require cookie-session CSRF validation and an idempotency key; all devices for a user and wallet share an account-row lock. Available credits are allocated from earliest-expiring lots first.
-- Expiration is reconciled on wallet reads and before credit mutations. Expired grant allocations leave balances; reservation expiry returns unexpired held credits and expires portions whose grant has already expired. Refunds return credits to their original grant lots, retaining the original expiration.
+- `packages/db/migrations/0016_build_session_lifecycle.sql` and `0017_precise_build_session_meter.sql`: allocation remaining amounts, durable product build sessions and command idempotency, plus conversion of existing session seconds to milliseconds.
+- `apps/api/src/credits.ts`: authenticated wallet operations and server-authoritative product build sessions. Writes require CSRF validation and idempotency; all devices for an account share a PostgreSQL account-row lock. Session start/heartbeat/recovery/settlement validates user/product ownership and lease versions; one open session is allowed per product account.
+- Expiration is reconciled on wallet reads and before credit mutations. Expired grant allocations leave balances; reservation expiry returns unexpired held credits and expires portions whose grant has already expired. Refunds return credits to their original grant lots, retaining the original expiration. Build-session settlement charges the ceiling of server-observed active milliseconds per minute, capped by the reservation, and releases unused minutes atomically.
 - `apps/api/src/server.ts`, `apps/web/next.config.ts`, and `infra/nginx/enough.conf`: no-store API registration, same-origin rewrite, and reverse-proxy routing.
-- `apps/web/app/credits/page.tsx` and `apps/web/app/workspace-data.ts`: wallet selector, balances, ledger, reservations, and controls for each operation. The dashboard links to the wallet.
-- Account export includes credit accounts, transactions, lots, reservations, and allocation records.
+- `apps/web/app/credits/page.tsx` and `apps/web/app/workspace-data.ts`: wallet selector, balances, ledger, reservations, session controls, and controls for each wallet operation. Offline work is explicitly not authorized by a server session.
+- Account export includes credit accounts, transactions, lots, reservations, allocation records, build sessions, and idempotent session commands.
 
-The current earn and credit-adjust APIs are owner-authenticated manual controls, not verified reward issuance. Do not treat them as billing or task-completion evidence; trusted reward issuance and production entitlement integration remain future work. Atomicity and multi-device behavior have not passed concurrency or runtime acceptance.
+Manual earn/adjust are prototype controls: disabled by default, rejected in production configuration, and enabled only in the disposable Phase 8 fixture. They are not verified rewards or billing. Session reservations are limited to 60 minutes; heartbeat gaps over 90 seconds pause metering; offline use is not authorized. P8-1–P8-5 passed by user report; the first P8-4 attempt crossed the 60-second billing boundary and correctly charged two minutes, while the immediate fresh-reservation retest charged one and released two. This was a timing observation, not a product defect. Do not repeat the completed manual acceptance.
 
 Credit amounts are positive integer units, capped at one billion per request. Omit `productId` (or pass `null`) for the account-wide wallet; pass an owned product UUID for a product wallet. Every write body carries an `idempotencyKey` (8–120 characters). Routes are `GET /credits`, `POST /credits/earn`, `/spend`, `/reserve`, `/refund`, `/adjust`, `/expire`, and `POST /credits/reservations/:reservationId/release` or `/spend`. Refunds require the original spend transaction ID and cannot exceed its unrefunded allocation. Reservation release/spend consumes the reservation's current remaining amount; partial expiration can reduce that amount while leaving the rest active.
 
@@ -222,15 +223,13 @@ the fixture was stopped. Full evidence is in `PHASE_6_ACCEPTANCE.md`.
 
 ## Phase 8 acceptance checklist
 
-- [x] Add global and product-scoped credit accounts, immutable transaction records, expiring grant lots, and reservation/spend/refund allocations.
-- [x] Add authenticated earn, spend, reserve, release, reserved spend, refund, expire, and adjust operations with per-wallet idempotency keys.
-- [x] Serialize wallet mutations by locking the shared account row; allocate only unexpired credits and preserve original lot expiry through refunds.
-- [x] Add the wallet page and include all credit state in account export.
-- [ ] Add deterministic and database concurrency cases proving two devices cannot double-spend and retries do not duplicate ledger effects.
-- [ ] Apply migrations `0002_authentication.sql` through `0008_credit_engine.sql` in order.
-- [ ] Exercise earn/spend, partial and full reservations, release, reserved spend, partial refunds, expiry, adjustments, product isolation, and account export against PostgreSQL.
-- [ ] Confirm concurrent spends never produce a negative balance or consume the same credit lot twice.
-- [ ] Review implementation and complete the project's quality checks before marking Phase 8 complete. No tests or typechecks were run during this implementation turn.
+- [x] Preserve the existing wallet operations and add authenticated product-specific build-session reserve/start, heartbeat, cross-device recovery, settlement, and release.
+- [x] Bound reservations to 1–60 minutes; pause metering after heartbeat gaps over 90 seconds; meter server-observed milliseconds and round up to whole minutes; reject stale lease writes.
+- [x] Add ordered migrations `0016`–`0017`, preserving allocation history and converting old build-session seconds safely.
+- [x] Cover wallet operation classes, ownership/CSRF, retries, expiration/refunds/export, concurrency, session lifecycle, and migration compatibility with isolated PostgreSQL/API integration tests.
+- [x] Keep manual earn/adjust disabled by default and unavailable in production; opt in only in the isolated Phase 8 fixture.
+- [x] Node 24 automated checks and disposable migration/API acceptance pass; exact evidence is in `PHASE_8_ACCEPTANCE.md`.
+- [x] Complete the single consolidated P8-1–P8-5 browser acceptance session; all five checks PASS by user report. Do not repeat the completed manual checks.
 
 ## Phase 9 acceptance checklist
 

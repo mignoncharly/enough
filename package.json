@@ -42,6 +42,8 @@
     "test:classification:serve": "node scripts/phase2-runtime.mjs serve --phase6",
     "test:rules:integration": "node scripts/phase2-runtime.mjs test --phase7",
     "test:rules:serve": "node scripts/phase2-runtime.mjs serve --phase7",
+    "test:credits:integration": "node scripts/phase2-runtime.mjs test --phase8",
+    "test:credits:serve": "node scripts/phase2-runtime.mjs serve --phase8",
     "db:phase5:migration-check": "node scripts/phase5-migration-check.mjs"
   },
   "devDependencies": {

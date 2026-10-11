@@ -1,6 +1,6 @@
 # Remediation Implementation Plan
 
-Last consolidated: 2026-10-11 (Phase 7 formally complete; checkpoint approval pending)
+Last consolidated: 2026-10-11 (Phase 8 complete; checkpoint approval pending)
 Source of truth for implementation order: this file. The historical scope remains in `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md`; historical implementation detail and evidence remain in `IMPLEMENTATION_HANDOFF.md`.
 
 ## Objective and current decision 
@@ -163,7 +163,8 @@ authorization.
 **Status: COMPLETE — 2026-10-11.** Existing evaluator, migration,
 authenticated API, and rules workspace passed automated acceptance and the
 user-reported consolidated browser review. Phase 7 is complete; checkpoint
-approval is pending. Phase 8 has not started.
+checkpoint `f6e42b66a1c78c50317a4584258e40accff90ee8` is accepted. Phase 8 is
+COMPLETE; see the acceptance record below.
 
 - [x] Add deterministic unit/property cases for condition combinations, scope, priorities/ties, schedules/time zones/DST, override expiry/revocation, version conflicts, defaults, and byte-for-byte repeatability.
 - [x] Apply migrations `0002`–`0007` in order on an isolated PostgreSQL 18 fixture; precheck passes with no pending migrations.
@@ -178,12 +179,25 @@ launch remains **NO-GO**. Preserve the accepted Phase 1–6 evidence.
 
 **Critical**
 
-- [ ] Add deterministic and PostgreSQL concurrency tests proving retries do not duplicate ledger effects and two devices cannot double-spend.
-- [ ] Apply migrations `0002`–`0008` in order.
-- [ ] Exercise earn/spend, partial/full reservations, release, reserved spend, partial refunds, expiry, adjustments, product isolation, and export.
-- [ ] Prove balances never go negative and a credit lot cannot be consumed twice under concurrent requests.
-- [ ] Connect product-specific minute credits to a server-authoritative build-session lifecycle: reserve, meter, settle/release and recover across devices. Specify rounding and bounded offline reservations. Current rules do not consume credits; manual wallet actions cannot fulfill the core product loop.
-- [ ] Decide whether manual earn/adjust controls remain available at launch; they are prototypes, not trusted rewards or billing evidence.
+**Status: COMPLETE — 2026-10-11.** Canonical wallet operations and the
+server-authoritative product build-session lifecycle pass automated
+PostgreSQL/API, migration, and Node 24 checks. The user reported P8-1–P8-5 PASS
+in the consolidated wallet review; evidence is in `PHASE_8_ACCEPTANCE.md`.
+Follow the canonical Phase 8 scope and existing Phase 0/product/domain
+contracts. No production deployment or dependency upgrade is in scope.
+
+- [x] Add deterministic and PostgreSQL concurrency tests proving retries do not duplicate ledger effects and two devices cannot double-spend.
+- [x] Apply and verify the existing ordered migration chain through `0017`, including migration compatibility for legacy Phase 7 allocation/session rows.
+- [x] Exercise earn/spend, partial/full reservations, release, reserved spend, partial refunds, expiry, adjustments, product isolation, and account export in isolated fixtures.
+- [x] Prove balances never go negative and a credit lot cannot be consumed twice under concurrent requests.
+- [x] Connect product-specific minute credits to server-authoritative build-session reserve/start, heartbeat, settlement/release and cross-device recovery. Bill server-observed milliseconds rounded up to whole minutes; cap reservations at 60 minutes and pause after heartbeat gaps over 90 seconds.
+- [x] Resolve offline-session policy for this phase: offline allowance is zero; offline work is unauthorized until later signed, scoped policy/reservation support. Do not claim that the current rules evaluator enforces wallet credits.
+- [x] Keep manual earn/adjust controls disabled by default, rejected in production, and opt-in only in the isolated fixture; they are not verified rewards or billing evidence.
+- [x] Complete the consolidated P8-1–P8-5 acceptance session; all five checks PASS by user report. The first P8-4 settlement crossed the 60-second billing boundary and correctly charged two minutes; the immediate fresh-reservation retest charged one minute and released two. This is a timing observation, not a product defect.
+
+Phase 8 is formally COMPLETE with no Phase 8 blocker. The 18 dependency-security
+findings remain open release obligations; production launch remains **NO-GO**.
+Preserve the accepted Phase 1–7 evidence. Do not repeat P8-1–P8-5.
 
 ### Phase 9 — Web Application
 
