@@ -1,6 +1,6 @@
 # Remediation Implementation Plan
 
-Last consolidated: 2026-10-11 (Phase 8 complete; checkpoint approval pending)
+Last consolidated: 2026-10-11 (Phase 8 checkpointed at `d8c67d028b874c783d9f78672bb38e7a6f6eb00e`; Phase 9 complete, checkpoint approval pending)
 Source of truth for implementation order: this file. The historical scope remains in `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md`; historical implementation detail and evidence remain in `IMPLEMENTATION_HANDOFF.md`.
 
 ## Objective and current decision 
@@ -98,7 +98,7 @@ release obligations; production launch remains NO-GO.
 
 ### Phase 4 — Product and Stage Engine
 
-**High — COMPLETE, accepted 2026-10-10; checkpoint approval pending.**
+**High — COMPLETE and checkpointed at `f6e42b66a1c78c50317a4584258e40accff90ee8`; accepted 2026-10-10.**
 
 Sequence: inspect existing scope/source and accepted evidence; apply migrations
 in a new disposable TEMP fixture; test products, nine stages/history, goals,
@@ -197,16 +197,18 @@ contracts. No production deployment or dependency upgrade is in scope.
 
 Phase 8 is formally COMPLETE with no Phase 8 blocker. The 18 dependency-security
 findings remain open release obligations; production launch remains **NO-GO**.
-Preserve the accepted Phase 1–7 evidence. Do not repeat P8-1–P8-5.
+Preserve the accepted Phase 1–8 evidence. Do not repeat P8-1–P8-5.
 
 ### Phase 9 — Web Application
 
 **High**
 
-- [ ] Apply migrations through `0008` and start the complete local stack.
-- [ ] Exercise core pages at declared desktop/mobile breakpoints, keyboard-only navigation, themes, and loading/empty/error/unauthorized states.
-- [ ] Verify activity filters, product ownership, goals, reports, device/session revocation, and account-export links.
-- [ ] Record accessibility and responsive defects; fix critical and high-severity issues before general availability.
+**Status: COMPLETE** (2026-10-11, user-reported acceptance). Phase 8 remains complete and checkpointed; Phase 9 is accepted for its existing Enough web application scope, runtime, responsive behavior, accessibility, and user-scoped flows. No Phase 9 blocker remains. Preserve the accepted Phase 1–8 evidence and do not reopen or repeat P9-1–P9-5.
+
+- [x] Apply migrations through `0008` and start the complete local stack. The isolated Phase 9 fixture applied the current migration chain through `0017`, passed migration precheck, and verified PostgreSQL, Redis, API, worker, and web readiness (`PHASE_9_ACCEPTANCE.md`).
+- [x] Exercise the canonical Phase 9 pages at desktop and approximately 390px narrow width; keyboard navigation and visible focus, System/Light/Dark persistence, and loading/empty/error/unauthorized states passed (P9-1, P9-2, P9-5; user report, 2026-10-11).
+- [x] Verify product creation/selection/stage update, goal and task creation/completion, Activity product filters, product-specific reports, prepared-target session revocation, and both account-export links (P9-3, P9-4; user report, 2026-10-11).
+- [x] Review responsive/accessibility behavior and resolve acceptance: no manual failures were observed; the user reported P9-1 through P9-5 PASS. Fixture stopped successfully (`PHASE_9_ACCEPTANCE.md`).
 
 ### Phase 10 — Browser Extension
 

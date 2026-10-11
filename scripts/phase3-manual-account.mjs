@@ -4,17 +4,30 @@ import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+const phase9 = process.env.ENOUGH_PHASE9_MANUAL_ACCOUNT === "1";
 const phase4 = process.env.ENOUGH_PHASE4_INTEGRATION === "1";
-const phase = phase4 ? "phase4" : "phase3";
+const phase = phase9 ? "phase9" : phase4 ? "phase4" : "phase3";
 const target = new URL(process.env.DATABASE_URL ?? "http://invalid");
 assert.deepEqual(
   [target.hostname, target.port, target.pathname, target.username],
-  ["127.0.0.1", phase4 ? "55435" : "55434", `/enough_${phase}`, `enough_${phase}`],
+  [
+    "127.0.0.1",
+    phase9 ? "55440" : phase4 ? "55435" : "55434",
+    `/enough_${phase}`,
+    `enough_${phase}`,
+  ],
 );
-assert.equal(process.env.API_BASE_URL, phase4 ? "http://127.0.0.1:4406" : "http://127.0.0.1:4404");
+assert.equal(
+  process.env.API_BASE_URL,
+  phase9 ? "http://127.0.0.1:4416" : phase4 ? "http://127.0.0.1:4406" : "http://127.0.0.1:4404",
+);
 assert.equal(
   process.env.REDIS_URL,
-  phase4 ? "redis://127.0.0.1:56385/0" : "redis://127.0.0.1:56383/0",
+  phase9
+    ? "redis://127.0.0.1:56397/0"
+    : phase4
+      ? "redis://127.0.0.1:56385/0"
+      : "redis://127.0.0.1:56383/0",
 );
 const { pool } = await import("../packages/db/src/index.ts");
 const { hashPassword } = await import("../packages/auth/src/crypto.ts");
@@ -26,6 +39,10 @@ try {
     "INSERT INTO enough.auth_users (id, email, email_normalized, password_hash, email_verified_at) VALUES ($1, $2, $2, $3, now())",
     [id, email, await hashPassword(password)],
   );
+  if (phase9) {
+    const { createSession } = await import("../packages/auth/src/session.ts");
+    await createSession(id, "web", "Phase 9 revocation target", "magic_link");
+  }
   if (phase4) {
     const { createSession } = await import("../packages/auth/src/session.ts");
     const session = await createSession(id, "web", "Phase 4 fixture setup", "magic_link");

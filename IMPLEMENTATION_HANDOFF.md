@@ -3,12 +3,12 @@
 Historical implementation record. The active remediation plan and current execution handoff are now [REMEDIATION_IMPLEMENTATION_PLAN.md](REMEDIATION_IMPLEMENTATION_PLAN.md) and [REMEDIATION_HANDOFF.md](REMEDIATION_HANDOFF.md).
 
 Last updated: 2026-10-11
-Current phase: Phase 8 - Build Credit Engine (COMPLETE; checkpoint approval pending)
-Status: Phase 7 is COMPLETE and checkpointed at `f6e42b66a1c78c50317a4584258e40accff90ee8`. Phase 8 implementation, automated acceptance, and user-reported P8-1–P8-5 browser acceptance are complete. Phases 1–7 remain accepted. No commit or push is authorized pending explicit checkpoint approval. Production launch remains NO-GO; see `LAUNCH_READINESS.md` and `SECURITY_STATUS.md`.
+Current phase: Phase 9 - Web Application (COMPLETE; checkpoint approval pending)
+Status: Phase 8 is COMPLETE and checkpointed at `d8c67d028b874c783d9f78672bb38e7a6f6eb00e`; P8-1–P8-5 and all earlier Phase 1–8 evidence remain accepted and unchanged. Phase 9 isolated migration/full-stack/route checks and automated quality checks pass; P9-1–P9-5 consolidated browser acceptance passed by user report on 2026-10-11, with no manual failures. No Phase 9 acceptance blockers remain; do not reopen or repeat its checks. Production launch remains NO-GO because the 18 dependency-security findings remain open; see `LAUNCH_READINESS.md` and `SECURITY_STATUS.md`.
 
 ## Current objective
 
-The following objective narrative is a historical snapshot from the earlier remediation pass. Current phase status and verified evidence are maintained in `REMEDIATION_HANDOFF.md`, `REMEDIATION_IMPLEMENTATION_PLAN.md`, and `PHASE_8_ACCEPTANCE.md`.
+The following objective narrative is a historical snapshot from the earlier remediation pass. Current phase status and verified evidence are maintained in `REMEDIATION_HANDOFF.md`, `REMEDIATION_IMPLEMENTATION_PLAN.md`, and the phase acceptance records.
 Phase 22's Admin Console source is present; migration `0015_admin_console.sql` and admin runtime acceptance remain pending. Phase 23 has 65 passing unit/property/contract tests and successful desktop/extension source builds; live database, runtime, concurrency, load, and broad security acceptance remain pending. Phase 24 adds installer/update configuration and extension store archive generation. `pnpm install --frozen-lockfile` now succeeds with the reviewed `electron-winstaller` install hook enabled, but local electron-builder packaging stops when Node receives `EPERM` reading the linked `dotenv` package. No signed desktop installers, browser store submissions, or end-user update installation have been accepted.
 
 Do not restart Phase 1 implementation. Its baseline work is complete; only its runtime acceptance remains unresolved in this environment.
@@ -130,7 +130,7 @@ Credit amounts are positive integer units, capped at one billion per request. Om
 - `/products` routes to product selection and editing on `/dashboard`. Phase 14 now supplies signed inbound Generic webhook and Public Event API connections; Phase 18 provides a separate Stripe Billing flow for Enough subscriptions.
 - The navigation links to existing tools, rules, and credit pages. API authorization remains the access boundary; client-side login redirects are presentation behavior only.
 
-No schema migration was added in Phase 9. Evidence and subscription billing were future-phase surfaces at that point; Phase 13 added evidence and Phase 14 added signed inbound integrations. The web UI, keyboard flow, responsive layouts, error/empty/permission states, and activity read API have not passed browser or runtime acceptance.
+No schema migration was added in Phase 9. Evidence and subscription billing were future-phase surfaces at that point; later phases added evidence, signed inbound integrations, and subscription billing. Consolidated browser acceptance for the Phase 9 web application, including responsive layouts, keyboard use, themes, empty/error/permission states, and core flows, passed by user report on 2026-10-11; see `PHASE_9_ACCEPTANCE.md`.
 
 ## Phase 10 implementation map
 
@@ -237,10 +237,10 @@ the fixture was stopped. Full evidence is in `PHASE_6_ACCEPTANCE.md`.
 - [x] Add Today, Activity, Growth, Tasks, Reports, Devices, Settings, and product navigation surfaces; keep event reads user-scoped and bounded.
 - [x] Add a persistent system/light/dark theme preference and app-wide theme application.
 - [x] Add explicit future-phase states for Evidence (Phase 13), Integrations (Phase 14), and Billing (Phase 18).
-- [ ] Apply migrations `0002_authentication.sql` through `0008_credit_engine.sql` and start the full local stack.
-- [ ] Verify each route in a browser at desktop and mobile widths, including keyboard navigation, theme persistence, and loading/empty/error/unauthorized states.
-- [ ] Confirm activity filtering, product ownership isolation, device/session revocation, goal actions, report limits, and account export links at runtime.
-- [ ] Review implementation and complete the project's quality checks before marking Phase 9 complete. No tests or typechecks were run during this implementation turn.
+- [x] Apply and precheck the isolated migration chain through `0017`; start the disposable PostgreSQL/Redis/API/worker/web stack and confirm readiness plus all 15 route smoke checks (`PHASE_9_ACCEPTANCE.md`).
+- [x] Complete the consolidated P9-1–P9-5 browser session at desktop and approximately 390px narrow width; keyboard navigation/focus, theme persistence, empty/error/unauthorized behavior, product/goal/task flows, activity filters, reports, device/session revocation, exports, and Evidence/Rules/Integrations/Billing states passed by user report, 2026-10-11.
+- [x] Automated quality checks and build passed as recorded in `PHASE_9_ACCEPTANCE.md`; no manual failures were observed, and the isolated fixture stopped successfully.
+- [x] Mark Phase 9 complete. No Phase 9 acceptance blockers remain; await explicit checkpoint approval before committing or pushing. Do not reopen or repeat P9-1–P9-5.
 
 ## Phase 10 acceptance checklist
 

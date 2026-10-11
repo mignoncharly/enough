@@ -14,88 +14,99 @@ const phase5 = process.argv.includes("--phase5");
 const phase6 = process.argv.includes("--phase6");
 const phase7 = process.argv.includes("--phase7");
 const phase8 = process.argv.includes("--phase8");
-const phase = phase8
-  ? "phase8"
-  : phase7
-    ? "phase7"
-    : phase6
-      ? "phase6"
-      : phase5
-        ? "phase5"
-        : phase4
-          ? "phase4"
-          : phase3
-            ? "phase3"
-            : phase2
-              ? "phase2"
-              : "phase1";
+const phase9 = process.argv.includes("--phase9");
+const phase = phase9
+  ? "phase9"
+  : phase8
+    ? "phase8"
+    : phase7
+      ? "phase7"
+      : phase6
+        ? "phase6"
+        : phase5
+          ? "phase5"
+          : phase4
+            ? "phase4"
+            : phase3
+              ? "phase3"
+              : phase2
+                ? "phase2"
+                : "phase1";
 const fixture =
-  phase3 || phase4 || phase5 || phase6 || phase7 || phase8
+  phase3 || phase4 || phase5 || phase6 || phase7 || phase8 || phase9
     ? join(tmpdir(), `enough-${phase}`)
     : join(root, ".runtime", phase);
 const data = join(fixture, "pgdata");
-const port = phase8
-  ? "55439"
-  : phase7
-    ? "55438"
-    : phase6
-      ? "55437"
-      : phase5
-        ? "55436"
-        : phase4
-          ? "55435"
-          : phase3
-            ? "55434"
-            : phase2
-              ? "55433"
-              : "55432";
+const port = phase9
+  ? "55440"
+  : phase8
+    ? "55439"
+    : phase7
+      ? "55438"
+      : phase6
+        ? "55437"
+        : phase5
+          ? "55436"
+          : phase4
+            ? "55435"
+            : phase3
+              ? "55434"
+              : phase2
+                ? "55433"
+                : "55432";
 const admin = `enough_${phase}_admin`;
 const database = `enough_${phase}`;
-const redisPort = phase8
-  ? "56393"
-  : phase7
-    ? "56391"
-    : phase6
-      ? "56389"
-      : phase5
-        ? "56387"
-        : phase4
-          ? "56385"
-          : phase3
-            ? "56383"
-            : phase2
-              ? "56381"
-              : "56379";
-const webPort = phase8
-  ? "3308"
-  : phase7
-    ? "3307"
-    : phase6
-      ? "3306"
-      : phase5
-        ? "3305"
-        : phase4
-          ? "3304"
-          : phase3
-            ? "3303"
-            : phase2
-              ? "3302"
-              : "3301";
-const apiPort = phase8
-  ? "4414"
-  : phase7
-    ? "4412"
-    : phase6
-      ? "4410"
-      : phase5
-        ? "4408"
-        : phase4
-          ? "4406"
-          : phase3
-            ? "4404"
-            : phase2
-              ? "4402"
-              : "4400";
+const redisPort = phase9
+  ? "56397"
+  : phase8
+    ? "56393"
+    : phase7
+      ? "56391"
+      : phase6
+        ? "56389"
+        : phase5
+          ? "56387"
+          : phase4
+            ? "56385"
+            : phase3
+              ? "56383"
+              : phase2
+                ? "56381"
+                : "56379";
+const webPort = phase9
+  ? "3309"
+  : phase8
+    ? "3308"
+    : phase7
+      ? "3307"
+      : phase6
+        ? "3306"
+        : phase5
+          ? "3305"
+          : phase4
+            ? "3304"
+            : phase3
+              ? "3303"
+              : phase2
+                ? "3302"
+                : "3301";
+const apiPort = phase9
+  ? "4416"
+  : phase8
+    ? "4414"
+    : phase7
+      ? "4412"
+      : phase6
+        ? "4410"
+        : phase5
+          ? "4408"
+          : phase4
+            ? "4406"
+            : phase3
+              ? "4404"
+              : phase2
+                ? "4402"
+                : "4400";
 const credentialPath = join(fixture, "credentials.json");
 const action = process.argv[2] ?? "start";
 if (!["start", "stop", "status"].includes(action)) throw new Error("Use start, stop or status.");
@@ -201,7 +212,7 @@ if (action !== "start") {
       `REDIS_URL=redis://127.0.0.1:${redisPort}/0`,
       `WEB_PORT=${webPort}`,
       `API_PORT=${apiPort}`,
-      `WORKER_PORT=${phase8 ? "4415" : phase7 ? "4413" : phase6 ? "4411" : phase5 ? "4409" : phase4 ? "4407" : phase3 ? "4405" : phase2 ? "4403" : "4401"}`,
+      `WORKER_PORT=${phase9 ? "4417" : phase8 ? "4415" : phase7 ? "4413" : phase6 ? "4411" : phase5 ? "4409" : phase4 ? "4407" : phase3 ? "4405" : phase2 ? "4403" : "4401"}`,
       `APP_BASE_URL=http://127.0.0.1:${webPort}`,
       `API_BASE_URL=http://127.0.0.1:${apiPort}`,
       `AUTH_SECRET=${credentials.auth}`,

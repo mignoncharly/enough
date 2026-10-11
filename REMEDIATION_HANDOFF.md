@@ -1,6 +1,6 @@
 # Remediation Handoff
 
-Last updated: 2026-10-11 (Phase 8 COMPLETE; checkpoint approval pending)
+Last updated: 2026-10-11 (Phase 8 checkpointed; Phase 9 COMPLETE, checkpoint approval pending)
 Active plan: [REMEDIATION_IMPLEMENTATION_PLAN.md](REMEDIATION_IMPLEMENTATION_PLAN.md)  
 Historical detail: [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)  
 Current launch decision: **NO-GO**
@@ -14,9 +14,58 @@ Close the incomplete work from Phases 1–26 in dependency order, run the requir
 **Phase 7 — Rule Engine: COMPLETE.** Checkpointed at
 `f6e42b66a1c78c50317a4584258e40accff90ee8`; local `main` and `origin/main`
 match and the worktree was clean at Phase 8 start. Its accepted evidence remains
-below. **Phase 8 — Build Credit Engine: COMPLETE.** The user reported P8-1
-through P8-5 PASS on 2026-10-11. Phase 9 has not started; checkpoint approval is
-pending, and no commit or push is authorized.
+below. **Phase 8 — Build Credit Engine: COMPLETE and checkpointed** at
+`d8c67d028b874c783d9f78672bb38e7a6f6eb00e`; local `main`, recorded
+`origin/main`, and the worktree was clean at Phase 9 start. The user reported
+P8-1 through P8-5 PASS on 2026-10-11. **Phase 9 — Web Application: COMPLETE**
+by user-reported P9-1–P9-5 PASS on 2026-10-11; no manual failures were observed
+and the isolated fixture stopped successfully. No Phase 8 or Phase 9 checks are
+reopened or repeated. Production launch remains NO-GO because all 18
+dependency-security findings are open.
+
+**Phase 9 canonical scope and accepted result:** the web control center specified
+in `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md` covers Home, Products, Today,
+Activity, Growth, Tasks, Evidence, Rules, Integrations, Reports, Devices, Billing,
+and Settings. Preserve the existing architecture, accepted Phase 1–8 evidence,
+and server-authoritative credit/session protections. The isolated migration,
+full-stack, route, and automated checks passed. The user reported P9-1–P9-5 PASS
+after one consolidated browser session covering responsive layouts, keyboard
+navigation/focus, themes, product and goal/task flows, Activity filters and
+reports, prepared-target revocation, exports, empty/error/unauthorized states,
+and the Evidence/Rules/Integrations/Billing pages. No manual failures were
+observed. The fixture stopped successfully. No production deployment, external
+provider calls, dependency upgrades, or protected local configuration changes
+were part of acceptance.
+
+**Phase 9 current evidence (2026-10-11):** `pnpm test` passed (80 passed, 137
+opt-in integration tests skipped); `pnpm typecheck` passed across 11 workspace
+projects; `pnpm format:check` passed (166 files); `pnpm lint` exited 0 with the
+existing 124 warnings and one informational diagnostic. The installed Next.js
+16.3.8 production build passed using only process-local synthetic required
+configuration; no `.env` was read. `pnpm test:web:integration` applied or
+verified migrations through `0017`, passed PostgreSQL/Redis/API/worker/web
+readiness, returned HTTP 200 for all 15 Phase 9 routes, and shut down its Redis
+fixture. The serve-mode stack used for manual acceptance at
+`http://127.0.0.1:3309` has been stopped successfully. Its private synthetic account file was
+`%TEMP%\enough-phase9\manual-account.json`. The Phase 9 fixture keeps manual
+credit controls disabled and uses only `%TEMP%\enough-phase9` plus dedicated
+loopback ports. See `PHASE_9_ACCEPTANCE.md` for the complete automated and
+user-reported manual results.
+
+The first Phase 9 runtime-test draft tried to run Phase 2–5 integration tests
+against the Phase 9 port/database; their target guards rejected the mismatch
+before any test cases ran. Those suites and accepted records were left
+unchanged, and the Phase 9 runtime smoke was separated from phase-specific API
+fixtures. A reused Phase 3 account helper similarly rejected the Phase 9
+target; its new explicit Phase 9 marker is isolated from Phase 3/4 setup. A
+fixture stop initially left its WSL Redis process running; cleanup now requests
+shutdown for only the fixture-owned WSL port before stopping child processes.
+The corrected runtime smoke and account preparation both pass. These were
+fixture-harness corrections, not product defects.
+
+**Next safe action:** prepare the Phase 9 checkpoint review and wait for the
+user's explicit approval before committing or pushing. Phase 9 is COMPLETE; do
+not reopen or repeat P9-1–P9-5. Phase 10 has not started.
 The Phase 6 checkpoint is
 `236b1b1585d29900a3b6e509254a8114e3f19f5a`; local `main` and `origin/main`
 matched and the working tree was clean at Phase 7 start. Canonical scope is
@@ -70,8 +119,7 @@ in. They are not task evidence, verified rewards, or billing.
 
 **Phase 8 blocker/manual state:** no Phase 8 blocker remains. P8-1–P8-5 are
 accepted and closed; do not reopen or repeat these manual checks. Evidence and
-the P8-4 timing observation are in `PHASE_8_ACCEPTANCE.md`. Phase 9 has not
-started and remains outside this checkpoint review.
+the P8-4 timing observation are in `PHASE_8_ACCEPTANCE.md`.
 
 **Phase 8 automated verification (Node `v24.19.0`, pnpm `11.20.0`):**
 `pnpm test` PASS (80 passed, 137 skipped; opt-in integration files skipped);

@@ -27,94 +27,107 @@ const phase5 = process.argv.includes("--phase5");
 const phase6 = process.argv.includes("--phase6");
 const phase7 = process.argv.includes("--phase7");
 const phase8 = process.argv.includes("--phase8");
-const phase = phase8
-  ? "phase8"
-  : phase7
-    ? "phase7"
-    : phase6
-      ? "phase6"
-      : phase5
-        ? "phase5"
-        : phase4
-          ? "phase4"
-          : phase3
-            ? "phase3"
-            : "phase2";
+const phase9 = process.argv.includes("--phase9");
+const phase = phase9
+  ? "phase9"
+  : phase8
+    ? "phase8"
+    : phase7
+      ? "phase7"
+      : phase6
+        ? "phase6"
+        : phase5
+          ? "phase5"
+          : phase4
+            ? "phase4"
+            : phase3
+              ? "phase3"
+              : "phase2";
 const fixture =
-  phase3 || phase4 || phase5 || phase6 || phase7 || phase8
+  phase3 || phase4 || phase5 || phase6 || phase7 || phase8 || phase9
     ? join(tmpdir(), `enough-${phase}`)
     : join(root, ".runtime", phase);
-const pgPort = phase8
-  ? 55439
-  : phase7
-    ? 55438
-    : phase6
-      ? 55437
-      : phase5
-        ? 55436
-        : phase4
-          ? 55435
-          : phase3
-            ? 55434
-            : 55433;
-const redisPort = phase8
-  ? 56393
-  : phase7
-    ? 56391
-    : phase6
-      ? 56389
-      : phase5
-        ? 56387
-        : phase4
-          ? 56385
-          : phase3
-            ? 56383
-            : 56381;
-const wslRedisPort = phase8
-  ? "56396"
-  : phase7
-    ? "56394"
-    : phase6
-      ? "56390"
-      : phase5
-        ? "56388"
-        : phase4
-          ? "56386"
-          : phase3
-            ? "56384"
-            : "56382";
-const apiPort = phase8
-  ? 4414
-  : phase7
-    ? 4412
-    : phase6
-      ? 4410
-      : phase5
-        ? 4408
-        : phase4
-          ? 4406
-          : phase3
-            ? 4404
-            : 4402;
-const webPort = phase8
-  ? 3308
-  : phase7
-    ? 3307
-    : phase6
-      ? 3306
-      : phase5
-        ? 3305
-        : phase4
-          ? 3304
-          : phase3
-            ? 3303
-            : 3302;
+const pgPort = phase9
+  ? 55440
+  : phase8
+    ? 55439
+    : phase7
+      ? 55438
+      : phase6
+        ? 55437
+        : phase5
+          ? 55436
+          : phase4
+            ? 55435
+            : phase3
+              ? 55434
+              : 55433;
+const redisPort = phase9
+  ? 56397
+  : phase8
+    ? 56393
+    : phase7
+      ? 56391
+      : phase6
+        ? 56389
+        : phase5
+          ? 56387
+          : phase4
+            ? 56385
+            : phase3
+              ? 56383
+              : 56381;
+const wslRedisPort = phase9
+  ? "56398"
+  : phase8
+    ? "56396"
+    : phase7
+      ? "56394"
+      : phase6
+        ? "56390"
+        : phase5
+          ? "56388"
+          : phase4
+            ? "56386"
+            : phase3
+              ? "56384"
+              : "56382";
+const apiPort = phase9
+  ? 4416
+  : phase8
+    ? 4414
+    : phase7
+      ? 4412
+      : phase6
+        ? 4410
+        : phase5
+          ? 4408
+          : phase4
+            ? 4406
+            : phase3
+              ? 4404
+              : 4402;
+const webPort = phase9
+  ? 3309
+  : phase8
+    ? 3308
+    : phase7
+      ? 3307
+      : phase6
+        ? 3306
+        : phase5
+          ? 3305
+          : phase4
+            ? 3304
+            : phase3
+              ? 3303
+              : 3302;
 const phaseFlag = `--${phase}`;
 const mode = process.argv[2] ?? "test";
 assert.ok(["test", "serve", "prepare"].includes(mode), "Use test, serve or prepare.");
 assert.ok(!phase5 || mode === "test", "Phase 5 is an automated ingestion fixture.");
 const extensionOrigins =
-  phase3 || phase4 || phase5 || phase6 || phase7 || phase8 ? "" : (process.argv[3] ?? "");
+  phase3 || phase4 || phase5 || phase6 || phase7 || phase8 || phase9 ? "" : (process.argv[3] ?? "");
 assert.ok(
   extensionOrigins
     .split(",")
@@ -172,6 +185,15 @@ async function ready(url, child) {
 async function cleanup() {
   if (closing) return;
   closing = true;
+  if (redisStarted) {
+    try {
+      execFileSync("wsl", ["-d", "Ubuntu", "--exec", "redis-cli", "-p", wslRedisPort, "shutdown"], {
+        windowsHide: true,
+        stdio: "ignore",
+      });
+      redisStarted = false;
+    } catch {}
+  }
   if (redisBridge) redisBridge.close();
   for (const child of children.toReversed()) {
     if (child.exitCode === null && !child.killed) {
@@ -213,7 +235,9 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 
 try {
   // Refuse occupied ports, including a previously started fixture; never take it over.
-  for (const port of [pgPort, redisPort, apiPort, webPort]) await freePort(port);
+  for (const port of [pgPort, redisPort, apiPort, webPort, ...(phase9 ? [4417] : [])]) {
+    await freePort(port);
+  }
   // Check Redis's WSL network namespace as well as the Windows listener.
   execFileSync(
     "wsl",
@@ -238,13 +262,27 @@ try {
   environment.NEXT_TELEMETRY_DISABLED = "1";
   environment.CI = "1";
   environment.AUTH_ALLOWED_ORIGINS = extensionOrigins;
-  environment.ENOUGH_PHASE2_INTEGRATION =
-    phase3 || phase4 || phase5 || phase6 || phase7 || phase8 ? "0" : "1";
-  environment.ENOUGH_PHASE3_INTEGRATION =
-    phase3 || phase4 || phase5 || phase6 || phase7 || phase8 ? "1" : "0";
-  environment.ENOUGH_PHASE4_INTEGRATION =
-    phase4 || phase5 || phase6 || phase7 || phase8 ? "1" : "0";
-  environment.ENOUGH_PHASE5_INTEGRATION = phase5 || phase6 || phase7 || phase8 ? "1" : "0";
+  environment.ENOUGH_PHASE9_MANUAL_ACCOUNT = phase9 ? "1" : "0";
+  environment.ENOUGH_PHASE2_INTEGRATION = phase9
+    ? "0"
+    : phase3 || phase4 || phase5 || phase6 || phase7 || phase8
+      ? "0"
+      : "1";
+  environment.ENOUGH_PHASE3_INTEGRATION = phase9
+    ? "0"
+    : phase3 || phase4 || phase5 || phase6 || phase7 || phase8
+      ? "1"
+      : "0";
+  environment.ENOUGH_PHASE4_INTEGRATION = phase9
+    ? "0"
+    : phase4 || phase5 || phase6 || phase7 || phase8
+      ? "1"
+      : "0";
+  environment.ENOUGH_PHASE5_INTEGRATION = phase9
+    ? "0"
+    : phase5 || phase6 || phase7 || phase8
+      ? "1"
+      : "0";
   environment.ENOUGH_PHASE6_INTEGRATION = phase6 || phase7 || phase8 ? "1" : "0";
   environment.ENOUGH_PHASE7_INTEGRATION = phase7 || phase8 ? "1" : "0";
   environment.ENOUGH_PHASE8_INTEGRATION = phase8 ? "1" : "0";
@@ -391,6 +429,12 @@ try {
     cwd: join(root, "apps", "api"),
     env: environment,
   });
+  const worker = phase9
+    ? launch(process.execPath, ["--import", "tsx", "src/server.ts"], {
+        cwd: join(root, "apps", "worker"),
+        env: environment,
+      })
+    : null;
   const web = launch(
     process.execPath,
     [
@@ -406,8 +450,39 @@ try {
   );
   await ready(`http://127.0.0.1:${apiPort}/ready`, api);
   await ready(`http://127.0.0.1:${webPort}/api/ready`, web);
-  console.info(`Isolated API/web ready at ${apiPort}/${webPort}; other runtimes untouched.`);
-  if (mode === "test") {
+  if (worker) await ready(`http://127.0.0.1:${environment.WORKER_PORT}/ready`, worker);
+  if (phase9) {
+    for (const path of [
+      "/",
+      "/products",
+      "/dashboard",
+      "/today",
+      "/activity",
+      "/growth",
+      "/tasks",
+      "/notifications",
+      "/evidence",
+      "/rules",
+      "/integrations",
+      "/reports",
+      "/devices",
+      "/billing",
+      "/settings",
+    ]) {
+      const response = await fetch(`http://127.0.0.1:${webPort}${path}`);
+      assert.equal(response.status, 200, `Phase 9 route failed: ${path}`);
+    }
+  }
+  console.info(
+    phase9
+      ? `Isolated PostgreSQL/Redis/API/worker/web ready at ${pgPort}/${redisPort}/${apiPort}/${environment.WORKER_PORT}/${webPort}; all Phase 9 routes returned 200.`
+      : `Isolated API/web ready at ${apiPort}/${webPort}; other runtimes untouched.`,
+  );
+  if (phase9 && mode === "test") {
+    console.info(
+      "Phase 9 isolated migration, full-stack readiness, and page-route smoke checks passed.",
+    );
+  } else if (mode === "test") {
     if (phase8) {
       await runNode([join(root, "scripts", "phase8-migration-check.mjs")], { env: environment });
     }
@@ -456,15 +531,17 @@ try {
         join(
           root,
           "scripts",
-          phase8
-            ? "phase8-manual-account.mjs"
-            : phase7
-              ? "phase7-manual-account.mjs"
-              : phase6
-                ? "phase6-manual-account.mjs"
-                : phase3 || phase4
-                  ? "phase3-manual-account.mjs"
-                  : "phase2-manual-account.mjs",
+          phase9
+            ? "phase3-manual-account.mjs"
+            : phase8
+              ? "phase8-manual-account.mjs"
+              : phase7
+                ? "phase7-manual-account.mjs"
+                : phase6
+                  ? "phase6-manual-account.mjs"
+                  : phase3 || phase4
+                    ? "phase3-manual-account.mjs"
+                    : "phase2-manual-account.mjs",
         ),
       ],
       {
@@ -476,11 +553,16 @@ try {
       console.info("Manual fixture preparation verified; stopping fixture services.");
     } else {
       console.info(
-        phase3 || phase4 || phase6 || phase7 || phase8
+        phase3 || phase4 || phase6 || phase7 || phase8 || phase9
           ? `Fixture serving. Ctrl+C stops this fixture; data stays in TEMP/enough-${phase}.`
           : "Fixture serving. Ctrl+C stops only this fixture; data stays in ignored .runtime/phase2.",
       );
-      await Promise.race([once(api, "exit"), once(web, "exit"), once(redis, "exit")]);
+      await Promise.race([
+        once(api, "exit"),
+        once(web, "exit"),
+        ...(worker ? [once(worker, "exit")] : []),
+        once(redis, "exit"),
+      ]);
       throw new Error("A fixture service exited.");
     }
   }
