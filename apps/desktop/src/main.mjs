@@ -26,12 +26,15 @@ import {
   pruneExpiredEvents,
 } from "../../../packages/shared/src/client-runtime.ts";
 import { evaluatePolicyRules } from "../../../packages/shared/src/policy-rules.ts";
+import { verifyPolicySnapshot } from "../../../packages/shared/src/signed-policy-snapshot.ts";
 import {
   normalizeToolKey,
   resolveToolClassification,
 } from "../../../packages/shared/src/tool-classification.ts";
+import { shouldKeepReminderForInteraction } from "./reminder-focus.ts";
 
 const { autoUpdater } = electronUpdater;
+const POLICY_SNAPSHOT_PUBLIC_KEY = process.env.ENOUGH_POLICY_SNAPSHOT_PUBLIC_KEY || "";
 
 const APP_NAME = "Enough";
 const IDLE_THRESHOLD_SECONDS = 300;
@@ -55,6 +58,8 @@ const defaultState = {
   selectedProductId: "",
   rules: [],
   overrides: [],
+  policySnapshot: null,
+  policySource: "unavailable",
   catalog: [],
   mappings: [],
   localClassifications: {},
@@ -82,7 +87,22 @@ const defaultState = {
 };
 
 app.setName(APP_NAME);
-app.setPath("userData", path.join(app.getPath("appData"), APP_NAME));
+const fixtureUserData = process.env.ENOUGH_DESKTOP_USER_DATA_DIR?.trim();
+if (fixtureUserData) {
+  const fixtureRoot = path.resolve(os.tmpdir(), "enough-phase11");
+  const requestedPath = path.resolve(fixtureUserData);
+  const relativePath = path.relative(fixtureRoot, requestedPath);
+  if (
+    !relativePath ||
+    relativePath === ".." ||
+    relativePath.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relativePath)
+  )
+    throw new Error("The Phase 11 desktop data directory must stay inside its temporary fixture.");
+  app.setPath("userData", requestedPath);
+} else {
+  app.setPath("userData", path.join(app.getPath("appData"), APP_NAME));
+}
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
@@ -137,6 +157,39 @@ async function loadState() {
     monitorWarning =
       "The encrypted local cache could not be read. Sign in again to restore your policy.";
   }
+  const cachedPolicy = verifyCachedPolicySnapshot();
+  if (cachedPolicy) {
+    state = {
+      ...state,
+      selectedProductId: cachedPolicy.productIds.includes(state.selectedProductId)
+        ? state.selectedProductId
+        : cachedPolicy.productIds[0] || "",
+      rules: cachedPolicy.rules,
+      overrides: [
+        ...cachedPolicy.overrides,
+        ...(state.pendingOverrides || []).filter((item) => Date.parse(item.expiresAt) > Date.now()),
+      ],
+      catalog: cachedPolicy.catalog,
+      mappings: cachedPolicy.mappings,
+      policySource: "signed-cache",
+    };
+  } else {
+    const hadCachedPolicy = Boolean(
+      state.accessToken || state.rules?.length || state.overrides?.length,
+    );
+    state = {
+      ...state,
+      rules: [],
+      overrides: [],
+      policySnapshot: null,
+      policySource: "unavailable",
+      catalog: [],
+      mappings: [],
+    };
+    if (hadCachedPolicy)
+      monitorWarning =
+        "The cached policy is unsigned, expired, or does not match this device. Sync while online before relying on local enforcement.";
+  }
   const now = Date.now();
   const lastObserved = Date.parse(state.lastClockObservedAt || "");
   if ((Number.isFinite(lastObserved) && now < lastObserved) || state.clockChangeDetected) {
@@ -175,7 +228,20 @@ async function persistState() {
 }
 
 function policyCacheIsStale(now = Date.now()) {
+  if (state.policySource === "unavailable") return true;
+  if (state.policySource === "signed-cache" && !verifyCachedPolicySnapshot(now)) return true;
   return isPolicyCacheStale(state, now, POLICY_CACHE_WARNING_MS);
+}
+
+function verifyCachedPolicySnapshot(now = Date.now()) {
+  if (!POLICY_SNAPSHOT_PUBLIC_KEY || !state.policySnapshot || !state.user?.id || !state.deviceId)
+    return null;
+  return verifyPolicySnapshot(
+    state.policySnapshot,
+    POLICY_SNAPSHOT_PUBLIC_KEY,
+    { userId: state.user.id, deviceId: state.deviceId },
+    now,
+  );
 }
 
 function growthModeIsActive(now = Date.now()) {
@@ -302,6 +368,8 @@ async function login(credentials) {
     products: [],
     rules: [],
     overrides: [],
+    policySnapshot: null,
+    policySource: "unavailable",
     catalog: [],
     mappings: [],
     selectedProductId: "",
@@ -349,6 +417,8 @@ async function loginWithToken(credentials) {
     products: [],
     rules: [],
     overrides: [],
+    policySnapshot: null,
+    policySource: "unavailable",
     catalog: [],
     mappings: [],
     selectedProductId: "",
@@ -508,12 +578,19 @@ async function syncPolicy() {
         : {}),
     };
     await publishPendingOverrides();
-    const [products, policy, catalog, mappings] = await Promise.all([
+    const [products, policy, catalog, mappings, signedSnapshot] = await Promise.all([
       apiRequest(state, "/products"),
       apiRequest(state, "/rules"),
       apiRequest(state, "/classification/catalog?kind=APPLICATION"),
       apiRequest(state, "/classification/mappings"),
+      apiRequest(state, "/desktop/policy-snapshot").catch(() => null),
     ]);
+    const verifiedSnapshot = signedSnapshot
+      ? verifyPolicySnapshot(signedSnapshot, POLICY_SNAPSHOT_PUBLIC_KEY, {
+          userId: state.user?.id || "",
+          deviceId: state.deviceId || "",
+        })
+      : null;
     const productList = Array.isArray(products.products) ? products.products : [];
     const selectedProductId = productList.some((product) => product.id === state.selectedProductId)
       ? state.selectedProductId
@@ -524,14 +601,21 @@ async function syncPolicy() {
       trackingEnabled: activityCollectionEnabled && Boolean(state.trackingEnabled),
       events: activityCollectionEnabled ? state.events : [],
       products: productList,
-      selectedProductId,
-      rules: Array.isArray(policy.rules) ? policy.rules : [],
+      selectedProductId:
+        verifiedSnapshot && !verifiedSnapshot.productIds.includes(selectedProductId)
+          ? verifiedSnapshot.productIds[0] || ""
+          : selectedProductId,
+      rules: verifiedSnapshot?.rules ?? (Array.isArray(policy.rules) ? policy.rules : []),
       overrides: [
-        ...(Array.isArray(policy.overrides) ? policy.overrides : []),
+        ...(verifiedSnapshot?.overrides ??
+          (Array.isArray(policy.overrides) ? policy.overrides : [])),
         ...(state.pendingOverrides || []).filter((item) => Date.parse(item.expiresAt) > Date.now()),
       ],
-      catalog: Array.isArray(catalog.catalog) ? catalog.catalog : [],
-      mappings: Array.isArray(mappings.mappings) ? mappings.mappings : [],
+      policySnapshot: verifiedSnapshot ? signedSnapshot : null,
+      policySource: verifiedSnapshot ? "signed-cache" : "online",
+      catalog: verifiedSnapshot?.catalog ?? (Array.isArray(catalog.catalog) ? catalog.catalog : []),
+      mappings:
+        verifiedSnapshot?.mappings ?? (Array.isArray(mappings.mappings) ? mappings.mappings : []),
       lastSyncAt: new Date().toISOString(),
       lastClockObservedAt: new Date().toISOString(),
       clockChangeDetected: false,
@@ -546,9 +630,6 @@ async function syncPolicy() {
       error.status === 403 &&
       String(error.message || "").includes("Activity collection is disabled");
     const syncMessage = error instanceof Error ? error.message : "Policy sync failed.";
-    const policyStatusMessage = policyCacheIsStale()
-      ? `${syncMessage} Cached policy expired or the system clock moved backwards; local enforcement is paused until sync succeeds.`
-      : syncMessage;
     if (error.status === 401) {
       activityConsentFresh = false;
       state = {
@@ -562,6 +643,8 @@ async function syncPolicy() {
         selectedProductId: "",
         rules: [],
         overrides: [],
+        policySnapshot: null,
+        policySource: "unavailable",
         catalog: [],
         mappings: [],
         pendingOverrides: [],
@@ -581,7 +664,36 @@ async function syncPolicy() {
           "This desktop session expired or was revoked. Sign in again to connect this device.",
       };
       await persistState();
-    } else if (consentDenied || !consentChecked || !serverActivityConsent) {
+    } else {
+      const cachedPolicy = verifyCachedPolicySnapshot();
+      state = cachedPolicy
+        ? {
+            ...state,
+            rules: cachedPolicy.rules,
+            overrides: [
+              ...cachedPolicy.overrides,
+              ...(state.pendingOverrides || []).filter(
+                (item) => Date.parse(item.expiresAt) > Date.now(),
+              ),
+            ],
+            catalog: cachedPolicy.catalog,
+            mappings: cachedPolicy.mappings,
+            policySource: "signed-cache",
+          }
+        : {
+            ...state,
+            rules: [],
+            overrides: [],
+            policySnapshot: null,
+            policySource: "unavailable",
+            catalog: [],
+            mappings: [],
+          };
+    }
+    const policyStatusMessage = policyCacheIsStale()
+      ? `${syncMessage} Cached policy expired, unavailable, or affected by a clock change; local enforcement is paused until sync succeeds.`
+      : syncMessage;
+    if (error.status !== 401 && (consentDenied || !consentChecked || !serverActivityConsent)) {
       if (consentDenied || !consentChecked) activityConsentFresh = false;
       state = {
         ...state,
@@ -590,7 +702,7 @@ async function syncPolicy() {
         ...(consentDenied ? { events: [] } : {}),
         syncError: policyStatusMessage,
       };
-    } else {
+    } else if (error.status !== 401) {
       state = { ...state, syncError: policyStatusMessage };
     }
     schedulePersist();
@@ -1055,6 +1167,8 @@ async function logout() {
     selectedProductId: "",
     rules: [],
     overrides: [],
+    policySnapshot: null,
+    policySource: "unavailable",
     catalog: [],
     mappings: [],
     mode: "BUILD",
@@ -1212,12 +1326,22 @@ async function monitorTick() {
       accessibilityPermission: false,
       screenRecordingPermission: false,
     });
+    const reminderVisible = Boolean(
+      lockWindow && !lockWindow.isDestroyed() && lockWindow.isVisible(),
+    );
+    if (
+      shouldKeepReminderForInteraction({
+        reminderVisible,
+        reminderFocused: reminderVisible && Boolean(lockWindow?.isFocused()),
+        foregroundProcessId: foreground?.owner?.processId,
+        appProcessId: process.pid,
+      })
+    ) {
+      await writeHeartbeat(true);
+      broadcastState();
+      return;
+    }
     if (foreground?.owner?.processId === process.pid) {
-      if (lockWindow && !lockWindow.isDestroyed() && lockWindow.isVisible()) {
-        await writeHeartbeat(true);
-        broadcastState();
-        return;
-      }
       await finishCurrentApplication();
       activeIdentity = null;
       activeSecondsSinceUpload = 0;

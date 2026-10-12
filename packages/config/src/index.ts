@@ -1,3 +1,4 @@
+import { createPrivateKey } from "node:crypto";
 import { z } from "zod";
 
 const optionalEnvironmentString = z.preprocess(
@@ -37,6 +38,9 @@ const environmentSchema = z
         z.string().min(32).optional(),
       )
       .transform((value) => value ?? DEVELOPMENT_AUTH_SECRET),
+    POLICY_SNAPSHOT_SIGNING_PRIVATE_KEY: optionalEnvironmentString.transform((value) =>
+      value?.replaceAll("\\n", "\n"),
+    ),
     AUTH_SESSION_DAYS: z.coerce.number().int().min(1).max(90).default(30),
     AUTH_DEV_SHOW_EMAIL_LINKS: z.preprocess(
       (value) =>
@@ -131,6 +135,22 @@ const environmentSchema = z
       });
     }
 
+    if (value.POLICY_SNAPSHOT_SIGNING_PRIVATE_KEY) {
+      try {
+        if (
+          createPrivateKey(value.POLICY_SNAPSHOT_SIGNING_PRIVATE_KEY).asymmetricKeyType !==
+          "ed25519"
+        )
+          throw new Error();
+      } catch {
+        context.addIssue({
+          code: "custom",
+          message: "POLICY_SNAPSHOT_SIGNING_PRIVATE_KEY must be a valid Ed25519 private key",
+          path: ["POLICY_SNAPSHOT_SIGNING_PRIVATE_KEY"],
+        });
+      }
+    }
+
     if (value.NODE_ENV === "production") {
       if (value.AUTH_SECRET === DEVELOPMENT_AUTH_SECRET) {
         context.addIssue({
@@ -144,6 +164,14 @@ const environmentSchema = z
           code: "custom",
           message: "RESEND_API_KEY and AUTH_EMAIL_FROM are required in production",
           path: ["RESEND_API_KEY"],
+        });
+      }
+      if (!value.POLICY_SNAPSHOT_SIGNING_PRIVATE_KEY) {
+        context.addIssue({
+          code: "custom",
+          message:
+            "POLICY_SNAPSHOT_SIGNING_PRIVATE_KEY is required for signed desktop policy snapshots",
+          path: ["POLICY_SNAPSHOT_SIGNING_PRIVATE_KEY"],
         });
       }
       if (!value.APP_BASE_URL || !value.API_BASE_URL) {

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
+import { generateKeyPairSync } from "node:crypto";
 import { once } from "node:events";
 import {
   copyFile,
@@ -29,6 +30,7 @@ const phase7 = process.argv.includes("--phase7");
 const phase8 = process.argv.includes("--phase8");
 const phase9 = process.argv.includes("--phase9");
 const phase10 = process.argv.includes("--phase10");
+const phase11 = process.argv.includes("--phase11");
 const basePhase = phase9
   ? "phase9"
   : phase8
@@ -44,99 +46,113 @@ const basePhase = phase9
             : phase3
               ? "phase3"
               : "phase2";
-const phase = phase10 ? "phase10" : basePhase;
+const phase = phase11 ? "phase11" : phase10 ? "phase10" : basePhase;
 const baseFixture =
-  phase3 || phase4 || phase5 || phase6 || phase7 || phase8 || phase9
+  phase3 || phase4 || phase5 || phase6 || phase7 || phase8 || phase9 || phase11
     ? join(tmpdir(), `enough-${basePhase}`)
     : join(root, ".runtime", basePhase);
-const fixture = phase10 ? join(tmpdir(), "enough-phase10") : baseFixture;
-const basePgPort = phase9
-  ? 55440
-  : phase8
-    ? 55439
-    : phase7
-      ? 55438
-      : phase6
-        ? 55437
-        : phase5
-          ? 55436
-          : phase4
-            ? 55435
-            : phase3
-              ? 55434
-              : 55433;
-const pgPort = phase10 ? 55441 : basePgPort;
-const baseRedisPort = phase9
-  ? 56397
-  : phase8
-    ? 56393
-    : phase7
-      ? 56391
-      : phase6
-        ? 56389
-        : phase5
-          ? 56387
-          : phase4
-            ? 56385
-            : phase3
-              ? 56383
-              : 56381;
-const redisPort = phase10 ? 56401 : baseRedisPort;
-const baseWslRedisPort = phase9
-  ? "56398"
-  : phase8
-    ? "56396"
-    : phase7
-      ? "56394"
-      : phase6
-        ? "56390"
-        : phase5
-          ? "56388"
-          : phase4
-            ? "56386"
-            : phase3
-              ? "56384"
-              : "56382";
-const wslRedisPort = phase10 ? "56402" : baseWslRedisPort;
-const baseApiPort = phase9
-  ? 4416
-  : phase8
-    ? 4414
-    : phase7
-      ? 4412
-      : phase6
-        ? 4410
-        : phase5
-          ? 4408
-          : phase4
-            ? 4406
-            : phase3
-              ? 4404
-              : 4402;
-const apiPort = phase10 ? 4418 : baseApiPort;
-const baseWebPort = phase9
-  ? 3309
-  : phase8
-    ? 3308
-    : phase7
-      ? 3307
-      : phase6
-        ? 3306
-        : phase5
-          ? 3305
-          : phase4
-            ? 3304
-            : phase3
-              ? 3303
-              : 3302;
-const webPort = phase10 ? 3310 : baseWebPort;
+const fixture = phase11
+  ? join(tmpdir(), "enough-phase11")
+  : phase10
+    ? join(tmpdir(), "enough-phase10")
+    : baseFixture;
+const basePgPort = phase11
+  ? 55942
+  : phase9
+    ? 55440
+    : phase8
+      ? 55439
+      : phase7
+        ? 55438
+        : phase6
+          ? 55437
+          : phase5
+            ? 55436
+            : phase4
+              ? 55435
+              : phase3
+                ? 55434
+                : 55433;
+const pgPort = phase11 ? 55942 : phase10 ? 55441 : basePgPort;
+const baseRedisPort = phase11
+  ? 56403
+  : phase9
+    ? 56397
+    : phase8
+      ? 56393
+      : phase7
+        ? 56391
+        : phase6
+          ? 56389
+          : phase5
+            ? 56387
+            : phase4
+              ? 56385
+              : phase3
+                ? 56383
+                : 56381;
+const redisPort = phase11 ? 56403 : phase10 ? 56401 : baseRedisPort;
+const baseWslRedisPort = phase11
+  ? "56404"
+  : phase9
+    ? "56398"
+    : phase8
+      ? "56396"
+      : phase7
+        ? "56394"
+        : phase6
+          ? "56390"
+          : phase5
+            ? "56388"
+            : phase4
+              ? "56386"
+              : phase3
+                ? "56384"
+                : "56382";
+const wslRedisPort = phase11 ? "56404" : phase10 ? "56402" : baseWslRedisPort;
+const baseApiPort = phase11
+  ? 4420
+  : phase9
+    ? 4416
+    : phase8
+      ? 4414
+      : phase7
+        ? 4412
+        : phase6
+          ? 4410
+          : phase5
+            ? 4408
+            : phase4
+              ? 4406
+              : phase3
+                ? 4404
+                : 4402;
+const apiPort = phase11 ? 4420 : phase10 ? 4418 : baseApiPort;
+const baseWebPort = phase11
+  ? 3312
+  : phase9
+    ? 3309
+    : phase8
+      ? 3308
+      : phase7
+        ? 3307
+        : phase6
+          ? 3306
+          : phase5
+            ? 3305
+            : phase4
+              ? 3304
+              : phase3
+                ? 3303
+                : 3302;
+const webPort = phase11 ? 3312 : phase10 ? 3310 : baseWebPort;
 const phaseFlag = `--${phase}`;
 const mode = process.argv[2] ?? "test";
 assert.ok(["test", "serve", "prepare"].includes(mode), "Use test, serve or prepare.");
 assert.ok(!phase5 || mode === "test", "Phase 5 is an automated ingestion fixture.");
 const extensionOrigins = phase10
   ? (process.argv.find((arg) => /^(?:chrome-extension:\/\/|moz-extension:\/\/)/.test(arg)) ?? "")
-  : phase3 || phase4 || phase5 || phase6 || phase7 || phase8 || phase9
+  : phase3 || phase4 || phase5 || phase6 || phase7 || phase8 || phase9 || phase11
     ? ""
     : (process.argv[3] ?? "");
 const suppliedOrigins = extensionOrigins.split(",").filter(Boolean);
@@ -257,6 +273,7 @@ try {
     redisPort,
     apiPort,
     webPort,
+    ...(phase11 ? [4421] : []),
     ...(phase9 ? [4417] : []),
     ...(phase10 ? [4419] : []),
   ]) {
@@ -275,6 +292,28 @@ try {
     ],
     { windowsHide: true, stdio: "pipe" },
   );
+  if (phase11) {
+    const markerPath = join(fixture, "phase11-fixture.json");
+    const existingFixture = await lstat(fixture).catch((error) =>
+      error.code === "ENOENT" ? null : Promise.reject(error),
+    );
+    if (existingFixture) {
+      assert.ok(existingFixture.isDirectory() && !existingFixture.isSymbolicLink());
+      const marker = JSON.parse(await readFile(markerPath, "utf8"));
+      assert.equal(marker.fixture, "enough-phase11");
+      assert.equal(marker.version, 1);
+    } else {
+      await mkdir(fixture, { recursive: true });
+      await writeFile(
+        markerPath,
+        `${JSON.stringify({ fixture: "enough-phase11", version: 1 })}\n`,
+        {
+          mode: 0o600,
+          flag: "wx",
+        },
+      );
+    }
+  }
   await mkdir(fixture, { recursive: true });
   await runNode(["scripts/phase1-postgres.mjs", "start", phaseFlag]);
   postgresStarted = true;
@@ -288,14 +327,46 @@ try {
   environment.AUTH_ALLOWED_ORIGINS = extensionOrigins;
   environment.ENOUGH_PHASE9_MANUAL_ACCOUNT = phase9 ? "1" : "0";
   environment.ENOUGH_PHASE10_MANUAL_ACCOUNT = phase10 ? "1" : "0";
+  environment.ENOUGH_PHASE11_MANUAL_ACCOUNT = phase11 ? "1" : "0";
+  if (phase11) {
+    const privatePath = join(fixture, "policy-snapshot-private.pem");
+    const publicPath = join(fixture, "policy-snapshot-public.pem");
+    const privateExists = Boolean(await lstat(privatePath).catch(() => null));
+    const publicExists = Boolean(await lstat(publicPath).catch(() => null));
+    assert.equal(privateExists, publicExists, "Preserve the existing Phase 11 signing-key pair.");
+    if (privateExists) {
+      environment.POLICY_SNAPSHOT_SIGNING_PRIVATE_KEY = await readFile(privatePath, "utf8");
+    } else {
+      const pair = generateKeyPairSync("ed25519");
+      environment.POLICY_SNAPSHOT_SIGNING_PRIVATE_KEY = pair.privateKey
+        .export({ type: "pkcs8", format: "pem" })
+        .toString();
+      await writeFile(privatePath, environment.POLICY_SNAPSHOT_SIGNING_PRIVATE_KEY, {
+        mode: 0o600,
+        flag: "wx",
+      });
+      await writeFile(publicPath, pair.publicKey.export({ type: "spki", format: "pem" }), {
+        mode: 0o600,
+        flag: "wx",
+      });
+    }
+  }
   environment.ENOUGH_PHASE2_INTEGRATION =
-    phase9 || phase10 ? "0" : phase3 || phase4 || phase5 || phase6 || phase7 || phase8 ? "0" : "1";
+    phase9 || phase10 || phase11
+      ? "0"
+      : phase3 || phase4 || phase5 || phase6 || phase7 || phase8
+        ? "0"
+        : "1";
   environment.ENOUGH_PHASE3_INTEGRATION =
-    phase9 || phase10 ? "0" : phase3 || phase4 || phase5 || phase6 || phase7 || phase8 ? "1" : "0";
+    phase9 || phase10 || phase11
+      ? "0"
+      : phase3 || phase4 || phase5 || phase6 || phase7 || phase8
+        ? "1"
+        : "0";
   environment.ENOUGH_PHASE4_INTEGRATION =
-    phase9 || phase10 ? "0" : phase4 || phase5 || phase6 || phase7 || phase8 ? "1" : "0";
+    phase9 || phase10 || phase11 ? "0" : phase4 || phase5 || phase6 || phase7 || phase8 ? "1" : "0";
   environment.ENOUGH_PHASE5_INTEGRATION =
-    phase9 || phase10 ? "0" : phase5 || phase6 || phase7 || phase8 ? "1" : "0";
+    phase9 || phase10 || phase11 ? "0" : phase5 || phase6 || phase7 || phase8 ? "1" : "0";
   environment.ENOUGH_PHASE6_INTEGRATION = phase6 || phase7 || phase8 ? "1" : "0";
   environment.ENOUGH_PHASE7_INTEGRATION = phase7 || phase8 ? "1" : "0";
   environment.ENOUGH_PHASE8_INTEGRATION = phase8 ? "1" : "0";
@@ -443,7 +514,7 @@ try {
     env: environment,
   });
   const worker =
-    phase9 || phase10
+    phase9 || phase10 || phase11
       ? launch(process.execPath, ["--import", "tsx", "src/server.ts"], {
           cwd: join(root, "apps", "worker"),
           env: environment,
@@ -488,13 +559,13 @@ try {
     }
   }
   console.info(
-    phase9 || phase10
+    phase9 || phase10 || phase11
       ? `Isolated PostgreSQL/Redis/API/worker/web ready at ${pgPort}/${redisPort}/${apiPort}/${environment.WORKER_PORT}/${webPort}${phase9 ? "; all Phase 9 routes returned 200" : ""}.`
       : `Isolated API/web ready at ${apiPort}/${webPort}; other runtimes untouched.`,
   );
-  if ((phase9 || phase10) && mode === "test") {
+  if ((phase9 || phase10 || phase11) && mode === "test") {
     console.info(
-      `Phase ${phase10 ? "10" : "9"} isolated migration and full-stack readiness smoke checks passed.`,
+      `Phase ${phase11 ? "11" : phase10 ? "10" : "9"} isolated migration and full-stack readiness smoke checks passed.`,
     );
   } else if (mode === "test") {
     if (phase8) {
@@ -545,19 +616,21 @@ try {
         join(
           root,
           "scripts",
-          phase10
-            ? "phase10-manual-account.mjs"
-            : phase9
-              ? "phase3-manual-account.mjs"
-              : phase8
-                ? "phase8-manual-account.mjs"
-                : phase7
-                  ? "phase7-manual-account.mjs"
-                  : phase6
-                    ? "phase6-manual-account.mjs"
-                    : phase3 || phase4
-                      ? "phase3-manual-account.mjs"
-                      : "phase2-manual-account.mjs",
+          phase11
+            ? "phase11-manual-account.mjs"
+            : phase10
+              ? "phase10-manual-account.mjs"
+              : phase9
+                ? "phase3-manual-account.mjs"
+                : phase8
+                  ? "phase8-manual-account.mjs"
+                  : phase7
+                    ? "phase7-manual-account.mjs"
+                    : phase6
+                      ? "phase6-manual-account.mjs"
+                      : phase3 || phase4
+                        ? "phase3-manual-account.mjs"
+                        : "phase2-manual-account.mjs",
         ),
       ],
       {
@@ -569,7 +642,7 @@ try {
       console.info("Manual fixture preparation verified; stopping fixture services.");
     } else {
       console.info(
-        phase3 || phase4 || phase6 || phase7 || phase8 || phase9 || phase10
+        phase3 || phase4 || phase6 || phase7 || phase8 || phase9 || phase10 || phase11
           ? `Fixture serving. Ctrl+C stops this fixture; data stays in TEMP/enough-${phase}.`
           : "Fixture serving. Ctrl+C stops only this fixture; data stays in ignored .runtime/phase2.",
       );

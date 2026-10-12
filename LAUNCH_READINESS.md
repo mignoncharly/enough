@@ -1,6 +1,6 @@
 # Phase 27 — Full Product Launch Gate
 
-Last assessed: 2026-10-11 (Phase 8 development status only; full launch gate not reassessed)
+Last assessed: 2026-10-12 (Phase 11 Windows acceptance evidence added; full launch gate not reassessed)
 
 ## Decision
 
@@ -19,7 +19,7 @@ This is a decision from the evidence recorded in this workspace, not a claim tha
 | Build Credits | Phase 8 COMPLETE: PostgreSQL concurrency/idempotency, migration compatibility, server-authoritative product-minute sessions, and P8-1–P8-5 user-reported browser acceptance PASS. The first P8-4 attempt correctly charged two minutes after crossing the 60-second boundary; the immediate retest charged one and released two. Offline work is not authorized; manual earn/adjust are default-off and unavailable in production. | Phase 8 accepted; launch not accepted |
 | Rules engine | Phase 7 COMPLETE: deterministic evaluator, migration/API ownership/version/history/override/export/deletion, shared-evaluator parity, isolated route/bundle checks, and P7-1–P7-5 user-reported browser review pass. Extension/desktop policy enforcement and production acceptance remain unaccepted. | Phase 7 accepted; launch not accepted |
 | Browser blocking | Chromium/Firefox extension source and store archives exist; browser installation, policy parity, offline behavior, and store publication are pending. | Not accepted |
-| Native desktop blocking | Desktop agent and native-host source exist; signed packages, platform behavior, identity limits, policy sync, and runtime acceptance are pending. | Not accepted |
+| Native desktop blocking | Windows P11-1–P11-3 passed manual acceptance, including signed offline policy, emergency bypass, and recovery. P11-4 browser-host registration is blocked by restrictions on browser-profile/protected-configuration changes. P11-5 signed updater/package and macOS/Linux runtime acceptance is blocked by unavailable credentials/environments. Production acceptance remains open. | Not accepted |
 | Growth tasks | Templates and task flows exist; migration, browser use, recurrence, and reward acceptance pending. | Not accepted |
 | Evidence | Private evidence and review flows exist; migration, privacy, deletion, content handling, and reward acceptance pending. Review is owner-controlled, not independent verification. | Not accepted |
 | Gmail | Provider-specific OAuth, sync, and signature adapter are not implemented. | Missing |
@@ -31,8 +31,8 @@ This is a decision from the evidence recorded in this workspace, not a claim tha
 | AI coach | Advisory API and local fallback exist; provider setup, consent, cost/usage behavior, and runtime acceptance remain pending. | Not accepted |
 | Reports | Report APIs and views exist; source data, database, browser, and correctness acceptance remain pending. | Not accepted |
 | Multi-device | Locking, ordering, and revocation protections exist in source; cross-device concurrency and convergence are unverified. | Not accepted |
-| Offline enforcement | Browser/desktop cache and stale-policy behavior exist; signed policy snapshots are absent and fail-open/client-disabled cases are not accepted. | Not accepted |
-| Emergency unlock | Source flow exists; device behavior, audit trail, expiry, and synchronization are unverified. | Not accepted |
+| Offline enforcement | Windows desktop P11-3 confirmed a valid signed cached policy continued enforcement offline and recovered after sync returned. Release key configuration, browser/extension parity, and fail-open/client-disabled production cases remain unaccepted. | Not accepted |
+| Emergency unlock | Windows P11-2 confirmed reminder interaction, a reasoned five-minute bypass, expiry, policy reapplication, and lock handling. Broader release and production acceptance remains open. | Not accepted |
 | Billing | Subscription and entitlement source exists; pricing/feature decisions, Stripe configuration, migrations, and end-to-end webhook acceptance remain pending. | Not accepted |
 | Privacy, export, and delete | Controls and source flows exist; migrations, retention scheduler, consent gates, external Stripe deletion, export/deletion completeness, and runtime acceptance remain pending. | Not accepted |
 | Admin | Console/API source exists; migration `0015_admin_console.sql`, authorization, audit, and operational acceptance remain pending. | Not accepted |
@@ -49,7 +49,7 @@ This is a decision from the evidence recorded in this workspace, not a claim tha
 3. Implement and verify the four provider integrations listed as missing above, or formally revise the product contract before launch. A Generic webhook is not a substitute for vendor-authenticated Gmail, Outlook, or calendar sync.
 4. Resolve Stripe pricing and entitlement mapping; configure test-mode credentials and verify signed, replay-safe webhook behavior before any live billing enablement.
 5. Complete database/browser/client runtime acceptance for Phases 2–22, including admin migration `0015`, privacy deletion/export, evidence review/rewards, multi-device behavior, offline enforcement, and emergency unlock.
-6. Produce and sign desktop packages, submit browser extensions, publish a reachable update feed, and verify installation and update on supported platforms. No signing or store credentials are configured here.
+6. Configure the server-side policy signing key and the matching pinned desktop public key for release builds; produce and sign desktop packages, submit browser extensions, publish a reachable update feed, and verify installation and update on supported platforms. No signing or store credentials are configured here.
 7. Expand automated coverage for database migrations, critical cross-service flows, two-device convergence, browser/Electron runtime, restore, load, and security. Preserve the existing 65 passing tests as a baseline; they do not clear these gaps.
 8. Close product and operational policy decisions: signed desktop policy freshness, the fail-open enforcement cases, independent-evidence expectations, data retention/deletion behavior, launch support ownership, and external alert response.
 9. Complete the remaining build-credit product loop: connect wallet/session status to shared build/grow enforcement and implement signed, scoped, bounded offline spend. Phase 8 supplies online product reservations, server metering, settlement, and release only; passing the wallet review does not prove enforcement or offline behavior.

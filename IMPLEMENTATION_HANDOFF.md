@@ -3,8 +3,8 @@
 Historical implementation record. The active remediation plan and current execution handoff are now [REMEDIATION_IMPLEMENTATION_PLAN.md](REMEDIATION_IMPLEMENTATION_PLAN.md) and [REMEDIATION_HANDOFF.md](REMEDIATION_HANDOFF.md).
 
 Last updated: 2026-10-11
-Current phase: Phase 10 - Browser Extension (COMPLETE; checkpoint approval pending)
-Status: Phase 9 is COMPLETE and checkpointed at `2efe261287d62621d28c71106832c7c2fb012b0d`; P9-1–P9-5 and all accepted Phase 1–9 evidence remain closed and unchanged. Phase 10 is COMPLETE after the consolidated Chromium/Firefox browser session reported P10-1–P10-5 PASS; checkpoint approval is pending. Production launch remains NO-GO because the 18 dependency-security findings remain open; see `LAUNCH_READINESS.md` and `SECURITY_STATUS.md`.
+Current phase: Phase 11 - Desktop Agent (ACTIVE)
+Status: Phase 10 is COMPLETE and checkpointed at `6a6110205276b839534427a05b60f4c1044a3c0e`; P10-1–P10-5 and all accepted Phase 1–9 evidence remain closed and unchanged. Phase 11 is active against the existing Electron/native-host architecture. Production launch remains NO-GO because the 18 dependency-security findings remain open; see `LAUNCH_READINESS.md` and `SECURITY_STATUS.md`.
 
 ## Current objective
 
@@ -266,25 +266,35 @@ while the 18 dependency-security findings remain open.
 ## Phase 11 implementation map
 
 - `apps/desktop/src/main.mjs`: Electron tray and app windows, desktop bearer login, encrypted `safeStorage` cache, five-minute product/rule/classification sync, shared local application classification and policy evaluation, Build/Growth session timer, idle/lock handling, active-app time aggregation, offline event queue, notifications, and emergency application overrides.
+- `apps/api/src/rules.ts` and `packages/shared/src/signed-policy-snapshot.ts`: authenticated Ed25519 snapshots containing account/device-bound rules, overrides, classification catalog/mappings, and owned product IDs; signatures expire within 24 hours and are validated before cached policy is restored or used offline.
 - `apps/desktop/src/preload.cjs` and `renderer/`: isolated IPC surface, desktop controls, local classification editor, tracking consent, grace-period settings, and full-screen restricted-app reminder. App names and active seconds are synced only after the user opts in; window titles and browser URLs are not read or uploaded.
 - `apps/desktop/src/native-host.cjs` and `scripts/install-native-host.mjs`: bounded length-prefixed native messaging protocol, freshness-checked desktop heartbeat, Chromium/Firefox host manifests, and per-user browser registration.
 - `apps/desktop/scripts/build.mjs`, `package.json`, and `README.md`: cross-platform Electron packaging targets, source build commands, local setup, privacy behavior, and platform limitations.
 - `apps/extension/src/background.ts`: waits for the host health response and reports the desktop agent as connected only while its heartbeat is fresh.
 
-No migration was added. Source implements local cached evaluation and offline event queuing, but the cache signature required by the plan has no matching signed-snapshot API yet. Linux Wayland active-app monitoring is unsupported; Linux screen-lock reporting depends on the desktop environment. The development native host uses the Node runtime and source path, so a production installer still needs a standalone host executable. Update feed and platform signing are not configured. No build, test, or typecheck was run.
+No migration was added. The signed cache path has focused account/device, expiry, data-tamper, product-ID, and unknown-key verification tests; API production configuration requires a private signing key, and desktop release builds embed only the matching public key. Unsigned/invalid cache is online-only and is not trusted after restart or loss of sync. Linux Wayland active-app monitoring is unsupported; Linux screen-lock reporting depends on the desktop environment. The development native host uses the Node runtime and source path, so a production installer still needs a standalone host executable. P11-1–P11-3 passed consolidated Windows acceptance. P11-4 is BLOCKED by restrictions on browser-profile/protected-configuration changes; P11-5 is BLOCKED by unavailable signed updater/package credentials and required macOS/Linux runtime environments. Phase 11 remains ACTIVE.
 
 ## Phase 11 acceptance checklist
+
+**Phase 11 ACTIVE — Windows P11-1–P11-3 PASS; P11-4–P11-5 BLOCKED — 2026-10-12.** Follow the canonical desktop-agent scope and
+the remediation sequence. Preserve accepted Phase 1–10 behavior, including the
+server-authoritative Phase 8 session contract and Phase 10 native-host health
+probe. No Docker, GitHub Actions, production deployment, protected local
+configuration access, dependency upgrade, or unrelated refactor.
 
 - [x] Add the desktop tray app, Build/Growth controls, startup preference, active-app and idle monitoring, encrypted cache, local shared-policy evaluation, notifications, grace period, lock reminder, emergency bypass, sync, and updater integration source.
 - [x] Keep desktop event collection opt-in; omit window titles, tab URLs, and window contents; cap offline activity queue at 1,000 events with seven-day retention.
 - [x] Supply the native messaging host and extension health handshake source.
-- [ ] Resolve and install workspace dependencies; build the app and installers for Windows, macOS, and Linux.
-- [ ] Apply migrations `0002_authentication.sql` through `0008_credit_engine.sql`; exercise desktop login, token revocation, product selection, policy sync, and event ingestion.
-- [ ] Verify active-app identifiers/classification for Cursor, VS Code, GitHub Desktop, Docker Desktop, Claude, IntelliJ, Android Studio, and terminals on each supported OS; verify idle, lock, suspend/resume, grace expiry, emergency bypass, and offline recovery.
-- [ ] Install the native host in Chrome/Edge/Brave/Firefox, confirm heartbeat behavior while the desktop agent starts/stops, and verify browser restarts and per-user permissions.
-- [ ] Add signed, expiring policy snapshots and verify signature validation before relying on offline policy. Current cache is encrypted but the API policy is unsigned.
-- [ ] Configure release feeds and code signing; exercise update discovery, download, verification, and restart on packaged platforms.
-- [ ] Review implementation and complete requested quality checks before marking Phase 11 complete. No tests, builds, or typechecks were run during this implementation turn.
+- [x] Build the existing desktop source bundle on Windows; packaged install/runtime acceptance remains blocked under P11-5.
+- [x] Exercise desktop bearer sign-in, token revocation, product selection, and policy sync against an isolated disposable fixture; do not repeat accepted Phase 2 or Phase 8 permutations.
+- [ ] Verify opted-in desktop app-time event ingestion; this was not part of the reported P11-1–P11-3 manual results.
+- [x] Verify configured app identity/classification, idle/lock handling, grace expiry, emergency bypass, and offline recovery; retain Windows-first evidence and record unsupported-platform gaps.
+- [ ] Verify suspend/resume behavior; it was not part of the reported P11-1–P11-3 manual results.
+- [x] Verify bounded native messaging frames and fresh/stale heartbeat behavior in isolated temporary directories; browser registration and restart acceptance remain pending.
+- [x] Implement and unit-verify the signed, expiring policy snapshot contract, including account/device binding, signed classification/product policy, altered data, expiry, wrong product, and unknown-key rejection. Signing keys remain out of source and evidence.
+- [ ] Verify update discovery/signature handling with synthetic test artifacts; signed package/update acceptance remains BLOCKED because signing/feed credentials and required macOS/Linux runtime environments are unavailable.
+- [x] Run final Phase 11 checks: `pnpm test` (102 passed; 137 opt-in integration/runtime tests skipped), `pnpm typecheck`, `pnpm desktop:build`, `pnpm format:check`, scoped Biome checks, and `git diff --check`. The isolated Phase 11 prepare smoke passed fresh migrations through `0017`, API/worker/web readiness, and disposable account/policy setup; the consolidated manual fixture stopped and the marked TEMP fixture was removed. Repository-wide `pnpm lint` still reports existing findings in unrelated files.
+- [x] Complete the consolidated Windows desktop acceptance for P11-1, P11-2, and P11-3. P11-4 remains BLOCKED by the restriction against browser-profile/protected-configuration changes; P11-5 remains BLOCKED by unavailable signed updater/package credentials and required macOS/Linux runtime environments. Keep Phase 11 ACTIVE until both gates pass.
 
 ## Phase 12 implementation map
 

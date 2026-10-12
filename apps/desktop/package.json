@@ -7,7 +7,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "start": "pnpm build && electron .",
-    "dist": "pnpm build && electron-builder --config electron-builder.config.cjs --publish never",
+    "dist": "node scripts/build.mjs --release && electron-builder --config electron-builder.config.cjs --publish never",
     "native-host:install": "pnpm build && node scripts/install-native-host.mjs"
   },
   "dependencies": {

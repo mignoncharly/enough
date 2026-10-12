@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { checkRateLimit } from "@enough/auth";
+import { env } from "@enough/config";
 import { type DbClient, pool } from "@enough/db";
 import {
   evaluatePolicyRules,
@@ -23,6 +24,7 @@ import {
 } from "@enough/shared";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { signPolicySnapshot } from "../../../packages/shared/src/signed-policy-snapshot.ts";
 import { requireCsrf, requireSession } from "./api-auth.js";
 
 interface RuleRow {
@@ -279,6 +281,107 @@ async function listRules(userId: string): Promise<RuleRow[]> {
 }
 
 export async function registerRuleRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/desktop/policy-snapshot", async (request, reply) => {
+    const session = await requireSession(request, reply);
+    if (!session) return;
+    if (!(await checkRateLimit(request, reply, "desktop:policy-snapshot", session.id, 120, 60)))
+      return;
+    const privateKey = env.POLICY_SNAPSHOT_SIGNING_PRIVATE_KEY;
+    if (!privateKey)
+      return reply.code(503).send({ error: "Signed desktop policy snapshots are not configured." });
+    try {
+      const [rules, overrides, catalog, mappings, products] = await Promise.all([
+        listRules(session.id),
+        pool.query<OverrideRow>(
+          `SELECT ovr.*, product.name AS product_name, device.name AS device_name
+           FROM enough.policy_overrides ovr
+           LEFT JOIN enough.products product ON product.id = ovr.product_id AND product.user_id = ovr.user_id
+           LEFT JOIN enough.auth_devices device ON device.id = ovr.device_id AND device.user_id = ovr.user_id
+           WHERE ovr.user_id = $1 AND ovr.revoked_at IS NULL
+           ORDER BY ovr.created_at DESC LIMIT 100`,
+          [session.id],
+        ),
+        pool.query<{
+          tool_kind: ToolKind;
+          tool_key: string;
+          display_name: string;
+          classification: ToolClassification;
+        }>(
+          `SELECT tool_kind, tool_key, display_name, classification
+           FROM enough.tool_classification_catalog
+           WHERE tool_kind = 'APPLICATION'
+           ORDER BY tool_kind, display_name LIMIT 250`,
+        ),
+        pool.query<{
+          id: string;
+          tool_kind: ToolKind;
+          tool_key: string;
+          display_name: string;
+          classification: ToolClassification;
+          product_id: string | null;
+          product_name: string | null;
+          context_key: string;
+          context_value: string;
+          created_at: Date;
+          updated_at: Date;
+        }>(
+          `SELECT mapping.id, mapping.tool_kind, mapping.tool_key, mapping.display_name,
+                  mapping.classification, mapping.product_id, product.name AS product_name,
+                  mapping.context_key, mapping.context_value, mapping.created_at, mapping.updated_at
+           FROM enough.tool_classification_mappings mapping
+           LEFT JOIN enough.products product ON product.id = mapping.product_id AND product.user_id = mapping.user_id
+           WHERE mapping.user_id = $1
+           ORDER BY mapping.tool_kind, mapping.display_name, mapping.product_id NULLS FIRST, mapping.context_key`,
+          [session.id],
+        ),
+        pool.query<{ id: string }>(
+          "SELECT id FROM enough.products WHERE user_id = $1 ORDER BY updated_at DESC, created_at DESC",
+          [session.id],
+        ),
+      ]);
+      const issuedAt = new Date();
+      const snapshot = signPolicySnapshot(
+        {
+          version: 1,
+          userId: session.id,
+          deviceId: session.deviceId,
+          issuedAt: issuedAt.toISOString(),
+          expiresAt: new Date(issuedAt.getTime() + 24 * 60 * 60_000).toISOString(),
+          rules: rules.map(ruleResponse),
+          overrides: overrides.rows.map(overrideResponse),
+          catalog: catalog.rows.map((row) => ({
+            toolKind: row.tool_kind,
+            toolKey: row.tool_key,
+            displayName: row.display_name,
+            classification: row.classification,
+          })),
+          mappings: mappings.rows.map((row) => ({
+            id: row.id,
+            toolKind: row.tool_kind,
+            toolKey: row.tool_key,
+            displayName: row.display_name,
+            classification: row.classification,
+            productId: row.product_id,
+            productName: row.product_name,
+            contextKey: row.context_key,
+            contextValue: row.context_value,
+            createdAt: row.created_at.toISOString(),
+            updatedAt: row.updated_at.toISOString(),
+          })),
+          productIds: products.rows.map((row) => row.id),
+        },
+        privateKey,
+      );
+      reply.header("cache-control", "no-store");
+      return reply.send(snapshot);
+    } catch {
+      request.log.error("Could not sign desktop policy snapshot");
+      return reply
+        .code(503)
+        .send({ error: "A signed desktop policy snapshot is temporarily unavailable." });
+    }
+  });
+
   app.get("/rules", async (request, reply) => {
     const session = await requireSession(request, reply);
     if (!session) return;

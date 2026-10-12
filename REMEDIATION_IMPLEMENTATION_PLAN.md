@@ -1,6 +1,6 @@
 # Remediation Implementation Plan
 
-Last consolidated: 2026-10-11 (Phase 9 checkpointed at `2efe261287d62621d28c71106832c7c2fb012b0d`; Phase 10 COMPLETE, checkpoint approval pending)
+Last consolidated: 2026-10-12 (Phase 10 checkpointed at `6a6110205276b839534427a05b60f4c1044a3c0e`; Phase 11 ACTIVE, P11-1–P11-3 PASS, P11-4–P11-5 BLOCKED)
 Source of truth for implementation order: this file. The historical scope remains in `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md`; historical implementation detail and evidence remain in `IMPLEMENTATION_HANDOFF.md`.
 
 ## Objective and current decision 
@@ -227,12 +227,27 @@ Preserve the accepted Phase 1–8 evidence. Do not repeat P8-1–P8-5.
 
 **Critical**
 
-- [ ] Build and run the desktop app/native host on every declared supported OS; verify login, product selection, sync, events, and revocation.
-- [ ] Verify app identity/classification, idle/lock/suspend/resume, grace expiry, emergency bypass, and offline recovery across supported platforms.
-- [ ] Install the native host in supported browsers; verify permissions and heartbeat as the desktop agent starts/stops and browsers restart.
-- [ ] Implement signed, expiring policy snapshots and validate signatures before treating cached policy as tamper-evident.
-- [ ] Verify update discovery, signature, download, installation, restart, and rollback on packaged builds.
-- [ ] Decide and document Linux Wayland/lock-state limitations and executable-renaming behavior in the supported-platform contract.
+**Status: ACTIVE — 2026-10-12.** Preserve the existing Electron implementation
+and accepted Phase 1–10 contracts. P11-1, P11-2, and P11-3 passed in one
+consolidated Windows manual session, with final automated checks passing. P11-4
+is BLOCKED by the current restriction against modifying browser profiles or
+protected configuration. P11-5 is BLOCKED because signed updater/package
+credentials and required macOS/Linux runtime environments are unavailable.
+These gates remain required before Phase 11 can be marked complete. A partial
+checkpoint may record the accepted implementation and Windows results, but it
+must retain the ACTIVE status. All 18 dependency-security findings remain open;
+production is NO-GO.
+
+- [x] Build the existing desktop source on Windows; P11-1–P11-3 Windows runtime acceptance passed against an isolated disposable fixture.
+- [x] Verify app identity/classification, idle/lock, grace expiry, emergency bypass, and offline recovery without changing the accepted Phase 8 server-authoritative session model.
+- [ ] Verify suspend/resume and opted-in app-time event ingestion; these were not part of the reported P11-1–P11-3 manual results.
+- [x] Test the bounded native-host protocol and fresh/stale heartbeat using isolated temporary data; browser registration/restart acceptance is BLOCKED by restrictions on browser-profile/protected-configuration changes.
+- [x] Implement and test signed, expiring policy snapshots with account/device binding and signed classification/product scope; automated checks reject altered payloads, expired/overlong validity, wrong account/device/product, and unknown keys before offline use.
+- [ ] Verify updater discovery/signature handling and package/sign/install/update/rollback; P11-5 is BLOCKED by unavailable signed updater/package credentials and required macOS/Linux runtime environments.
+- [ ] Document Linux Wayland/lock-state limits and executable-renaming behavior; preserve the agreed support contract and test Windows-first behavior.
+- [x] Run final `pnpm test` (102 passed; 137 opt-in integration/runtime tests skipped), `pnpm typecheck`, `pnpm desktop:build`, `pnpm format:check`, scoped Biome checks, and `git diff --check`. The isolated Phase 11 prepare smoke passed fresh migrations through `0017`, API/worker/web readiness, and disposable account/policy setup; the consolidated manual fixture stopped and the marked TEMP fixture was removed. Repository-wide `pnpm lint` continues to report existing findings in unrelated files.
+- [x] Complete automated verification: full default suite, workspace typecheck, desktop source build, formatter, scoped Biome checks, and the isolated Phase 11 API signed-snapshot fixture smoke.
+- [x] Complete the consolidated Windows manual acceptance for P11-1 through P11-3. P11-4 remains BLOCKED by browser-profile/protected-configuration restrictions; P11-5 remains BLOCKED by unavailable signed updater/package credentials and required macOS/Linux runtime environments. Do not mark Phase 11 complete until both gates pass.
 
 ### Phase 12 — Growth Task Engine
 

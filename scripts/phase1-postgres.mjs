@@ -16,6 +16,7 @@ const phase7 = process.argv.includes("--phase7");
 const phase8 = process.argv.includes("--phase8");
 const phase9 = process.argv.includes("--phase9");
 const phase10 = process.argv.includes("--phase10");
+const phase11 = process.argv.includes("--phase11");
 const basePhase = phase9
   ? "phase9"
   : phase8
@@ -33,12 +34,16 @@ const basePhase = phase9
               : phase2
                 ? "phase2"
                 : "phase1";
-const phase = phase10 ? "phase10" : basePhase;
+const phase = phase11 ? "phase11" : phase10 ? "phase10" : basePhase;
 const baseFixture =
   phase3 || phase4 || phase5 || phase6 || phase7 || phase8 || phase9
     ? join(tmpdir(), `enough-${basePhase}`)
     : join(root, ".runtime", basePhase);
-const fixture = phase10 ? join(tmpdir(), "enough-phase10") : baseFixture;
+const fixture = phase11
+  ? join(tmpdir(), "enough-phase11")
+  : phase10
+    ? join(tmpdir(), "enough-phase10")
+    : baseFixture;
 const data = join(fixture, "pgdata");
 const basePort = phase9
   ? "55440"
@@ -57,7 +62,7 @@ const basePort = phase9
               : phase2
                 ? "55433"
                 : "55432";
-const port = phase10 ? "55441" : basePort;
+const port = phase11 ? "55942" : phase10 ? "55441" : basePort;
 const admin = `enough_${phase}_admin`;
 const database = `enough_${phase}`;
 const baseRedisPort = phase9
@@ -77,7 +82,7 @@ const baseRedisPort = phase9
               : phase2
                 ? "56381"
                 : "56379";
-const redisPort = phase10 ? "56401" : baseRedisPort;
+const redisPort = phase11 ? "56403" : phase10 ? "56401" : baseRedisPort;
 const baseWebPort = phase9
   ? "3309"
   : phase8
@@ -95,7 +100,7 @@ const baseWebPort = phase9
               : phase2
                 ? "3302"
                 : "3301";
-const webPort = phase10 ? "3310" : baseWebPort;
+const webPort = phase11 ? "3312" : phase10 ? "3310" : baseWebPort;
 const baseApiPort = phase9
   ? "4416"
   : phase8
@@ -113,7 +118,7 @@ const baseApiPort = phase9
               : phase2
                 ? "4402"
                 : "4400";
-const apiPort = phase10 ? "4418" : baseApiPort;
+const apiPort = phase11 ? "4420" : phase10 ? "4418" : baseApiPort;
 const credentialPath = join(fixture, "credentials.json");
 const action = process.argv[2] ?? "start";
 if (!["start", "stop", "status"].includes(action)) throw new Error("Use start, stop or status.");
@@ -219,7 +224,7 @@ if (action !== "start") {
       `REDIS_URL=redis://127.0.0.1:${redisPort}/0`,
       `WEB_PORT=${webPort}`,
       `API_PORT=${apiPort}`,
-      `WORKER_PORT=${phase10 ? "4419" : phase9 ? "4417" : phase8 ? "4415" : phase7 ? "4413" : phase6 ? "4411" : phase5 ? "4409" : phase4 ? "4407" : phase3 ? "4405" : phase2 ? "4403" : "4401"}`,
+      `WORKER_PORT=${phase11 ? "4421" : phase10 ? "4419" : phase9 ? "4417" : phase8 ? "4415" : phase7 ? "4413" : phase6 ? "4411" : phase5 ? "4409" : phase4 ? "4407" : phase3 ? "4405" : phase2 ? "4403" : "4401"}`,
       `APP_BASE_URL=http://127.0.0.1:${webPort}`,
       `API_BASE_URL=http://127.0.0.1:${apiPort}`,
       `AUTH_SECRET=${credentials.auth}`,

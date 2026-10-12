@@ -1,6 +1,8 @@
 # Remediation Handoff
 
-Last updated: 2026-10-11 (Phase 9 COMPLETE and checkpointed at `2efe261287d62621d28c71106832c7c2fb012b0d`; Phase 10 COMPLETE, checkpoint approval pending)
+Last updated: 2026-10-12 (Phase 10 COMPLETE and checkpointed at `6a6110205276b839534427a05b60f4c1044a3c0e`; Phase 11 ACTIVE, P11-1–P11-3 PASS, P11-4–P11-5 BLOCKED)
+
+Phase 11 implementation and acceptance update: the authenticated desktop policy-snapshot API and shared Ed25519 signer/verifier bind account, device, rules/overrides, classification catalog/mappings, and product IDs; expiry is capped at 24 hours. Consolidated Windows manual acceptance passed P11-1 (connection, sync, product switching and policy match), P11-2 (grace, reminder interaction, emergency bypass/expiry, and lock handling), and P11-3 (offline enforcement, recovery, session revocation, and cleanup). Final default tests report 102 passed and 137 opt-in integration/runtime tests skipped; workspace typecheck, desktop build, format check, scoped Biome checks, and `git diff --check` pass. The fixture PostgreSQL port was moved from excluded port `55442` to `55942` consistently after Windows reported `Permission denied`; Windows excluded-port configuration was not changed. P11-4 is BLOCKED by restrictions on browser-profile/protected-configuration changes. P11-5 is BLOCKED because signed updater/package credentials and required macOS/Linux runtime environments are unavailable. Phase 11 remains ACTIVE, not COMPLETE; all 18 dependency-security findings remain open and production launch remains NO-GO.
 Active plan: [REMEDIATION_IMPLEMENTATION_PLAN.md](REMEDIATION_IMPLEMENTATION_PLAN.md)  
 Historical detail: [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)  
 Current launch decision: **NO-GO**
@@ -87,6 +89,17 @@ failures; browser version was not
 separately recorded for Chromium and Firefox was 157.0.1. See
 `PHASE_10_ACCEPTANCE.md`. Phase 10 is COMPLETE. The 18 dependency-security
 findings remain open release obligations; production remains NO-GO.
+
+**Phase 11 — Desktop Agent: ACTIVE (P11-1–P11-3 PASS; P11-4–P11-5 BLOCKED).**
+Preserve accepted Phase 1–10 evidence and behavior. The consolidated Windows
+manual session accepted connection/product policy, enforcement and emergency
+bypass/lock handling, and signed offline policy/recovery/revocation. Remaining
+gates are native-host registration/browser restart (blocked by the restriction
+against browser-profile/protected-configuration changes) and signed updater/
+package plus macOS/Linux runtime acceptance (blocked by unavailable credentials
+and environments). Phase 11 is not complete; a partial checkpoint may record
+this accepted work without closing the phase. All 18 dependency findings remain
+open; production is NO-GO.
 The Phase 6 checkpoint is
 `236b1b1585d29900a3b6e509254a8114e3f19f5a`; local `main` and `origin/main`
 matched and the working tree was clean at Phase 7 start. Canonical scope is
