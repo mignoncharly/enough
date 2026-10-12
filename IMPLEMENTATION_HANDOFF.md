@@ -328,7 +328,7 @@ The task catalog is stage-specific and seeded from the current product-growth re
 - `apps/web/app/evidence/page.tsx`, `apps/web/app/tasks/page.tsx`, `apps/web/app/credits/page.tsx`, and `apps/web/app/globals.css`: evidence submission/review workspace, task-completion link, responsive evidence history, and credit-wallet explanation.
 - `apps/web/app/workspace-data.ts` and `packages/auth/src/routes.ts`: typed evidence API helpers and account export including evidence metadata and base64 file content.
 
-Uploaded files are stored in PostgreSQL and served only through authenticated ownership-checked routes. Files are limited to 2 MiB each and 20 MiB per account; accounts can hold up to 200 evidence items. Only PNG, JPEG, WebP, and PDF uploads are accepted, with screenshot evidence restricted to images. Integration references remain user-submitted until Phase 14 supplies authenticated connectors. Manual review is performed by the product owner using the same account, so it is auditable but not independent verification. New rewards are granted only when evidence is verified; manual wallet earn/adjust controls remain prototype controls. Browser, database, and security behavior have not been accepted at runtime.
+Uploads and screenshots now use private S3-compatible object storage with opaque keys; PostgreSQL retains evidence metadata, ownership, checksums, lifecycle state, audit information, and the deletion outbox. Retrieval stays behind the authenticated owner-scoped API. Files are limited to 2 MiB each and 20 MiB per account; accounts can hold up to 200 evidence items. Only PNG, JPEG, WebP, and PDF uploads are accepted, with screenshot evidence restricted to images. Integration references remain user-submitted and pending until an authenticated Phase 14 provider flow exists. Manual review is performed by the product owner using the same account, so it is auditable but not independent verification. New rewards are granted only when evidence is verified; manual wallet earn/adjust controls remain prototype controls. Isolated migrations through `0019`, legacy BYTEA transfer, storage failure/retry, cleanup, API, paired PostgreSQL/object restore, and the consolidated browser acceptance passed; see `PHASE_13_ACCEPTANCE.md`. Keep the deployed bucket private with public access blocked and least-privilege credentials. Malware scanning is not implemented; the High Phase 20/27 decision and controls must be closed before enabling public/unauthenticated uploads. Phase 13 is COMPLETE; production object-storage backup scheduling, encryption/versioning/retention, remote replication, and restore acceptance remain Phase 25 obligations.
 
 ## Phase 13 acceptance checklist
 
@@ -337,10 +337,13 @@ Uploaded files are stored in PostgreSQL and served only through authenticated ow
 - [x] Gate new task rewards on verified evidence and grant them atomically through the credit ledger.
 - [x] Preserve already-issued Phase 12 rewards as `SELF_REPORTED` and prevent duplicate issuance.
 - [x] Include evidence and uploaded content in account export; enforce file size, account quota, content signature, ownership, and rate limits in source.
-- [ ] Apply migrations `0002_authentication.sql` through `0010_evidence_system.sql` in order.
-- [ ] Exercise private upload/retrieval, ownership isolation, evidence rejection/retry, review idempotency, verified reward creation, wallet balance, account export, and account deletion against PostgreSQL.
-- [ ] Confirm evidence, task, and credits pages work across mobile/keyboard use, error/empty states, and supported file types.
-- [ ] Review implementation and complete requested quality checks before marking Phase 13 complete. No tests, builds, or typechecks were run during this implementation turn.
+- [x] Apply the isolated migration chain through `0019`; verify migration precheck, legacy BYTEA checksum transfer, and safe finalization.
+- [x] Exercise private upload/retrieval, ownership isolation, evidence rejection/retry, review idempotency, verified reward creation, wallet balance, account export, evidence deletion, account deletion cleanup, CSRF/validation, quota boundaries, orphan reconciliation, and paired PostgreSQL/object restore against the isolated fixture.
+- [x] Verify evidence, task, and credit page readiness and API authorization/download-denied behavior. The consolidated browser session passed; do not repeat accepted Phase 1–12 browser behavior.
+- [x] Run the final Phase 13 API/storage integration suite, relevant workspace tests, typecheck, format, lint, and diff checks; record results in `PHASE_13_ACCEPTANCE.md`.
+- [x] Implement and automate acceptance for private S3-compatible storage, checksum-verified BYTEA migration, export/delete/account cleanup, bounded orphan reconciliation, and paired metadata/object restore. See `PHASE_13_ACCEPTANCE.md`.
+- [x] Complete one consolidated browser acceptance session after automated storage acceptance and final checks passed; user reported PASS with no failures. Upload, screenshot privacy/retrieval/deletion, self-verification, and exactly one +5 Build Credit reward were confirmed.
+- [ ] Decide and close the Phase 20/27 High malware-scanning/moderation risk before any public or unauthenticated upload functionality is enabled.
 
 ## Phase 14 implementation map
 

@@ -761,13 +761,18 @@ export function markAllNotificationsRead(): Promise<{ markedRead: number }> {
   return postProductAction("/api/notifications/read-all", {});
 }
 
-async function postProductAction<T>(path: string, body: unknown, method = "POST"): Promise<T> {
+async function postProductAction<T>(
+  path: string,
+  body: unknown,
+  method = "POST",
+  extraHeaders: Record<string, string> = {},
+): Promise<T> {
   const csrfToken = readCsrfCookie();
   if (!csrfToken) throw new Error("Your secure session has expired. Sign in again and retry.");
   const response = await fetch(path, {
     method,
     credentials: "include",
-    headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+    headers: { "content-type": "application/json", "x-csrf-token": csrfToken, ...extraHeaders },
     body: JSON.stringify(body),
   });
   const payload = (await response.json().catch(() => ({}))) as { error?: string } & T;
@@ -955,19 +960,27 @@ export function revokeIntegration(
   return postProductAction(`/api/integrations/${integrationId}/revoke`, {});
 }
 
-export function createTaskEvidence(body: {
-  completionId: string;
-  evidenceType: TaskEvidenceType;
-  title?: string;
-  note?: string;
-  url?: string;
-  integrationProvider?: string;
-  integrationReference?: string;
-  fileName?: string;
-  contentType?: "image/png" | "image/jpeg" | "image/webp" | "application/pdf";
-  fileContentBase64?: string;
-}): Promise<{ evidence: TaskEvidenceItem }> {
-  return postProductAction("/api/evidence", body);
+export function createTaskEvidence(
+  body: {
+    completionId: string;
+    evidenceType: TaskEvidenceType;
+    title?: string;
+    note?: string;
+    url?: string;
+    integrationProvider?: string;
+    integrationReference?: string;
+    fileName?: string;
+    contentType?: "image/png" | "image/jpeg" | "image/webp" | "application/pdf";
+    fileContentBase64?: string;
+  },
+  idempotencyKey?: string,
+): Promise<{ evidence: TaskEvidenceItem }> {
+  return postProductAction(
+    "/api/evidence",
+    body,
+    "POST",
+    idempotencyKey ? { "idempotency-key": idempotencyKey } : {},
+  );
 }
 
 export function decideTaskEvidence(

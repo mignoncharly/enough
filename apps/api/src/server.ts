@@ -43,6 +43,10 @@ app.addContentTypeParser("application/json", { parseAs: "buffer" }, (request, bo
   (request as typeof request & { rawJsonBody?: Buffer }).rawJsonBody = Buffer.isBuffer(body)
     ? body
     : Buffer.from(body, "utf8");
+  if (request.method === "DELETE" && body.length === 0) {
+    done(null, {});
+    return;
+  }
   try {
     done(null, JSON.parse(body.toString("utf8")) as unknown);
   } catch {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { generateKeyPairSync } from "node:crypto";
+import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { once } from "node:events";
 import {
   copyFile,
@@ -32,6 +32,7 @@ const phase9 = process.argv.includes("--phase9");
 const phase10 = process.argv.includes("--phase10");
 const phase11 = process.argv.includes("--phase11");
 const phase12 = process.argv.includes("--phase12");
+const phase13 = process.argv.includes("--phase13");
 const basePhase = phase12
   ? "phase12"
   : phase9
@@ -49,18 +50,28 @@ const basePhase = phase12
               : phase3
                 ? "phase3"
                 : "phase2";
-const phase = phase12 ? "phase12" : phase11 ? "phase11" : phase10 ? "phase10" : basePhase;
+const phase = phase13
+  ? "phase13"
+  : phase12
+    ? "phase12"
+    : phase11
+      ? "phase11"
+      : phase10
+        ? "phase10"
+        : basePhase;
 const baseFixture =
   phase3 || phase4 || phase5 || phase6 || phase7 || phase8 || phase9 || phase11 || phase12
     ? join(tmpdir(), `enough-${basePhase}`)
     : join(root, ".runtime", basePhase);
-const fixture = phase12
-  ? join(tmpdir(), "enough-phase12")
-  : phase11
-    ? join(tmpdir(), "enough-phase11")
-    : phase10
-      ? join(tmpdir(), "enough-phase10")
-      : baseFixture;
+const fixture = phase13
+  ? join(tmpdir(), "enough-phase13")
+  : phase12
+    ? join(tmpdir(), "enough-phase12")
+    : phase11
+      ? join(tmpdir(), "enough-phase11")
+      : phase10
+        ? join(tmpdir(), "enough-phase10")
+        : baseFixture;
 const basePgPort = phase12
   ? 55943
   : phase11
@@ -80,7 +91,7 @@ const basePgPort = phase12
                 : phase3
                   ? 55434
                   : 55433;
-const pgPort = phase12 ? 55943 : phase11 ? 55942 : phase10 ? 55441 : basePgPort;
+const pgPort = phase13 ? 55944 : phase12 ? 55943 : phase11 ? 55942 : phase10 ? 55441 : basePgPort;
 const baseRedisPort = phase12
   ? 56405
   : phase11
@@ -100,7 +111,15 @@ const baseRedisPort = phase12
                 : phase3
                   ? 56383
                   : 56381;
-const redisPort = phase12 ? 56405 : phase11 ? 56403 : phase10 ? 56401 : baseRedisPort;
+const redisPort = phase13
+  ? 56407
+  : phase12
+    ? 56405
+    : phase11
+      ? 56403
+      : phase10
+        ? 56401
+        : baseRedisPort;
 const baseWslRedisPort = phase12
   ? "56406"
   : phase11
@@ -120,7 +139,15 @@ const baseWslRedisPort = phase12
                 : phase3
                   ? "56384"
                   : "56382";
-const wslRedisPort = phase12 ? "56406" : phase11 ? "56404" : phase10 ? "56402" : baseWslRedisPort;
+const wslRedisPort = phase13
+  ? "56408"
+  : phase12
+    ? "56406"
+    : phase11
+      ? "56404"
+      : phase10
+        ? "56402"
+        : baseWslRedisPort;
 const baseApiPort = phase12
   ? 4422
   : phase11
@@ -140,7 +167,7 @@ const baseApiPort = phase12
                 : phase3
                   ? 4404
                   : 4402;
-const apiPort = phase12 ? 4422 : phase11 ? 4420 : phase10 ? 4418 : baseApiPort;
+const apiPort = phase13 ? 4424 : phase12 ? 4422 : phase11 ? 4420 : phase10 ? 4418 : baseApiPort;
 const baseWebPort = phase12
   ? 3313
   : phase11
@@ -160,14 +187,23 @@ const baseWebPort = phase12
                 : phase3
                   ? 3303
                   : 3302;
-const webPort = phase12 ? 3313 : phase11 ? 3312 : phase10 ? 3310 : baseWebPort;
+const webPort = phase13 ? 3314 : phase12 ? 3313 : phase11 ? 3312 : phase10 ? 3310 : baseWebPort;
 const phaseFlag = `--${phase}`;
 const mode = process.argv[2] ?? "test";
 assert.ok(["test", "serve", "prepare"].includes(mode), "Use test, serve or prepare.");
 assert.ok(!phase5 || mode === "test", "Phase 5 is an automated ingestion fixture.");
 const extensionOrigins = phase10
   ? (process.argv.find((arg) => /^(?:chrome-extension:\/\/|moz-extension:\/\/)/.test(arg)) ?? "")
-  : phase3 || phase4 || phase5 || phase6 || phase7 || phase8 || phase9 || phase11 || phase12
+  : phase3 ||
+      phase4 ||
+      phase5 ||
+      phase6 ||
+      phase7 ||
+      phase8 ||
+      phase9 ||
+      phase11 ||
+      phase12 ||
+      phase13
     ? ""
     : (process.argv[3] ?? "");
 const suppliedOrigins = extensionOrigins.split(",").filter(Boolean);
@@ -190,6 +226,8 @@ let postgresStarted = false;
 let redisStarted = false;
 let closing = false;
 let redisBridge;
+let evidenceStorageServer;
+const evidenceStoragePort = 55945;
 
 async function freePort(port) {
   const server = createServer();
@@ -243,6 +281,10 @@ async function cleanup() {
     } catch {}
   }
   if (redisBridge) redisBridge.close();
+  if (evidenceStorageServer) {
+    await evidenceStorageServer.close().catch(() => undefined);
+    evidenceStorageServer = undefined;
+  }
   for (const child of children.toReversed()) {
     if (child.exitCode === null && !child.killed) {
       child.kill();
@@ -288,8 +330,10 @@ try {
     redisPort,
     apiPort,
     webPort,
+    ...(phase13 ? [evidenceStoragePort] : []),
     ...(phase11 ? [4421] : []),
     ...(phase12 ? [4423] : []),
+    ...(phase13 ? [4425] : []),
     ...(phase9 ? [4417] : []),
     ...(phase10 ? [4419] : []),
   ]) {
@@ -308,7 +352,7 @@ try {
     ],
     { windowsHide: true, stdio: "pipe" },
   );
-  if (phase11 || phase12) {
+  if (phase11 || phase12 || phase13) {
     const markerPath = join(fixture, `${phase}-fixture.json`);
     const existingFixture = await lstat(fixture).catch((error) =>
       error.code === "ENOENT" ? null : Promise.reject(error),
@@ -345,6 +389,7 @@ try {
   environment.ENOUGH_PHASE10_MANUAL_ACCOUNT = phase10 ? "1" : "0";
   environment.ENOUGH_PHASE11_MANUAL_ACCOUNT = phase11 ? "1" : "0";
   environment.ENOUGH_PHASE12_MANUAL_ACCOUNT = phase12 ? "1" : "0";
+  environment.ENOUGH_PHASE13_MANUAL_ACCOUNT = phase13 ? "1" : "0";
   if (phase11) {
     const privatePath = join(fixture, "policy-snapshot-private.pem");
     const publicPath = join(fixture, "policy-snapshot-public.pem");
@@ -369,25 +414,25 @@ try {
     }
   }
   environment.ENOUGH_PHASE2_INTEGRATION =
-    phase9 || phase10 || phase11 || phase12
+    phase9 || phase10 || phase11 || phase12 || phase13
       ? "0"
       : phase3 || phase4 || phase5 || phase6 || phase7 || phase8
         ? "0"
         : "1";
   environment.ENOUGH_PHASE3_INTEGRATION =
-    phase9 || phase10 || phase11 || phase12
+    phase9 || phase10 || phase11 || phase12 || phase13
       ? "0"
       : phase3 || phase4 || phase5 || phase6 || phase7 || phase8
         ? "1"
         : "0";
   environment.ENOUGH_PHASE4_INTEGRATION =
-    phase9 || phase10 || phase11 || phase12
+    phase9 || phase10 || phase11 || phase12 || phase13
       ? "0"
       : phase4 || phase5 || phase6 || phase7 || phase8
         ? "1"
         : "0";
   environment.ENOUGH_PHASE5_INTEGRATION =
-    phase9 || phase10 || phase11 || phase12
+    phase9 || phase10 || phase11 || phase12 || phase13
       ? "0"
       : phase5 || phase6 || phase7 || phase8
         ? "1"
@@ -396,6 +441,40 @@ try {
   environment.ENOUGH_PHASE7_INTEGRATION = phase7 || phase8 ? "1" : "0";
   environment.ENOUGH_PHASE8_INTEGRATION = phase8 ? "1" : "0";
   environment.ENOUGH_PHASE12_INTEGRATION = phase12 ? "1" : "0";
+  environment.ENOUGH_PHASE13_INTEGRATION = phase13 ? "1" : "0";
+  if (phase13) {
+    const apiRequire = createRequire(join(root, "apps/api/package.json"));
+    const S3rver = apiRequire("s3rver");
+    const accountModel = apiRequire("s3rver/lib/models/account");
+    const accessKeyId = randomBytes(20).toString("hex").toUpperCase();
+    const secretAccessKey = randomBytes(40).toString("base64url");
+    const bucket = `phase13-evidence-${randomBytes(6).toString("hex")}`;
+    accountModel.DUMMY_ACCOUNT.createKeyPair(accessKeyId, secretAccessKey);
+    const objectDirectory = join(fixture, "object-store");
+    await mkdir(objectDirectory, { recursive: true });
+    evidenceStorageServer = new S3rver({
+      address: "127.0.0.1",
+      port: evidenceStoragePort,
+      directory: objectDirectory,
+      configureBuckets: [{ name: bucket }],
+      silent: true,
+      vhostBuckets: false,
+    });
+    evidenceStorageServer.middleware.unshift(async (ctx, next) => {
+      if (!ctx.get("authorization")) {
+        ctx.status = 403;
+        ctx.body = "Access denied";
+        return;
+      }
+      await next();
+    });
+    await evidenceStorageServer.run();
+    environment.EVIDENCE_STORAGE_ENDPOINT = `http://127.0.0.1:${evidenceStoragePort}`;
+    environment.EVIDENCE_STORAGE_BUCKET = bucket;
+    environment.EVIDENCE_STORAGE_REGION = "us-east-1";
+    environment.EVIDENCE_STORAGE_ACCESS_KEY_ID = accessKeyId;
+    environment.EVIDENCE_STORAGE_SECRET_ACCESS_KEY = secretAccessKey;
+  }
   environment.CREDITS_MANUAL_CONTROLS_ENABLED = phase8 ? "true" : "false";
   // The generated fixture explicitly blanks all provider credentials; no root env file is loaded.
   assert.equal(new URL(environment.DATABASE_URL).pathname, `/enough_${phase}`);
@@ -540,7 +619,7 @@ try {
     env: environment,
   });
   const worker =
-    phase9 || phase10 || phase11 || phase12
+    phase9 || phase10 || phase11 || phase12 || phase13
       ? launch(process.execPath, ["--import", "tsx", "src/server.ts"], {
           cwd: join(root, "apps", "worker"),
           env: environment,
@@ -588,15 +667,42 @@ try {
     const response = await fetch(`http://127.0.0.1:${webPort}/tasks`);
     assert.equal(response.status, 200, "Phase 12 task page failed.");
   }
+  if (phase13) {
+    for (const path of ["/tasks", "/evidence", "/credits"]) {
+      const response = await fetch(`http://127.0.0.1:${webPort}${path}`);
+      assert.equal(response.status, 200, `Phase 13 page failed: ${path}`);
+    }
+  }
   console.info(
-    phase9 || phase10 || phase11 || phase12
-      ? `Isolated PostgreSQL/Redis/API/worker/web ready at ${pgPort}/${redisPort}/${apiPort}/${environment.WORKER_PORT}/${webPort}${phase9 ? "; all Phase 9 routes returned 200" : phase12 ? "; task page returned 200" : ""}.`
+    phase9 || phase10 || phase11 || phase12 || phase13
+      ? `Isolated PostgreSQL/Redis/API/worker/web ready at ${pgPort}/${redisPort}/${apiPort}/${environment.WORKER_PORT}/${webPort}${phase9 ? "; all Phase 9 routes returned 200" : phase12 ? "; task page returned 200" : phase13 ? "; tasks, evidence and credits pages returned 200" : ""}.`
       : `Isolated API/web ready at ${apiPort}/${webPort}; other runtimes untouched.`,
   );
-  if ((phase9 || phase10 || phase11 || phase12) && mode === "test") {
+  if ((phase9 || phase10 || phase11 || phase12 || phase13) && mode === "test") {
     console.info(
-      `Phase ${phase12 ? "12" : phase11 ? "11" : phase10 ? "10" : "9"} isolated migration and full-stack readiness smoke checks passed.`,
+      `Phase ${phase13 ? "13" : phase12 ? "12" : phase11 ? "11" : phase10 ? "10" : "9"} isolated migration and full-stack readiness smoke checks passed.`,
     );
+    if (phase13) {
+      const fixtureCredentials = JSON.parse(
+        await readFile(join(fixture, "credentials.json"), "utf8"),
+      );
+      const integrationEnvironment = {
+        ...environment,
+        PHASE13_RESTORE_ADMIN_DATABASE_URL: `postgresql://enough_phase13_admin:${fixtureCredentials.admin}@127.0.0.1:${pgPort}/postgres`,
+      };
+      await runNode(
+        [
+          join(root, "node_modules", "vitest", "vitest.mjs"),
+          "run",
+          "apps/api/src/evidence-storage-migration.integration.test.ts",
+          "apps/api/src/evidence.integration.test.ts",
+          "--hookTimeout=60000",
+          "--testTimeout=60000",
+          "--maxWorkers=1",
+        ],
+        { env: integrationEnvironment },
+      );
+    }
     if (phase12) {
       await runNode(
         [
@@ -659,23 +765,25 @@ try {
         join(
           root,
           "scripts",
-          phase12
-            ? "phase12-manual-account.mjs"
-            : phase11
-              ? "phase11-manual-account.mjs"
-              : phase10
-                ? "phase10-manual-account.mjs"
-                : phase9
-                  ? "phase3-manual-account.mjs"
-                  : phase8
-                    ? "phase8-manual-account.mjs"
-                    : phase7
-                      ? "phase7-manual-account.mjs"
-                      : phase6
-                        ? "phase6-manual-account.mjs"
-                        : phase3 || phase4
-                          ? "phase3-manual-account.mjs"
-                          : "phase2-manual-account.mjs",
+          phase13
+            ? "phase13-manual-account.mjs"
+            : phase12
+              ? "phase12-manual-account.mjs"
+              : phase11
+                ? "phase11-manual-account.mjs"
+                : phase10
+                  ? "phase10-manual-account.mjs"
+                  : phase9
+                    ? "phase3-manual-account.mjs"
+                    : phase8
+                      ? "phase8-manual-account.mjs"
+                      : phase7
+                        ? "phase7-manual-account.mjs"
+                        : phase6
+                          ? "phase6-manual-account.mjs"
+                          : phase3 || phase4
+                            ? "phase3-manual-account.mjs"
+                            : "phase2-manual-account.mjs",
         ),
       ],
       {
@@ -687,7 +795,16 @@ try {
       console.info("Manual fixture preparation verified; stopping fixture services.");
     } else {
       console.info(
-        phase3 || phase4 || phase6 || phase7 || phase8 || phase9 || phase10 || phase11 || phase12
+        phase3 ||
+          phase4 ||
+          phase6 ||
+          phase7 ||
+          phase8 ||
+          phase9 ||
+          phase10 ||
+          phase11 ||
+          phase12 ||
+          phase13
           ? `Fixture serving. Ctrl+C stops this fixture; data stays in TEMP/enough-${phase}.`
           : "Fixture serving. Ctrl+C stops only this fixture; data stays in ignored .runtime/phase2.",
       );

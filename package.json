@@ -59,6 +59,11 @@
     "test:tasks:prepare": "node scripts/phase2-runtime.mjs prepare --phase12",
     "test:tasks:serve": "node scripts/phase2-runtime.mjs serve --phase12",
     "test:tasks:clean": "node scripts/phase12-clean.mjs",
+    "test:evidence:integration": "node scripts/phase2-runtime.mjs test --phase13",
+    "test:evidence:prepare": "node scripts/phase2-runtime.mjs prepare --phase13",
+    "test:evidence:serve": "node scripts/phase2-runtime.mjs serve --phase13",
+    "test:evidence:clean": "node scripts/phase13-clean.mjs",
+    "db:migrate:evidence-storage": "node --env-file-if-exists=.env scripts/phase13-evidence-storage-upgrade.mjs",
     "db:phase5:migration-check": "node scripts/phase5-migration-check.mjs"
   },
   "devDependencies": {

@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import {
   createTaskEvidence,
   decideTaskEvidence,
@@ -30,7 +30,7 @@ function evidenceStatusLabel(status: TaskEvidenceCompletion["verificationStatus"
     case "AWAITING_REVIEW":
       return "Ready for review";
     case "VERIFIED":
-      return "Verified";
+      return "Self-verified by product owner";
     case "AUTOMATICALLY_VERIFIED":
       return "Verified by integration";
     case "REJECTED":
@@ -60,7 +60,8 @@ export default function EvidencePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [, setNotice] = useState("");
+  const [notice, setNotice] = useState("");
+  const uploadRetryKey = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -179,12 +180,16 @@ export default function EvidencePage() {
     setSaving(true);
     setError("");
     setNotice("");
+    const isUpload = evidenceType === "UPLOAD" || evidenceType === "SCREENSHOT";
+    if (isUpload && !uploadRetryKey.current) uploadRetryKey.current = window.crypto.randomUUID();
     try {
-      await createTaskEvidence(body);
+      await createTaskEvidence(body, isUpload ? (uploadRetryKey.current ?? undefined) : undefined);
+      uploadRetryKey.current = null;
       form.reset();
       await refresh();
       setNotice("Evidence saved privately. It is waiting for manual review.");
     } catch (cause) {
+      if ((cause as { status?: number })?.status === 409) uploadRetryKey.current = null;
       setError(cause instanceof Error ? cause.message : "Evidence could not be saved.");
     } finally {
       setSaving(false);
@@ -282,6 +287,11 @@ export default function EvidencePage() {
           Loading evidence…
         </p>
       ) : null}
+      {notice ? (
+        <p className="notice" role="status" aria-live="polite">
+          {notice}
+        </p>
+      ) : null}
       {error ? (
         <section className="account-card" role="alert">
           <h2>Evidence action could not be completed</h2>
@@ -305,6 +315,9 @@ export default function EvidencePage() {
               <h2>Support a completed task</h2>
               <form
                 className="product-form evidence-form"
+                onChange={() => {
+                  uploadRetryKey.current = null;
+                }}
                 onSubmit={(event) => void addEvidence(event)}
               >
                 <label>

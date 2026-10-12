@@ -1,6 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
 import { checkRateLimit } from "@enough/auth";
 import { pool } from "@enough/db";
+import {
+  closeEvidenceObjectStore,
+  createEvidenceObjectKeys,
+  evidenceObjectStore,
+  finalizeEvidenceUpload,
+  hasEvidenceObjectStorageConfig,
+  reconcileEvidenceObjectStorage,
+} from "@enough/evidence-storage";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { requireCsrf, requireSession } from "./api-auth.js";
@@ -169,6 +177,7 @@ interface EvidenceRow {
   content_type: string | null;
   file_size: number | null;
   file_sha256: string | null;
+  storage_state: "NONE" | "MIGRATION_PENDING" | "FINALIZING" | "READY";
   verification_status: (typeof evidenceStatuses)[number];
   reviewed_by_user_id: string | null;
   reviewed_at: Date | null;
@@ -225,7 +234,9 @@ function evidenceResponse(row: EvidenceRow) {
     contentType: row.content_type,
     fileSize: row.file_size,
     fileSha256: row.file_sha256,
-    contentUrl: row.file_size ? `/api/evidence/${row.id}/content` : null,
+    contentUrl:
+      row.file_size && row.storage_state === "READY" ? `/api/evidence/${row.id}/content` : null,
+    fileAvailable: row.file_size !== null && row.storage_state === "READY",
     verificationStatus: row.verification_status,
     verificationMethod: row.verification_method,
     reviewedByUserId: row.reviewed_by_user_id,
@@ -294,11 +305,45 @@ function safeFileName(value: string): string {
 }
 
 function sendEvidenceError(request: FastifyRequest, reply: FastifyReply, error: unknown) {
-  request.log.error({ err: error }, "Task evidence operation failed");
+  const details =
+    error && typeof error === "object" ? (error as { code?: unknown; statusCode?: unknown }) : {};
+  request.log.error(
+    {
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      errorCode: typeof details.code === "string" ? details.code : undefined,
+      errorStatus: typeof details.statusCode === "number" ? details.statusCode : undefined,
+    },
+    "Task evidence operation failed",
+  );
   return reply.code(503).send({ error: "The evidence could not be saved. Try again shortly." });
 }
 
 export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void> {
+  if (hasEvidenceObjectStorageConfig()) {
+    let maintenanceBusy = false;
+    const runMaintenance = () => {
+      if (maintenanceBusy) return;
+      maintenanceBusy = true;
+      void reconcileEvidenceObjectStorage()
+        .then((result) => {
+          if (result.failures > 0)
+            app.log.warn({ failures: result.failures }, "Evidence storage maintenance needs retry");
+        })
+        .catch(() => app.log.warn("Evidence storage maintenance needs retry"))
+        .finally(() => {
+          maintenanceBusy = false;
+        });
+    };
+    const initialMaintenance = setTimeout(runMaintenance, 5_000);
+    const maintenanceTimer = setInterval(runMaintenance, 60_000);
+    initialMaintenance.unref();
+    maintenanceTimer.unref();
+    app.addHook("onClose", async () => {
+      clearTimeout(initialMaintenance);
+      clearInterval(maintenanceTimer);
+      await closeEvidenceObjectStore();
+    });
+  }
   app.get("/task-evidence", async (request, reply) => {
     const session = await requireSession(request, reply);
     if (!session) return;
@@ -340,7 +385,7 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
         pool.query<EvidenceRow>(
           `SELECT id, completion_id, task_id, product_id, user_id, evidence_type, title, note,
                   evidence_url, integration_provider, integration_reference, provenance,
-                  original_file_name, content_type, file_size, file_sha256, verification_status,
+                  original_file_name, content_type, file_size, file_sha256, storage_state, verification_status,
                   reviewed_by_user_id, reviewed_at, review_note, verification_method, created_at, updated_at
            FROM enough.task_evidence_items
            WHERE product_id = $1 AND user_id = $2 AND deleted_at IS NULL
@@ -402,15 +447,100 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
       fileName = safeFileName(body.fileName);
       fileSha256 = createHash("sha256").update(fileData).digest("hex");
     }
+    const title =
+      body.title?.trim() ||
+      (body.evidenceType === "URL"
+        ? "Reference link"
+        : body.evidenceType === "UPLOAD" || body.evidenceType === "SCREENSHOT"
+          ? (fileName ?? "File attachment")
+          : body.evidenceType === "INTEGRATION"
+            ? `${body.integrationProvider} event`
+            : body.evidenceType === "SELF_REPORT"
+              ? "Self-report"
+              : "Evidence note");
+    const headerValue = request.headers["idempotency-key"];
+    if (
+      headerValue !== undefined &&
+      (typeof headerValue !== "string" || !z.string().uuid().safeParse(headerValue).success)
+    ) {
+      return reply.code(400).send({ error: "The upload retry key is invalid." });
+    }
+    const uploadIdempotencyKey = fileData
+      ? typeof headerValue === "string"
+        ? headerValue
+        : randomUUID()
+      : null;
+    const uploadRequestHash = fileData
+      ? createHash("sha256")
+          .update(
+            JSON.stringify({
+              completionId: body.completionId,
+              evidenceType: body.evidenceType,
+              title,
+              note: body.note ?? null,
+              fileName,
+              contentType,
+              fileSha256,
+            }),
+          )
+          .digest("hex")
+      : null;
+
+    if (uploadIdempotencyKey && uploadRequestHash) {
+      const previous = await pool.query<EvidenceRow>(
+        `SELECT id, completion_id, task_id, product_id, user_id, evidence_type, title, note,
+                evidence_url, integration_provider, integration_reference, provenance,
+                original_file_name, content_type, file_size, file_sha256, storage_state,
+                verification_status, reviewed_by_user_id, reviewed_at, review_note,
+                verification_method, created_at, updated_at
+         FROM enough.task_evidence_items
+         WHERE user_id = $1 AND upload_idempotency_key = $2 AND deleted_at IS NULL`,
+        [session.id, uploadIdempotencyKey],
+      );
+      const existing = previous.rows[0];
+      if (existing) {
+        const fingerprint = await pool.query<{ upload_request_sha256: string }>(
+          `SELECT upload_request_sha256 FROM enough.task_evidence_items WHERE id = $1`,
+          [existing.id],
+        );
+        if (fingerprint.rows[0]?.upload_request_sha256?.trim() !== uploadRequestHash) {
+          return reply.code(409).send({ error: "This upload retry key was already used." });
+        }
+        if (existing.storage_state === "READY")
+          return reply.code(200).send({ evidence: evidenceResponse(existing) });
+        if (existing.storage_state === "FINALIZING") {
+          try {
+            const finalized = await finalizeEvidenceUpload(existing.id, session.id);
+            if (finalized)
+              return reply
+                .code(200)
+                .send({ evidence: evidenceResponse({ ...existing, storage_state: "READY" }) });
+          } catch (error) {
+            return sendEvidenceError(request, reply, error);
+          }
+        }
+        return reply
+          .code(503)
+          .send({ error: "The evidence is still being saved. Retry the same upload shortly." });
+      }
+    }
+
     const evidenceId = randomUUID();
+    const objectKeys = fileData ? createEvidenceObjectKeys() : null;
     const client = await pool.connect();
+    let transactionOpen = false;
+    let commitAttempted = false;
+    let stagingObjectWritten = false;
+    let clientReleased = false;
     try {
       await client.query("BEGIN");
+      transactionOpen = true;
       const user = await client.query("SELECT id FROM enough.auth_users WHERE id = $1 FOR UPDATE", [
         session.id,
       ]);
       if (user.rowCount !== 1) {
         await client.query("ROLLBACK");
+        transactionOpen = false;
         return reply.code(404).send({ error: "Account not found." });
       }
       const completionResult = await client.query<CompletionRow>(
@@ -428,6 +558,7 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
       const completion = completionResult.rows[0];
       if (completion?.task_status !== "COMPLETED") {
         await client.query("ROLLBACK");
+        transactionOpen = false;
         return reply.code(404).send({ error: "Completed task not found." });
       }
       if (
@@ -436,6 +567,7 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
         )
       ) {
         await client.query("ROLLBACK");
+        transactionOpen = false;
         return reply
           .code(409)
           .send({ error: "This completion is locked and cannot accept more evidence." });
@@ -448,38 +580,42 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
       );
       if (Number(usage.rows[0].item_count) >= MAX_USER_EVIDENCE_ITEMS) {
         await client.query("ROLLBACK");
+        transactionOpen = false;
         return reply
           .code(413)
           .send({ error: "This account has reached the 200 evidence item limit." });
       }
       if (fileData && Number(usage.rows[0].file_bytes) + fileData.length > MAX_USER_UPLOAD_BYTES) {
         await client.query("ROLLBACK");
+        transactionOpen = false;
         return reply
           .code(413)
           .send({ error: "This account has reached the 20 MiB evidence upload limit." });
       }
-      const title =
-        body.title?.trim() ||
-        (body.evidenceType === "URL"
-          ? "Reference link"
-          : body.evidenceType === "UPLOAD" || body.evidenceType === "SCREENSHOT"
-            ? (fileName ?? "File attachment")
-            : body.evidenceType === "INTEGRATION"
-              ? `${body.integrationProvider} event`
-              : body.evidenceType === "SELF_REPORT"
-                ? "Self-report"
-                : "Evidence note");
+
+      if (fileData && fileSha256 && contentType && objectKeys) {
+        await evidenceObjectStore().putStaging({
+          key: objectKeys.stagingKey,
+          bytes: fileData,
+          sha256: fileSha256,
+          contentType,
+        });
+        stagingObjectWritten = true;
+      }
+
       const inserted = await client.query<EvidenceRow>(
         `INSERT INTO enough.task_evidence_items
            (id, completion_id, task_id, product_id, user_id, evidence_type, title, note,
             evidence_url, integration_provider, integration_reference, provenance,
-            original_file_name, content_type, file_size, file_sha256, file_data)
+            original_file_name, content_type, file_size, file_sha256, storage_state,
+            storage_object_key, storage_staging_key, upload_idempotency_key, upload_request_sha256)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'USER_SUBMITTED',
-                 $12, $13, $14, $15, $16)
+                 $12, $13, $14, $15, $16, $17, $18, $19, $20)
          RETURNING id, completion_id, task_id, product_id, user_id, evidence_type, title, note,
                    evidence_url, integration_provider, integration_reference, provenance,
-                   original_file_name, content_type, file_size, file_sha256, verification_status,
-                   reviewed_by_user_id, reviewed_at, review_note, verification_method, created_at, updated_at`,
+                   original_file_name, content_type, file_size, file_sha256, storage_state,
+                   verification_status, reviewed_by_user_id, reviewed_at, review_note,
+                   verification_method, created_at, updated_at`,
         [
           evidenceId,
           completion.id,
@@ -496,7 +632,11 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
           contentType,
           fileData?.length ?? null,
           fileSha256,
-          fileData,
+          fileData ? "FINALIZING" : "NONE",
+          objectKeys?.objectKey ?? null,
+          objectKeys?.stagingKey ?? null,
+          uploadIdempotencyKey,
+          uploadRequestHash,
         ],
       );
       await client.query(
@@ -521,13 +661,30 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
           }),
         ],
       );
+      commitAttempted = true;
       await client.query("COMMIT");
+      transactionOpen = false;
+      client.release();
+      clientReleased = true;
+
+      if (fileData) {
+        const finalized = await finalizeEvidenceUpload(evidenceId, session.id);
+        if (!finalized) return sendEvidenceError(request, reply, new Error("StorageStateConflict"));
+        return reply
+          .code(201)
+          .send({ evidence: evidenceResponse({ ...inserted.rows[0], storage_state: "READY" }) });
+      }
       return reply.code(201).send({ evidence: evidenceResponse(inserted.rows[0]) });
     } catch (error) {
-      await client.query("ROLLBACK");
+      if (transactionOpen) await client.query("ROLLBACK").catch(() => undefined);
+      if (stagingObjectWritten && objectKeys && !commitAttempted) {
+        await evidenceObjectStore()
+          .delete(objectKeys.stagingKey)
+          .catch(() => undefined);
+      }
       return sendEvidenceError(request, reply, error);
     } finally {
-      client.release();
+      if (!clientReleased) client.release();
     }
   });
 
@@ -540,16 +697,27 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
     try {
       const result = await pool.query<{
         content_type: string;
-        file_data: Buffer;
         file_size: number;
+        file_sha256: string;
+        storage_object_key: string;
         original_file_name: string;
       }>(
-        `SELECT content_type, file_data, file_size, original_file_name
-         FROM enough.task_evidence_items WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL AND file_data IS NOT NULL`,
+        `SELECT content_type, file_size, file_sha256, storage_object_key, original_file_name
+         FROM enough.task_evidence_items
+         WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+           AND file_size IS NOT NULL AND storage_state = 'READY'`,
         [evidenceId, session.id],
       );
       const file = result.rows[0];
       if (!file) return reply.code(404).send({ error: "Evidence file not found." });
+      const object = await evidenceObjectStore().get(file.storage_object_key);
+      if (
+        object.size !== file.file_size ||
+        object.contentType !== file.content_type ||
+        object.sha256 !== file.file_sha256.trim()
+      ) {
+        throw new Error("EvidenceStorageIntegrity");
+      }
       const disposition = file.content_type.startsWith("image/") ? "inline" : "attachment";
       const safeName =
         file.original_file_name.replace(/[^A-Za-z0-9._ ()-]/g, "_").slice(0, 160) ||
@@ -561,7 +729,7 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
         .header("x-content-type-options", "nosniff")
         .header("content-security-policy", "default-src 'none'; sandbox")
         .header("cache-control", "private, no-store")
-        .send(file.file_data);
+        .send(object.bytes);
     } catch (error) {
       return sendEvidenceError(request, reply, error);
     }
@@ -589,7 +757,9 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
          SET evidence_type = 'NOTE', title = 'Evidence deleted', note = 'This evidence was deleted by the account owner.',
              evidence_url = NULL, integration_provider = NULL, integration_reference = NULL,
              original_file_name = NULL, content_type = NULL, file_size = NULL, file_sha256 = NULL,
-             file_data = NULL, review_note = NULL, provenance = 'USER_SUBMITTED',
+             storage_state = 'NONE', storage_object_key = NULL, storage_staging_key = NULL,
+             upload_idempotency_key = NULL, upload_request_sha256 = NULL,
+             review_note = NULL, provenance = 'USER_SUBMITTED',
              deleted_at = COALESCE(deleted_at, now()), updated_at = now()
          WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
          RETURNING id, completion_id`,
@@ -616,6 +786,7 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
         [removed.rows[0].completion_id, session.id],
       );
       await client.query("COMMIT");
+      await reconcileEvidenceObjectStorage({ maxFinalize: 0, maxScan: 0 }).catch(() => undefined);
       return reply.send({ deleted: true, evidenceId });
     } catch (error) {
       await client.query("ROLLBACK");
@@ -796,7 +967,7 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
             productId: current.product_id,
             type: "CREDIT_EARNED",
             title: "Task reward verified",
-            body: current.reward_credits + " credits were added for “" + current.task_title + "”.",
+            body: `${current.reward_credits} credits were added for “${current.task_title}”.`,
             href: `/evidence?productId=${current.product_id}`,
             dedupeKey: `reward:${current.completion_id}`,
           });

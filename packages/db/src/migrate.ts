@@ -24,6 +24,13 @@ async function migrate(): Promise<void> {
   `);
 
   const names = (await readdir(migrationsDirectory)).filter((name) => name.endsWith(".sql")).sort();
+  const stopAfter = process.env.ENOUGH_MIGRATION_STOP_AFTER;
+  if (stopAfter && !/^\d{4}_[a-z0-9_]+\.sql$/.test(stopAfter)) {
+    throw new Error("ENOUGH_MIGRATION_STOP_AFTER must name a migration file.");
+  }
+  if (stopAfter && !names.includes(stopAfter)) {
+    throw new Error("ENOUGH_MIGRATION_STOP_AFTER does not match a migration file.");
+  }
   let appliedCount = 0;
 
   for (const name of names) {
@@ -38,6 +45,7 @@ async function migrate(): Promise<void> {
       if (existing.rows[0].checksum !== checksum) {
         throw new Error(`Applied migration ${name} has changed; create a new migration instead.`);
       }
+      if (name === stopAfter) break;
       continue;
     }
 
@@ -55,6 +63,7 @@ async function migrate(): Promise<void> {
       await client.query("ROLLBACK");
       throw error;
     }
+    if (name === stopAfter) break;
   }
 
   console.info(appliedCount ? `Applied ${appliedCount} migration(s).` : "Database is up to date.");

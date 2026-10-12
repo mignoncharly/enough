@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { env } from "@enough/config";
 import { pool } from "@enough/db";
+import { evidenceObjectStore } from "@enough/evidence-storage";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
@@ -985,7 +986,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         `SELECT id, completion_id, task_id, product_id, evidence_type, title, note,
                 evidence_url, integration_provider, integration_reference, provenance,
                 original_file_name, content_type, file_size, file_sha256,
-                replace(encode(file_data, 'base64'), chr(10), '') AS file_content_base64,
+                storage_state, storage_object_key,
                 verification_status, reviewed_by_user_id, reviewed_at, review_note, verification_method,
                 created_at, updated_at, deleted_at
          FROM enough.task_evidence_items WHERE user_id = $1 ORDER BY created_at`,
@@ -1142,6 +1143,50 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
           [session.id],
         ),
       ]);
+
+    let exportedTaskEvidenceItems: Array<Record<string, unknown>>;
+    try {
+      exportedTaskEvidenceItems = await Promise.all(
+        taskEvidenceItems.rows.map(async (row) => {
+          const {
+            storage_object_key: objectKey,
+            storage_state: storageState,
+            ...evidence
+          } = row as {
+            storage_object_key: string | null;
+            storage_state: string;
+            content_type: string | null;
+            file_size: number | null;
+            file_sha256: string | null;
+          } & Record<string, unknown>;
+          if (evidence.file_size === null) return { ...evidence, file_content_base64: null };
+          if (
+            storageState !== "READY" ||
+            !objectKey ||
+            !evidence.content_type ||
+            !evidence.file_sha256
+          ) {
+            throw new Error("EvidenceStorageNotReady");
+          }
+          const object = await evidenceObjectStore().get(objectKey);
+          if (
+            object.size !== evidence.file_size ||
+            object.contentType !== evidence.content_type ||
+            object.sha256 !== evidence.file_sha256.trim()
+          ) {
+            throw new Error("EvidenceStorageIntegrity");
+          }
+          return { ...evidence, file_content_base64: object.bytes.toString("base64") };
+        }),
+      );
+    } catch (error) {
+      const code =
+        error && typeof error === "object" && "code" in error && typeof error.code === "string"
+          ? error.code.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 80)
+          : "EvidenceStorageUnavailable";
+      request.log.error({ errorCode: code }, "Account export evidence retrieval failed");
+      return reply.code(503).send({ error: "Account export is temporarily unavailable." });
+    }
     reply
       .header("content-type", "application/json; charset=utf-8")
       .header("content-disposition", 'attachment; filename="enough-account-export.json"');
@@ -1161,7 +1206,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       policyOverrides: policyOverrides.rows,
       growthTasks: growthTasks.rows,
       growthTaskCompletions: growthTaskCompletions.rows,
-      taskEvidenceItems: taskEvidenceItems.rows,
+      taskEvidenceItems: exportedTaskEvidenceItems,
       integrationAccounts: integrationAccounts.rows,
       integrationEvents: integrationEvents.rows,
       integrationSyncRuns: integrationSyncRuns.rows,

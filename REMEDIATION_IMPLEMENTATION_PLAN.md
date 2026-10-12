@@ -1,6 +1,6 @@
 # Remediation Implementation Plan
 
-Last consolidated: 2026-10-12 (Phase 10 checkpointed at `6a6110205276b839534427a05b60f4c1044a3c0e`; Phase 11 ACTIVE, P11-1–P11-3 PASS, P11-4–P11-5 BLOCKED)
+Last consolidated: 2026-10-13 (Phase 10 checkpointed at `6a6110205276b839534427a05b60f4c1044a3c0e`; Phase 11 ACTIVE, P11-1–P11-3 PASS, P11-4–P11-5 BLOCKED; Phase 12 COMPLETE; Phase 13 COMPLETE)
 Source of truth for implementation order: this file. The historical scope remains in `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md`; historical implementation detail and evidence remain in `IMPLEMENTATION_HANDOFF.md`.
 
 ## Objective and current decision 
@@ -263,11 +263,15 @@ production is NO-GO.
 
 **Critical**
 
-- [ ] Apply migrations `0002`–`0010` in order.
-- [ ] Exercise private upload/retrieval, file types/quotas, ownership, rejection/retry, review idempotency, verified rewards, wallet balance, export, and deletion.
-- [ ] Verify evidence/task/credit pages and unauthorized/download-denied behavior.
-- [ ] Verify the agreed evidence model: visibly labelled owner self-review for voluntary accountability; automatic rewards only from separately authenticated provider provenance and tested idempotent verification rules. Assess malware scanning for uploaded files before public uploads.
-- [ ] Implement the agreed private object-storage target for evidence bytes, keeping ownership/checksums/lifecycle metadata in PostgreSQL. Migrate existing BYTEA files with checksum, export/delete, private retrieval, orphan cleanup and joint metadata/object restore tests.
+- [x] Apply the isolated Phase 13 migration chain through `0019`, migrate a seeded legacy BYTEA file after checksum verification, and confirm migration precheck finds no pending migrations.
+- [x] Exercise S3 upload, screenshot, private retrieval, ownership isolation, URL/note/self-report/integration references, integrity, duplicates/retries, failure recovery, evidence/account deletion, bounded orphan cleanup, export, paired restore, atomic reward rollback/retry, and exactly-once credit creation in eight PostgreSQL/API/storage cases. See `PHASE_13_ACCEPTANCE.md`.
+- [x] Verify the evidence, task, and credit pages return HTTP 200; exercise unauthorized and cross-account evidence/download rejection through the web API proxy.
+- [x] Verify the trust boundary: owner review is labelled as self-verification, user-submitted integration references remain pending, and no automatic provider reward is claimed in Phase 13. Uploads remain authenticated/private; the local S3-compatible fixture denies unsigned access.
+- [x] Implement the private object-storage target for evidence bytes, keeping ownership/checksums/lifecycle metadata in PostgreSQL. Verify checksum-protected BYTEA migration, export/delete, private retrieval, orphan cleanup, and joint metadata/object restore.
+- [x] Complete one consolidated browser acceptance session after final automated checks passed; user reported PASS with no failures. Upload and screenshot privacy/retrieval/deletion, owner self-verification, and exactly one +5 Build Credit reward were confirmed. The manual fixture uses `/growth-tasks` and `/growth-tasks/:id/complete`; its earlier `/tasks` route usage was a fixture setup defect and was corrected.
+- [ ] Close the Phase 20/27 High malware-scanning/moderation risk before enabling public or unauthenticated uploads; no scanner is claimed in Phase 13.
+
+**Status: COMPLETE.** Isolated migrations/API/runtime/storage acceptance, legacy BYTEA transfer, paired metadata/object restore, default tests, typecheck, format, lint, diff checks, and the consolidated browser session passed. The canonical exit criterion is satisfied. Malware scanning remains unimplemented; keep uploads private/authenticated and close the High Phase 20/27 decision before any public upload surface. Production object-storage backup and restore obligations remain in Phase 25. Production remains NO-GO with all 18 dependency-security findings open.
 
 ### Phase 14 — Integrations
 

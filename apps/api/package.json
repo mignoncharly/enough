@@ -8,6 +8,7 @@
     "@enough/cache": "workspace:*",
     "@enough/config": "workspace:*",
     "@enough/db": "workspace:*",
+    "@enough/evidence-storage": "workspace:*",
     "@enough/queue": "workspace:*",
     "@enough/shared": "workspace:*",
     "fastify": "^5.6.1",
@@ -16,6 +17,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "s3rver": "^3.7.1",
     "typescript": "^5.9.2"
   },
   "scripts": {
