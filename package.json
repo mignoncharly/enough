@@ -55,6 +55,10 @@
     "test:credits:serve": "node scripts/phase2-runtime.mjs serve --phase8",
     "test:web:integration": "node scripts/phase2-runtime.mjs test --phase9",
     "test:web:serve": "node scripts/phase2-runtime.mjs serve --phase9",
+    "test:tasks:integration": "node scripts/phase2-runtime.mjs test --phase12",
+    "test:tasks:prepare": "node scripts/phase2-runtime.mjs prepare --phase12",
+    "test:tasks:serve": "node scripts/phase2-runtime.mjs serve --phase12",
+    "test:tasks:clean": "node scripts/phase12-clean.mjs",
     "db:phase5:migration-check": "node scripts/phase5-migration-check.mjs"
   },
   "devDependencies": {

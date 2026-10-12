@@ -253,9 +253,11 @@ production is NO-GO.
 
 **High**
 
-- [ ] Apply migrations `0002`–`0009` in order.
-- [ ] Exercise stage templates, custom tasks, ownership, cancellation, completion retries, recurrence, and credit-ledger interactions against PostgreSQL.
-- [ ] Verify task pages/API on mobile and keyboard, empty/error states, export, deletion, and reward history.
+**Status: COMPLETE — 2026-10-12.** Existing task functionality passed canonical scope review, isolated migrations through `0017`, five PostgreSQL-backed API cases, API/worker/web readiness, workspace typecheck and default tests, and the consolidated browser acceptance. No Phase 12 blockers remain. Phase 11 remains ACTIVE with P11-1–P11-3 PASS and P11-4/P11-5 BLOCKED. All 18 dependency-security findings remain open; production launch remains NO-GO. See `PHASE_12_ACCEPTANCE.md`.
+
+- [x] Apply migrations `0002`–`0009` in order; isolated PostgreSQL applied the complete ordered chain through `0017` and migration precheck found no pending migrations.
+- [x] Exercise stage templates, custom tasks, ownership, cancellation, completion retries, recurrence, evidence-gated credit rewards, export, and account deletion against PostgreSQL (five integration cases passed).
+- [x] Complete one consolidated task-page browser session for stage recommendations, keyboard reachability, offline error recovery, recurring custom task metadata, narrow-screen usability, completion/evidence/history state, next occurrence, and cancellation; user reported PASS with no failures. See `PHASE_12_ACCEPTANCE.md`.
 
 ### Phase 13 — Evidence System
 

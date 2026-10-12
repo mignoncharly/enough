@@ -305,7 +305,7 @@ configuration access, dependency upgrade, or unrelated refactor.
 - `apps/web/app/tasks/page.tsx` and `apps/web/app/workspace-data.ts`: stage recommendation templates, custom task configuration, priority/signal/time/reward settings, due dates, recurring tasks, completion/cancellation, and task history.
 - `packages/auth/src/routes.ts`: account export now includes growth tasks and completion records. Account and product deletion cascade through task data.
 
-The task catalog is stage-specific and seeded from the current product-growth recommendations. Completing a recurring task creates the next occurrence due after its recurrence interval. Since Phase 13, new reward issuance waits for an evidence decision; legacy Phase 12 rewards already in the ledger remain marked `SELF_REPORTED` and are not issued again. Migration, browser, database, and reward behavior have not been accepted at runtime. No tests or typechecks were run during the Phase 12 implementation turn.
+The task catalog is stage-specific and seeded from the current product-growth recommendations. Completing a recurring task creates the next occurrence due after its recurrence interval. Since Phase 13, new reward issuance waits for an evidence decision; legacy Phase 12 rewards already in the ledger remain marked `SELF_REPORTED` and are not issued again. See `PHASE_12_ACCEPTANCE.md`: fresh migrations, five PostgreSQL-backed API cases, runtime readiness, and consolidated browser acceptance passed; Phase 12 is COMPLETE.
 
 ## Phase 12 acceptance checklist
 
@@ -313,10 +313,11 @@ The task catalog is stage-specific and seeded from the current product-growth re
 - [x] Add recurring task series that generate the next due occurrence when the current occurrence is completed.
 - [x] Add configured reward amounts and ledger integration; Phase 13 now gates new grants on manual evidence verification.
 - [x] Add authenticated task APIs and workspace UI; apply ownership checks, CSRF protection on writes, rate limits, audit events, and account export coverage.
-- [ ] Apply migrations `0002_authentication.sql` through `0009_growth_task_engine.sql` in order.
-- [ ] Exercise stage template filtering, custom task creation, ownership isolation, cancellation, completion retries, recurrence generation, and credit ledger updates against PostgreSQL.
-- [ ] Confirm the task page and API work after migration, including mobile/keyboard use, empty/error states, credit history, and account export/deletion.
-- [ ] Review implementation and complete requested quality checks before marking Phase 12 complete. No tests or typechecks were run during this implementation turn.
+- [x] Apply migrations `0002_authentication.sql` through `0009_growth_task_engine.sql` in order. The isolated fresh fixture applied the full ordered chain through `0017` and migration precheck found no pending migrations.
+- [x] Exercise stage template filtering, custom task creation, ownership isolation, cancellation, completion retries, recurrence generation, reward gating, export, and account deletion against PostgreSQL.
+- [x] Verify API proxy and task-page HTTP readiness; export/deletion and evidence-gated reward history are covered by the API integration suite.
+- [x] Complete the consolidated browser session for stage recommendations, keyboard reachability, offline error recovery, recurring custom task metadata, approximately 390px usability, completion/history/evidence state, next occurrence, and cancellation history. The user reported PASS with no manual failures; see `PHASE_12_ACCEPTANCE.md`.
+- [x] Review the implementation and complete automated checks. Phase 12 canonical scope and exit criteria are satisfied; mark Phase 12 COMPLETE. Preserve Phase 11 as ACTIVE with P11-1–P11-3 PASS and P11-4/P11-5 BLOCKED.
 
 ## Phase 13 implementation map
 
