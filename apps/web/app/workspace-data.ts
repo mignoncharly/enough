@@ -997,6 +997,7 @@ export function createStripeIntegration(body: {
   productId: string;
   displayName: string;
   restrictedApiKey: string;
+  accountId?: string;
   webhookSigningSecret: string;
 }): Promise<{
   integrationId: string;

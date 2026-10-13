@@ -524,8 +524,7 @@ try {
     )}\n`,
     { mode: 0o600, flag: "wx" },
   );
-  console.info(`Disposable Phase 14 fixture login: ${email}`);
-  console.info(`Disposable password: ${password}`);
+  console.info("Disposable Phase 14 account and acceptance fixture are ready for local use.");
   console.info(
     "Provider states and evidence are labeled [TEST FIXTURE]; no provider account was connected.",
   );

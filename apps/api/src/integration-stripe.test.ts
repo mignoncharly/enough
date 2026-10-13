@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { describe, expect, it, vi } from "vitest";
 import {
   validateStripeRestrictedKey,
@@ -15,6 +16,7 @@ function payload(type: string, object: Record<string, unknown>, id = "evt_phase1
     id,
     type,
     created: Math.floor(now.getTime() / 1000) - 15,
+    livemode: false,
     data: { object },
   };
 }
@@ -36,27 +38,92 @@ function response(value: unknown, status = 200): Response {
 }
 
 describe("Stripe customer-revenue protocol", () => {
-  it("validates only restricted keys against the account API and never returns provider details", async () => {
-    const fetcher = vi.fn<typeof fetch>(async (_url, init) => {
-      expect(new Headers(init?.headers).get("authorization")).toMatch(
-        /^Bearer rk(?:cs)?_test_fixturekey$/,
-      );
+  it("requires Events read and supports anonymous sandbox credentials without weakening standard key checks", async () => {
+    const seen: string[] = [];
+    const fetcher = vi.fn<typeof fetch>(async (url, init) => {
+      const requestUrl = String(url);
+      seen.push(requestUrl);
       expect(init?.redirect).toBe("error");
-      return response({ id: "acct_phase14fixture" });
+      expect(new Headers(init?.headers).get("authorization")).toMatch(/^Bearer rk/);
+      if (requestUrl === "https://api.stripe.com/v1/account")
+        return response({ id: "acct_phase14fixture" });
+      if (requestUrl === "https://api.stripe.com/v1/events?limit=1")
+        return response({ object: "list", data: [] });
+      throw new Error("Unexpected Stripe capability probe.");
     });
     await expect(
       validateStripeRestrictedKey({ apiKey: "rk_test_fixturekey", fetcher }),
     ).resolves.toBe("acct_phase14fixture");
     await expect(
-      validateStripeRestrictedKey({ apiKey: "rkcs_test_fixturekey", fetcher }),
+      validateStripeRestrictedKey({ apiKey: "rk_live_fixturekey", fetcher }),
     ).resolves.toBe("acct_phase14fixture");
+    expect(seen).toEqual([
+      "https://api.stripe.com/v1/account",
+      "https://api.stripe.com/v1/events?limit=1",
+      "https://api.stripe.com/v1/account",
+      "https://api.stripe.com/v1/events?limit=1",
+    ]);
+
+    const sandboxCalls: string[] = [];
+    const sandboxFetcher = vi.fn<typeof fetch>(async (url, init) => {
+      sandboxCalls.push(String(url));
+      expect(init?.redirect).toBe("error");
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer rkcs_test_fixturekey");
+      if (String(url) === "https://api.stripe.com/v1/account") return response({}, 403);
+      return response({ object: "list", data: [] });
+    });
     await expect(
-      validateStripeRestrictedKey({ apiKey: "sk_test_secret", fetcher }),
+      validateStripeRestrictedKey({
+        apiKey: "rkcs_test_fixturekey",
+        accountId: "acct_phase14sandbox",
+        fetcher: sandboxFetcher,
+      }),
+    ).resolves.toBe("acct_phase14sandbox");
+    expect(sandboxCalls).toEqual(["https://api.stripe.com/v1/events?limit=1"]);
+
+    await expect(
+      validateStripeRestrictedKey({
+        apiKey: "rkcs_test_fixturekey",
+        fetcher: sandboxFetcher,
+      }),
     ).rejects.toMatchObject({ code: "INVALID_STRIPE_CREDENTIAL" });
     await expect(
       validateStripeRestrictedKey({
-        apiKey: "rk_test_anotherfixture",
-        fetcher: async () => response({ error: { message: "private provider response" } }, 401),
+        apiKey: "rkcs_test_fixturekey",
+        accountId: "acct_bad-id",
+        fetcher: sandboxFetcher,
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_STRIPE_CREDENTIAL" });
+    await expect(
+      validateStripeRestrictedKey({
+        apiKey: "rk_test_fixturekey",
+        accountId: "acct_different",
+        fetcher,
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_STRIPE_CREDENTIAL" });
+    await expect(
+      validateStripeRestrictedKey({ apiKey: "rkcs_live_fixturekey", accountId: "acct_phase14" }),
+    ).rejects.toMatchObject({ code: "INVALID_STRIPE_CREDENTIAL" });
+    await expect(
+      validateStripeRestrictedKey({ apiKey: "sk_test_secret", fetcher }),
+    ).rejects.toMatchObject({ code: "INVALID_STRIPE_CREDENTIAL" });
+  });
+
+  it("rejects a standard key that can read Account but cannot read Events and hides authentication details", async () => {
+    const fetcher = vi.fn<typeof fetch>(async (url) => {
+      if (String(url) === "https://api.stripe.com/v1/account")
+        return response({ id: "acct_phase14fixture" });
+      return response({ error: { message: "sensitive permission detail" } }, 403);
+    });
+    await expect(
+      validateStripeRestrictedKey({ apiKey: "rk_test_eventsdenied", fetcher }),
+    ).rejects.toMatchObject({ code: "PROVIDER_AUTHENTICATION_FAILED" });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+
+    await expect(
+      validateStripeRestrictedKey({
+        apiKey: "rk_test_expired",
+        fetcher: async () => response({ error: { message: "sensitive credential detail" } }, 401),
       }),
     ).rejects.toMatchObject({ code: "PROVIDER_AUTHENTICATION_FAILED" });
   });
@@ -109,6 +176,7 @@ describe("Stripe customer-revenue protocol", () => {
       signingSecret: secret,
       restrictedApiKey: "rk_test_readonlykey",
       expectedAccountId: "acct_phase14fixture",
+      expectedLivemode: false,
       now,
       fetcher,
     });
@@ -177,6 +245,7 @@ describe("Stripe customer-revenue protocol", () => {
         signingSecret: secret,
         restrictedApiKey: "rk_test_readonlykey",
         expectedAccountId: "acct_phase14fixture",
+        expectedLivemode: false,
         now,
         fetcher: async (_url, init) => {
           expect(init?.redirect).toBe("error");
@@ -207,6 +276,7 @@ describe("Stripe customer-revenue protocol", () => {
         signingSecret: secret,
         restrictedApiKey: "rk_test_readonlykey",
         expectedAccountId: "acct_phase14fixture",
+        expectedLivemode: false,
         now,
         fetcher,
       }),
@@ -221,6 +291,7 @@ describe("Stripe customer-revenue protocol", () => {
         signingSecret: secret,
         restrictedApiKey: "rk_test_readonlykey",
         expectedAccountId: "acct_phase14fixture",
+        expectedLivemode: false,
         now,
         fetcher,
       }),
@@ -242,9 +313,102 @@ describe("Stripe customer-revenue protocol", () => {
         signingSecret: secret,
         restrictedApiKey: "rk_test_readonlykey",
         expectedAccountId: "acct_phase14fixture",
+        expectedLivemode: false,
         now,
         fetcher: async () => new Response(fetchEvent),
       }),
     ).rejects.toMatchObject({ code: "STRIPE_EVENT_MISMATCH" });
+
+    const reference = payload("payment_intent.succeeded", {
+      id: "pi_phase14confirmed",
+      amount_received: 2500,
+      currency: "usd",
+      metadata: { enough_task_completion_id: completionId },
+    });
+    const referenceBody = Buffer.from(JSON.stringify(reference));
+    const mismatches: Array<[string, Record<string, unknown>]> = [
+      ["event ID", { ...reference, id: "evt_different" }],
+      ["event type", { ...reference, type: "invoice.paid" }],
+      ["creation time", { ...reference, created: reference.created + 1 }],
+      [
+        "object identity",
+        { ...reference, data: { object: { ...reference.data.object, id: "pi_other" } } },
+      ],
+      ["live/test mode", { ...reference, livemode: true }],
+      [
+        "account context",
+        { ...reference, account: "acct_other", data: { object: reference.data.object } },
+      ],
+      [
+        "positive amount",
+        {
+          ...reference,
+          data: { object: { ...reference.data.object, amount_received: 1 } },
+        },
+      ],
+      [
+        "completion metadata",
+        {
+          ...reference,
+          data: {
+            object: {
+              ...reference.data.object,
+              metadata: { enough_task_completion_id: "e7b46bd6-9cb1-4ddc-8c08-59e88f493661" },
+            },
+          },
+        },
+      ],
+    ];
+    for (const mismatch of mismatches.map(([, value]) => value)) {
+      await expect(
+        verifyStripeWebhook({
+          rawBody: referenceBody,
+          signatureHeader: signed(referenceBody),
+          signingSecret: secret,
+          restrictedApiKey: "rk_test_readonlykey",
+          expectedAccountId: "acct_phase14fixture",
+          expectedLivemode: false,
+          now,
+          fetcher: async () => response(mismatch),
+        }),
+      ).rejects.toMatchObject({ code: "STRIPE_EVENT_MISMATCH" });
+    }
+
+    await expect(
+      verifyStripeWebhook({
+        rawBody: referenceBody,
+        signatureHeader: signed(referenceBody),
+        signingSecret: secret,
+        restrictedApiKey: "rk_test_readonlykey",
+        expectedAccountId: "acct_phase14fixture",
+        expectedLivemode: false,
+        now,
+        fetcher: async () => response({ error: { message: "private event denial" } }, 403),
+      }),
+    ).rejects.toMatchObject({ code: "STRIPE_EVENT_NOT_CONFIRMED" });
+
+    await expect(
+      verifyStripeWebhook({
+        rawBody: referenceBody,
+        signatureHeader: signed(referenceBody),
+        signingSecret: secret,
+        restrictedApiKey: "rk_test_readonlykey",
+        expectedAccountId: "acct_phase14fixture",
+        expectedLivemode: true,
+        now,
+        fetcher: async () => new Response(referenceBody),
+      }),
+    ).rejects.toMatchObject({ code: "STRIPE_EVENT_MISMATCH" });
+  });
+
+  it("keeps Phase 14 fixture credentials out of console output", async () => {
+    const fixtureSource = await readFile(
+      new URL("../../../scripts/phase14-manual-account.mjs", import.meta.url),
+      "utf8",
+    );
+    const consoleLines = fixtureSource
+      .split(/\r?\n/)
+      .filter((line) => /\bconsole\.(?:info|log|warn|error)\(/.test(line));
+    expect(consoleLines.join("\n")).not.toMatch(/password|session\.token|csrfToken|cookie/i);
   });
 });

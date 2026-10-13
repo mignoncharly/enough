@@ -103,7 +103,12 @@ const stripeConnectSchema = z
       .trim()
       .min(12)
       .max(255)
-      .regex(/^rk(?:cs)?_(?:test|live)_[A-Za-z0-9]+$/),
+      .regex(/^(?:rkcs_test_|rk_(?:test|live)_)[A-Za-z0-9]+$/),
+    accountId: z
+      .string()
+      .trim()
+      .regex(/^acct_[A-Za-z0-9]+$/)
+      .optional(),
     webhookSigningSecret: z
       .string()
       .trim()
@@ -835,6 +840,7 @@ export async function registerProviderIntegrationRoutes(
     try {
       const providerAccountId = await validateStripeRestrictedKey({
         apiKey: body.restrictedApiKey,
+        ...(body.accountId ? { accountId: body.accountId } : {}),
         fetcher: options.fetcher,
       });
       const id = await createProviderConnection({
@@ -1218,7 +1224,11 @@ export async function registerProviderIntegrationRoutes(
         const credential = JSON.parse(
           decryptIntegrationSecret(providerConfig.credential_ciphertext),
         ) as { webhookSigningSecret?: unknown };
-        if (typeof credential.webhookSigningSecret !== "string")
+        const mode = providerConfig.configuration.mode;
+        if (
+          typeof credential.webhookSigningSecret !== "string" ||
+          (mode !== "test" && mode !== "live")
+        )
           throw new ProviderApiError("STRIPE_CONFIGURATION_MISSING");
         const event = await verifyStripeWebhook({
           rawBody: body,
@@ -1226,6 +1236,7 @@ export async function registerProviderIntegrationRoutes(
           signingSecret: credential.webhookSigningSecret,
           restrictedApiKey: accessToken,
           expectedAccountId: providerAccountId,
+          expectedLivemode: mode === "live",
           fetcher: options.fetcher,
         });
         const eventClient = await pool.connect();

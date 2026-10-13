@@ -12,6 +12,7 @@ interface StripePayload {
   id: string;
   type: string;
   created: number;
+  livemode: boolean;
   account?: string;
   data: { object: Record<string, unknown> };
 }
@@ -75,6 +76,10 @@ function parseStripePayload(input: Buffer): StripePayload {
     typeof body.type !== "string" ||
     typeof body.created !== "number" ||
     !Number.isSafeInteger(body.created) ||
+    typeof body.livemode !== "boolean" ||
+    (body.account !== undefined &&
+      body.account !== null &&
+      (typeof body.account !== "string" || !/^acct_[A-Za-z0-9]+$/.test(body.account))) ||
     !eventObject
   )
     throw new ProviderApiError("INVALID_STRIPE_EVENT");
@@ -82,6 +87,7 @@ function parseStripePayload(input: Buffer): StripePayload {
     id: body.id,
     type: body.type,
     created: body.created,
+    livemode: body.livemode,
     ...(typeof body.account === "string" ? { account: body.account } : {}),
     data: { object: eventObject },
   };
@@ -157,25 +163,55 @@ function normalizedStripeEvent(event: StripePayload): VerifiedStripeEvent {
 
 export async function validateStripeRestrictedKey(input: {
   apiKey: string;
+  accountId?: string;
   fetcher?: typeof fetch;
 }): Promise<string> {
-  if (!/^rk(?:cs)?_(?:test|live)_[A-Za-z0-9]+$/.test(input.apiKey))
+  const anonymousSandboxKey = /^rkcs_test_[A-Za-z0-9]+$/.test(input.apiKey);
+  const ordinaryRestrictedKey = /^rk_(?:test|live)_[A-Za-z0-9]+$/.test(input.apiKey);
+  if (!anonymousSandboxKey && !ordinaryRestrictedKey)
     throw new ProviderApiError("INVALID_STRIPE_CREDENTIAL");
-  let response: Response;
-  try {
-    response = await (input.fetcher ?? fetch)("https://api.stripe.com/v1/account", {
-      headers: { authorization: `Bearer ${input.apiKey}` },
-      redirect: "error",
-      signal: AbortSignal.timeout(10_000),
-    });
-  } catch {
-    throw new ProviderApiError("PROVIDER_UNAVAILABLE");
+  if (input.accountId !== undefined && !/^acct_[A-Za-z0-9]+$/.test(input.accountId))
+    throw new ProviderApiError("INVALID_STRIPE_CREDENTIAL");
+  if (anonymousSandboxKey && !input.accountId)
+    throw new ProviderApiError("INVALID_STRIPE_CREDENTIAL");
+
+  const request = async (url: string): Promise<Response> => {
+    try {
+      return await (input.fetcher ?? fetch)(url, {
+        headers: { authorization: `Bearer ${input.apiKey}`, accept: "application/json" },
+        redirect: "error",
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch {
+      throw new ProviderApiError("PROVIDER_UNAVAILABLE");
+    }
+  };
+
+  let accountId = input.accountId;
+  if (!anonymousSandboxKey) {
+    const accountResponse = await request("https://api.stripe.com/v1/account");
+    if (!accountResponse.ok) throw new ProviderApiError("PROVIDER_AUTHENTICATION_FAILED");
+    const accountBody = (await accountResponse.json().catch(() => null)) as Record<
+      string,
+      unknown
+    > | null;
+    if (typeof accountBody?.id !== "string" || !/^acct_[A-Za-z0-9]+$/.test(accountBody.id))
+      throw new ProviderApiError("INVALID_PROVIDER_RESPONSE");
+    if (accountId && accountId !== accountBody.id)
+      throw new ProviderApiError("INVALID_STRIPE_CREDENTIAL");
+    accountId = accountBody.id;
   }
-  if (!response.ok) throw new ProviderApiError("PROVIDER_AUTHENTICATION_FAILED");
-  const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
-  if (typeof body?.id !== "string" || !/^acct_[A-Za-z0-9]+$/.test(body.id))
+
+  const eventsResponse = await request("https://api.stripe.com/v1/events?limit=1");
+  if (!eventsResponse.ok) throw new ProviderApiError("PROVIDER_AUTHENTICATION_FAILED");
+  const eventsBody = (await eventsResponse.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
+  if (eventsBody?.object !== "list" || !Array.isArray(eventsBody.data))
     throw new ProviderApiError("INVALID_PROVIDER_RESPONSE");
-  return body.id;
+  if (!accountId) throw new ProviderApiError("INVALID_PROVIDER_RESPONSE");
+  return accountId;
 }
 
 export async function verifyStripeWebhook(input: {
@@ -184,6 +220,7 @@ export async function verifyStripeWebhook(input: {
   signingSecret: string;
   restrictedApiKey: string;
   expectedAccountId: string;
+  expectedLivemode: boolean;
   now?: Date;
   fetcher?: typeof fetch;
 }): Promise<VerifiedStripeEvent> {
@@ -199,6 +236,8 @@ export async function verifyStripeWebhook(input: {
 
   const received = parseStripePayload(input.rawBody);
   if (!eventTypeMap[received.type]) throw new ProviderApiError("UNSUPPORTED_STRIPE_EVENT");
+  if (!/^acct_[A-Za-z0-9]+$/.test(input.expectedAccountId))
+    throw new ProviderApiError("STRIPE_CONFIGURATION_MISSING");
   let response: Response;
   try {
     response = await (input.fetcher ?? fetch)(
@@ -214,13 +253,31 @@ export async function verifyStripeWebhook(input: {
   }
   if (!response.ok) throw new ProviderApiError("STRIPE_EVENT_NOT_CONFIRMED");
   const providerPayload = parseStripePayload(Buffer.from(await response.text()));
+  const receivedObjectId = meaningfulObjectId(received.data.object);
+  const providerObjectId = meaningfulObjectId(providerPayload.data.object);
   if (
     providerPayload.id !== received.id ||
     providerPayload.type !== received.type ||
     providerPayload.created !== received.created ||
-    meaningfulObjectId(providerPayload.data.object) !== meaningfulObjectId(received.data.object) ||
-    (providerPayload.account && providerPayload.account !== input.expectedAccountId)
+    providerObjectId === null ||
+    providerObjectId !== receivedObjectId ||
+    providerPayload.livemode !== received.livemode ||
+    providerPayload.livemode !== input.expectedLivemode ||
+    (providerPayload.account ?? null) !== (received.account ?? null) ||
+    (providerPayload.account !== undefined && providerPayload.account !== input.expectedAccountId)
   )
     throw new ProviderApiError("STRIPE_EVENT_MISMATCH");
-  return normalizedStripeEvent(providerPayload);
+  const signedNormalized = normalizedStripeEvent(received);
+  const providerNormalized = normalizedStripeEvent(providerPayload);
+  if (
+    signedNormalized.eventType !== providerNormalized.eventType ||
+    signedNormalized.occurredAt !== providerNormalized.occurredAt ||
+    signedNormalized.completionId !== providerNormalized.completionId ||
+    signedNormalized.amountMinor !== providerNormalized.amountMinor ||
+    signedNormalized.currency !== providerNormalized.currency ||
+    signedNormalized.automaticVerificationEligible !==
+      providerNormalized.automaticVerificationEligible
+  )
+    throw new ProviderApiError("STRIPE_EVENT_MISMATCH");
+  return providerNormalized;
 }

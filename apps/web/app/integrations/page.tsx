@@ -117,6 +117,7 @@ export default function IntegrationsPage() {
   const [plausibleSiteId, setPlausibleSiteId] = useState("");
   const [eventMapText, setEventMapText] = useState('{"signup":"analytics.user_signup"}');
   const [stripeRestrictedKey, setStripeRestrictedKey] = useState("");
+  const [stripeAccountId, setStripeAccountId] = useState("");
   const [stripeWebhookSecret, setStripeWebhookSecret] = useState("");
   const [selectedCompletions, setSelectedCompletions] = useState<Record<string, string>>({});
 
@@ -268,9 +269,11 @@ export default function IntegrationsPage() {
           productId,
           displayName: vendorName.trim(),
           restrictedApiKey: stripeRestrictedKey.trim(),
+          ...(stripeAccountId.trim() ? { accountId: stripeAccountId.trim() } : {}),
           webhookSigningSecret: stripeWebhookSecret.trim(),
         });
         setStripeRestrictedKey("");
+        setStripeAccountId("");
         setStripeWebhookSecret("");
         setNotice(
           `Stripe connected. Add ${result.webhookUrl} as a webhook endpoint and subscribe to payment_intent.succeeded, checkout.session.completed, customer.subscription.created, invoice.paid, customer.subscription.deleted, charge.refunded, and refund.created. Automatic task credit verification applies only to confirmed payment_intent.succeeded events with a matching task completion ID.`,
@@ -589,7 +592,7 @@ export default function IntegrationsPage() {
                 {vendorProvider === "STRIPE" ? (
                   <>
                     <label>
-                      Stripe restricted API key (Account: Read and Events: Read)
+                      Stripe restricted API key (Events: Read; Account: Read for standard rk_ keys)
                       <input
                         type="password"
                         autoComplete="new-password"
@@ -598,8 +601,26 @@ export default function IntegrationsPage() {
                         required
                         minLength={12}
                         maxLength={255}
-                        placeholder="rk_test_…"
+                        placeholder="rk_test_… or rkcs_test_…"
                       />
+                    </label>
+                    <label>
+                      Stripe account ID (required for rkcs_test_ sandbox keys)
+                      <input
+                        type="text"
+                        autoComplete="off"
+                        value={stripeAccountId}
+                        onChange={(event) => setStripeAccountId(event.target.value)}
+                        required={stripeRestrictedKey.trim().startsWith("rkcs_test_")}
+                        maxLength={255}
+                        placeholder="acct_…"
+                        aria-describedby="stripe-account-id-help"
+                      />
+                      <span id="stripe-account-id-help" className="evidence-help">
+                        For an anonymous Stripe sandbox, use the acct_ ID returned when the sandbox
+                        is created. This ID is not a secret. Enough checks Events: Read access
+                        separately and confirms each exact event through Stripe.
+                      </span>
                     </label>
                     <label>
                       Stripe webhook signing secret
@@ -615,8 +636,9 @@ export default function IntegrationsPage() {
                       />
                     </label>
                     <p className="evidence-help">
-                      Use Stripe test mode during acceptance. This connection is separate from
-                      Enough subscription billing.
+                      Use Stripe test mode during acceptance. Ordinary rk_test_ and rk_live_ keys
+                      are still validated against their Stripe account. This customer-revenue
+                      connection is separate from Enough subscription billing.
                     </p>
                     <StripeEventRequirements />
                   </>

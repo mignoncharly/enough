@@ -716,6 +716,7 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
         id: "evt_phase14fixturepayment",
         type: "payment_intent.succeeded",
         created: Math.floor(Date.now() / 1000) - 10,
+        livemode: false,
         data: {
           object: {
             id: "pi_phase14fixturepayment",
@@ -726,15 +727,27 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
         },
       };
       const body = Buffer.from(JSON.stringify(event));
+      let accountReadCalls = 0;
+      let eventReadCalls = 0;
       const fetcher: typeof fetch = async (value, init) => {
         const url = String(value);
-        if (url === "https://api.stripe.com/v1/account") return json({ id: "acct_phase14fixture" });
+        if (url === "https://api.stripe.com/v1/account") {
+          accountReadCalls += 1;
+          return json({ error: { message: "sandbox account endpoint unavailable" } }, 403);
+        }
+        if (url === "https://api.stripe.com/v1/events?limit=1") {
+          expect(init?.redirect).toBe("error");
+          return json({ object: "list", data: [] });
+        }
         if (url === `https://api.stripe.com/v1/events/${event.id}`) {
+          eventReadCalls += 1;
           expect(new Headers(init?.headers).get("authorization")).toBe(
             "Bearer rkcs_test_fixturekey",
           );
           return new Response(body);
         }
+        if (url === "https://api.stripe.com/v1/events/evt_phase14unavailable")
+          return json({ error: { message: "private event read denied" } }, 403);
         throw new Error(`Unexpected Stripe fixture request: ${url}`);
       };
       activeFetcher = fetcher;
@@ -746,10 +759,12 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
           productId,
           displayName: "Stripe test account",
           restrictedApiKey: "rkcs_test_fixturekey",
+          accountId: "acct_phase14fixture",
           webhookSigningSecret: webhookSecret,
         },
       });
       expect(connected.statusCode, connected.body).toBe(201);
+      expect(accountReadCalls).toBe(0);
       const integrationId = (connected.json() as { integrationId: string }).integrationId;
 
       const first = await providerApp.inject({
@@ -763,6 +778,7 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
       });
       expect(first.statusCode, first.body).toBe(202);
       expect(first.json()).toMatchObject({ duplicate: false, rewardIssued: true });
+      expect(eventReadCalls).toBe(1);
       const duplicate = await providerApp.inject({
         method: "POST",
         url: `/v1/integrations/stripe/${integrationId}/events`,
@@ -774,6 +790,27 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
       });
       expect(duplicate.statusCode, duplicate.body).toBe(200);
       expect(duplicate.json()).toMatchObject({ duplicate: true, rewardIssued: false });
+      expect(eventReadCalls).toBe(2);
+
+      const unconfirmedEvent = {
+        ...event,
+        id: "evt_phase14unavailable",
+        data: { object: { ...event.data.object, id: "pi_phase14unavailable" } },
+      };
+      const unconfirmedBody = Buffer.from(JSON.stringify(unconfirmedEvent));
+      const unconfirmed = await providerApp.inject({
+        method: "POST",
+        url: `/v1/integrations/stripe/${integrationId}/events`,
+        headers: {
+          "content-type": "application/json",
+          "stripe-signature": stripeSignature(unconfirmedBody, webhookSecret),
+        },
+        payload: unconfirmedBody,
+      });
+      expect(unconfirmed.statusCode).toBe(422);
+      expect(unconfirmed.body).not.toContain("private event read denied");
+      expect(unconfirmed.body).not.toContain("rkcs_test_fixturekey");
+      expect(unconfirmed.body).not.toContain(webhookSecret);
 
       const stored = await pool.query<{
         provider_origin_verified: boolean;
@@ -802,8 +839,18 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
         completion_status: "AUTOMATICALLY_VERIFIED",
         reward_count: "1",
       });
-      const tokenState = await pool.query<{ token: Buffer; secret: Buffer }>(
-        `SELECT token.access_token_ciphertext AS token, config.credential_ciphertext AS secret
+      const eventCount = await pool.query<{ count: number }>(
+        "SELECT count(*)::int AS count FROM enough.integration_events WHERE integration_account_id = $1",
+        [integrationId],
+      );
+      expect(eventCount.rows[0].count).toBe(1);
+      const tokenState = await pool.query<{
+        token: Buffer;
+        secret: Buffer;
+        account_id: Buffer;
+      }>(
+        `SELECT token.access_token_ciphertext AS token, config.credential_ciphertext AS secret,
+                config.provider_account_ciphertext AS account_id
          FROM enough.integration_tokens token
          JOIN enough.integration_provider_configs config ON config.integration_account_id = token.integration_account_id
          WHERE token.integration_account_id = $1`,
@@ -811,6 +858,7 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
       );
       expect(decryptIntegrationSecret(tokenState.rows[0].token)).toBe("rkcs_test_fixturekey");
       expect(decryptIntegrationSecret(tokenState.rows[0].secret)).toContain(webhookSecret);
+      expect(decryptIntegrationSecret(tokenState.rows[0].account_id)).toBe("acct_phase14fixture");
     }, 60_000);
   },
 );
