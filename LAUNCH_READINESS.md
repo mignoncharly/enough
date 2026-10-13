@@ -4,7 +4,7 @@ Last assessed: 2026-10-12 (Phase 11 Windows acceptance evidence added; full laun
 
 ## Decision
 
-**NO-GO. Do not open the product to general users.** The required capabilities have not been accepted as one working production system. The project has no configured production host; migrations `0002` through `0015` have only been exercised in disposable development fixtures; Phase 26 production checks have not run; multiple critical user flows remain unverified; and required integrations or release artifacts are missing.
+**NO-GO. Do not open the product to general users.** The required capabilities have not been accepted as one working production system. The project has no configured production host; migrations `0002` through `0015` have only been exercised in disposable development fixtures; Phase 26 production checks have not run; multiple critical user flows remain unverified; required integrations or release artifacts are missing; and all 18 dependency-security findings remain open.
 
 This is a decision from the evidence recorded in this workspace, not a claim that the source implementation is absent. Source presence, unit tests, and successful bundle builds do not substitute for the launch gate's integrated runtime evidence.
 
@@ -20,14 +20,15 @@ This is a decision from the evidence recorded in this workspace, not a claim tha
 | Rules engine | Phase 7 COMPLETE: deterministic evaluator, migration/API ownership/version/history/override/export/deletion, shared-evaluator parity, isolated route/bundle checks, and P7-1–P7-5 user-reported browser review pass. Extension/desktop policy enforcement and production acceptance remain unaccepted. | Phase 7 accepted; launch not accepted |
 | Browser blocking | Chromium/Firefox extension source and store archives exist; browser installation, policy parity, offline behavior, and store publication are pending. | Not accepted |
 | Native desktop blocking | Windows P11-1–P11-3 passed manual acceptance, including signed offline policy, emergency bypass, and recovery. P11-4 browser-host registration is blocked by restrictions on browser-profile/protected-configuration changes. P11-5 signed updater/package and macOS/Linux runtime acceptance is blocked by unavailable credentials/environments. Production acceptance remains open. | Not accepted |
-| Growth tasks | Templates and task flows exist; migration, browser use, recurrence, and reward acceptance pending. | Not accepted |
-| Evidence | Private evidence and review flows exist; migration, privacy, deletion, content handling, and reward acceptance pending. Review is owner-controlled, not independent verification. | Not accepted |
-| Gmail | Provider-specific OAuth, sync, and signature adapter are not implemented. | Missing |
-| Outlook | Provider-specific OAuth, sync, and signature adapter are not implemented. | Missing |
-| Google Calendar | Provider-specific OAuth, sync, and signature adapter are not implemented. | Missing |
-| Microsoft Calendar | Provider-specific OAuth, sync, and signature adapter are not implemented. | Missing |
-| Stripe | Checkout, portal, and webhook source exist; test/live configuration, price IDs, feature mapping, migrations, and runtime acceptance remain pending. | Not accepted |
-| Generic webhook/API | Signed inbound event source exists; migration, external-client, replay, revocation, and runtime acceptance remain pending. It authenticates a workspace-controlled source, not a vendor. | Not accepted |
+| Growth tasks | Phase 12 COMPLETE: migration, PostgreSQL/API cases, runtime readiness, recurrence, rewards, and consolidated browser acceptance passed. | Phase 12 accepted; launch not accepted |
+| Evidence | Phase 13 COMPLETE: migrations, PostgreSQL/API/storage, privacy, deletion, reward idempotency, and consolidated browser acceptance passed. Review is owner-controlled, not independent verification. Production object-storage backup and restore remain open. | Phase 13 accepted; launch not accepted |
+| Gmail | Deterministic OAuth/provider tests and local setup/browser acceptance passed. Real OAuth round trip with a dedicated test configuration and user remains open. | External provider gate open |
+| Outlook | Deterministic OAuth/provider tests and local setup/browser acceptance passed. Real OAuth round trip with a dedicated test tenant and app remains open. | External provider gate open |
+| Google Calendar | Deterministic OAuth/calendar tests and local setup/browser acceptance passed. Dedicated real Google OAuth acceptance remains open. | External provider gate open |
+| Microsoft Calendar | Deterministic OAuth/calendar tests and local setup/browser acceptance passed. Dedicated real Microsoft OAuth acceptance remains open. | External provider gate open |
+| Stripe customer revenue | Deterministic signature/API/normalization tests and local setup/browser acceptance passed; exactly-once reward behavior passed. End-to-end webhook delivery with a working sandbox/test setup remains open. Enough subscription billing remains a separate unaccepted launch gate. | External provider gate open |
+| Analytics providers | Deterministic PostHog, Plausible, and GA4 adapter tests and local setup/browser acceptance passed. Dedicated test project/property credentials remain open for each provider. | External provider gates open |
+| Generic webhook/API | Migration, replay, revocation, PostgreSQL/API, and local browser acceptance passed. It authenticates a workspace-controlled source, not a vendor; linked evidence remains pending and grants no automatic reward. | Protocol/local UI accepted; vendor origin not claimed |
 | AI coach | Advisory API and local fallback exist; provider setup, consent, cost/usage behavior, and runtime acceptance remain pending. | Not accepted |
 | Reports | Report APIs and views exist; source data, database, browser, and correctness acceptance remain pending. | Not accepted |
 | Multi-device | Locking, ordering, and revocation protections exist in source; cross-device concurrency and convergence are unverified. | Not accepted |
@@ -46,7 +47,7 @@ This is a decision from the evidence recorded in this workspace, not a claim tha
 
 1. Configure and accept a production-like Ubuntu deployment using [the Phase 25 runbook](infra/README.md). Apply and verify reviewed migrations, TLS, service restart behavior, external monitoring, off-host backups, isolated restore, and reboot recovery.
 2. Complete [Phase 26 production verification](infra/production-verification.md) with redacted evidence for the required service and integration flows. No Phase 26 production scenario has run; the last read-only workspace probe found the relevant local ports closed.
-3. Implement and verify the four provider integrations listed as missing above, or formally revise the product contract before launch. A Generic webhook is not a substitute for vendor-authenticated Gmail, Outlook, or calendar sync.
+3. Complete the six dedicated real-provider gates listed in `PHASE_14_ACCEPTANCE.md`. The deterministic provider suites and local browser acceptance have passed. A Generic webhook is not a substitute for vendor-authenticated Gmail, Outlook, or calendar sync.
 4. Resolve Stripe pricing and entitlement mapping; configure test-mode credentials and verify signed, replay-safe webhook behavior before any live billing enablement.
 5. Complete database/browser/client runtime acceptance for Phases 2–22, including admin migration `0015`, privacy deletion/export, evidence review/rewards, multi-device behavior, offline enforcement, and emergency unlock.
 6. Configure the server-side policy signing key and the matching pinned desktop public key for release builds; produce and sign desktop packages, submit browser extensions, publish a reachable update feed, and verify installation and update on supported platforms. No signing or store credentials are configured here.

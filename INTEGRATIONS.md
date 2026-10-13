@@ -1,8 +1,16 @@
-# Signed Event API
+# Integrations
 
-Enough currently supports two inbound connection types: Generic webhook and Public Event API. Create either from **Workspace → Integrations**. Each connection has its own API key and signing secret; copy both when they are shown because the workspace does not show them again. Store the values in your server-side secret manager.
+Enough supports provider connections and two owner-controlled inbound sources: Generic webhook and Public Event API. Create connections from **Workspace → Integrations**. Generic webhook and Public Event API credentials are shown once; store them in your server-side secret manager.
 
-The API key is stored as a one-way hash. The signing secret is encrypted at rest. Disconnecting a connection revokes both credentials and removes its stored OAuth tokens.
+## Provider connections
+
+Google providers (Gmail, Google Calendar, and GA4) require `GOOGLE_INTEGRATION_CLIENT_ID` and `GOOGLE_INTEGRATION_CLIENT_SECRET`. Microsoft providers (Outlook and Microsoft Calendar) require `MICROSOFT_INTEGRATION_CLIENT_ID` and `MICROSOFT_INTEGRATION_CLIENT_SECRET`. Register the matching callback URLs `/integrations/oauth/google/callback` and `/integrations/oauth/microsoft/callback` on the API host. OAuth uses PKCE and requests read-only, provider-specific scopes. Disconnecting removes Enough's stored tokens and attempts provider revocation; Microsoft may require the user to revoke consent in their Microsoft account settings.
+
+PostHog and Plausible connections use read-only API tokens and an explicit event-name mapping. GA4 uses OAuth, a numeric property ID, and an event-name mapping. Analytics events are aggregated by provider and day; Enough does not store raw user identifiers. Gmail and Outlook sync stores no message body or address; recipient references are HMAC-hashed. Calendar events are classified from their title/category and linked task evidence remains pending owner review.
+
+Stripe customer-revenue connections use a restricted API key with **Account: Read** and **Events: Read** permissions, plus the webhook signing secret. In Stripe, add the full webhook URL shown by Enough and subscribe to `payment_intent.succeeded`, `checkout.session.completed`, `customer.subscription.created`, `invoice.paid`, `customer.subscription.deleted`, `charge.refunded`, and `refund.created`. Use a separate test-mode connection during acceptance. Enough verifies the webhook signature and confirms the event through Stripe's API before storing it. Only a confirmed `payment_intent.succeeded` event with a matching task completion ID can automatically verify a task and issue its configured reward; other Stripe events are recorded, and linked evidence follows owner review.
+
+API keys, OAuth tokens, provider account IDs, and Stripe webhook secrets are encrypted or hashed at rest and excluded from account exports. Disconnecting disables the connection in Enough; API-token providers and some OAuth providers may also require revocation in the provider's settings.
 
 ## Send an event
 
@@ -72,15 +80,15 @@ The JSON body is strict; extra fields and free-form metadata are rejected.
 
 Supported event types:
 
-- Email: `email.outreach_sent`, `email.reply_received`
+- Email: `email.outreach_sent`, `email.reply_received`, `email.conversation_continued`
 - Calendar: `calendar.interview_completed`, `calendar.demo_completed`, `calendar.sales_call_completed`, `calendar.onboarding_completed`, `calendar.feedback_call_completed`, `calendar.retention_call_completed`
-- Revenue: `revenue.payment_received`, `revenue.subscription_created`
+- Revenue: `revenue.payment_received`, `revenue.checkout_completed`, `revenue.subscription_created`, `revenue.invoice_paid`, `revenue.subscription_cancelled`, `revenue.payment_refunded`
 - Product analytics: `analytics.user_signup`, `analytics.user_activated`, `analytics.trial_started`, `analytics.conversion_completed`, `analytics.user_retained`, `analytics.user_churned`
 
 The request body is limited to 16 KiB. Rate limits are 300 requests per minute per client IP and 120 per minute per integration. Signatures older or newer than five minutes are rejected. Retry later after `429`; preserve the event ID when retrying.
 
 ## What signature verification means
 
-The response's `verificationStatus` confirms that the request matched this connection's API key and signing secret. It does not prove that a vendor produced the event or that the event claim is true. The workspace owner controls this signing source. A linked task receives pending integration evidence and remains in the owner review queue; the event alone does not grant task credits.
+The response's `verificationStatus` confirms that the request matched this connection's API key and signing secret. It does not prove that a vendor produced the event or that the event claim is true. The workspace owner controls this signing source. A linked task receives pending integration evidence and remains in the owner review queue; the event alone does not grant task credits. Provider API sync is authenticated to the connected provider, but its task evidence also requires owner review. Stripe customer-revenue webhook events are confirmed through the connected Stripe account before the narrowly scoped automatic payment verification path can issue a reward.
 
-Gmail, Google Calendar, Outlook, Microsoft Calendar, Stripe, PostHog, Plausible, and GA4 are listed as planned adapters. Their provider-specific OAuth scopes, sync behavior, and vendor signature checks are not implemented yet. Do not treat a Generic webhook or Public Event API connection as a vendor-authenticated source.
+Do not treat a Generic webhook or Public Event API connection as a vendor-authenticated source. Deterministic provider tests and local browser acceptance have passed. Real Google/Microsoft OAuth, dedicated PostHog/Plausible/GA4 test properties, and Stripe end-to-end customer-revenue webhook delivery still require dedicated external test configurations; see `PHASE_14_ACCEPTANCE.md`.

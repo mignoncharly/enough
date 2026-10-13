@@ -994,14 +994,15 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       ),
       pool.query(
         `SELECT id, product_id, provider, display_name, status, scopes,
-                connected_at, last_received_at, revoked_at, created_at, updated_at
+                connected_at, last_received_at, last_sync_at, revoked_at, created_at, updated_at
          FROM enough.integration_accounts WHERE user_id = $1 ORDER BY created_at`,
         [session.id],
       ),
       pool.query(
         `SELECT id, integration_account_id, product_id, provider_event_id, event_type,
                 user_reference_hash, amount_minor, currency, occurred_at, received_at,
-                payload_hash, verification_status, completion_id, task_id, evidence_id
+                payload_hash, verification_status, provider_origin_verified,
+                completion_id, task_id, evidence_id
          FROM enough.integration_events WHERE user_id = $1 ORDER BY received_at`,
         [session.id],
       ),

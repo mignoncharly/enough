@@ -6,6 +6,7 @@ import {
   hashIntegrationCredential,
   newIntegrationCredential,
 } from "@enough/auth";
+import { env } from "@enough/config";
 import { pool } from "@enough/db";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -16,6 +17,17 @@ import {
   integrationCatalog,
   type NormalizedIntegrationEvent,
 } from "./integration-adapters.js";
+import {
+  integrationOAuthRuntimeFromEnvironment,
+  type OAuthIntegrationProvider,
+  oauthClientConfig,
+  requiredOAuthScopes,
+  revokeProviderGrant,
+} from "./integration-oauth.js";
+import {
+  type ProviderIntegrationRouteOptions,
+  registerProviderIntegrationRoutes,
+} from "./integration-provider-routes.js";
 import { insertNotification } from "./notifications.js";
 
 const createIntegrationSchema = z
@@ -38,6 +50,7 @@ interface IntegrationAccountRow {
   api_key_hash: Buffer | null;
   signing_secret_ciphertext: Buffer | null;
   last_received_at: Date | null;
+  last_sync_at?: Date | null;
   created_at: Date;
 }
 
@@ -54,6 +67,7 @@ interface IntegrationEventRow {
   amount_minor: string | null;
   currency: string | null;
   payload_hash?: string;
+  provider_origin_verified?: boolean;
 }
 
 interface IntegrationCompletionRow {
@@ -80,6 +94,7 @@ function eventResponse(row: IntegrationEventRow) {
     receivedAt: row.received_at.toISOString(),
     completionId: row.completion_id,
     evidenceId: row.evidence_id,
+    providerOriginVerified: Boolean(row.provider_origin_verified),
     amountMinor: row.amount_minor === null ? null : Number(row.amount_minor),
     currency: row.currency,
   };
@@ -104,6 +119,15 @@ function accountResponse(row: IntegrationAccountRow, recentEvents: IntegrationEv
     status: row.status,
     health,
     lastReceivedAt: row.last_received_at?.toISOString() ?? null,
+    lastSyncAt: row.last_sync_at?.toISOString() ?? null,
+    ...(row.provider === "STRIPE"
+      ? {
+          webhookUrl: new URL(
+            `/v1/integrations/stripe/${row.id}/events`,
+            env.API_BASE_URL,
+          ).toString(),
+        }
+      : {}),
     createdAt: row.created_at.toISOString(),
     recentEvents: recentEvents.map(eventResponse),
   };
@@ -148,7 +172,11 @@ function sendIntegrationError(request: FastifyRequest, reply: FastifyReply) {
     .send({ error: "The integration action could not be completed. Try again shortly." });
 }
 
-export async function registerIntegrationRoutes(app: FastifyInstance): Promise<void> {
+export async function registerIntegrationRoutes(
+  app: FastifyInstance,
+  options: { providerOptions?: ProviderIntegrationRouteOptions } = {},
+): Promise<void> {
+  await registerProviderIntegrationRoutes(app, options.providerOptions);
   app.get("/integrations", async (request, reply) => {
     const session = await requireSession(request, reply);
     if (!session) return;
@@ -164,7 +192,7 @@ export async function registerIntegrationRoutes(app: FastifyInstance): Promise<v
       const [accounts, events] = await Promise.all([
         pool.query<IntegrationAccountRow>(
           `SELECT id, user_id, product_id, provider, display_name, status,
-                  api_key_hash, signing_secret_ciphertext, last_received_at, created_at
+                  api_key_hash, signing_secret_ciphertext, last_received_at, last_sync_at, created_at
            FROM enough.integration_accounts WHERE product_id = $1 AND user_id = $2
            ORDER BY created_at DESC`,
           [parsed.data.productId, session.id],
@@ -172,6 +200,7 @@ export async function registerIntegrationRoutes(app: FastifyInstance): Promise<v
         pool.query<IntegrationEventRow>(
           `SELECT id, integration_account_id, provider_event_id, event_type,
                   verification_status, occurred_at, received_at, completion_id, evidence_id,
+                  provider_origin_verified,
                   amount_minor::text AS amount_minor, currency
            FROM enough.integration_events WHERE product_id = $1 AND user_id = $2
            ORDER BY received_at DESC LIMIT 200`,
@@ -186,7 +215,17 @@ export async function registerIntegrationRoutes(app: FastifyInstance): Promise<v
       }
       return reply.send({
         productId: parsed.data.productId,
-        catalog: integrationCatalog,
+        catalog: integrationCatalog.map((item) => {
+          const oauthProvider =
+            item.mode === "OAUTH" ? (item.provider as OAuthIntegrationProvider) : null;
+          return {
+            ...item,
+            available:
+              !oauthProvider ||
+              oauthClientConfig(oauthProvider, integrationOAuthRuntimeFromEnvironment()) !== null,
+            requiredScopes: oauthProvider ? requiredOAuthScopes(oauthProvider) : [],
+          };
+        }),
         accounts: accounts.rows.map((account) =>
           accountResponse(account, eventsByAccount.get(account.id) ?? []),
         ),
@@ -282,6 +321,8 @@ export async function registerIntegrationRoutes(app: FastifyInstance): Promise<v
     );
     if (!integrationId.success) return reply.code(400).send({ error: "Invalid integration ID." });
     const client = await pool.connect();
+    let providerRevocation: "REVOKED" | "MANUAL_REQUIRED" | "NOT_APPLICABLE" = "NOT_APPLICABLE";
+    let remoteRevoke: { provider: OAuthIntegrationProvider; token: string } | null = null;
     try {
       await client.query("BEGIN");
       const account = await client.query<{
@@ -300,6 +341,28 @@ export async function registerIntegrationRoutes(app: FastifyInstance): Promise<v
         return reply.code(404).send({ error: "Integration not found." });
       }
       if (current.status !== "REVOKED") {
+        if (
+          ["GMAIL", "GOOGLE_CALENDAR", "OUTLOOK", "MICROSOFT_CALENDAR", "GA4"].includes(
+            current.provider,
+          )
+        ) {
+          const token = await client.query<{
+            access_token_ciphertext: Buffer;
+            refresh_token_ciphertext: Buffer | null;
+          }>(
+            `SELECT access_token_ciphertext, refresh_token_ciphertext
+             FROM enough.integration_tokens WHERE integration_account_id = $1 FOR UPDATE`,
+            [current.id],
+          );
+          const stored = token.rows[0];
+          const ciphertext = stored?.refresh_token_ciphertext ?? stored?.access_token_ciphertext;
+          if (ciphertext) {
+            remoteRevoke = {
+              provider: current.provider as OAuthIntegrationProvider,
+              token: decryptIntegrationSecret(ciphertext),
+            };
+          }
+        }
         await client.query(
           `UPDATE enough.integration_accounts
            SET status = 'REVOKED', api_key_hash = NULL, signing_secret_ciphertext = NULL,
@@ -327,7 +390,29 @@ export async function registerIntegrationRoutes(app: FastifyInstance): Promise<v
         );
       }
       await client.query("COMMIT");
-      return reply.send({ integrationId: current.id, status: "REVOKED" });
+      if (remoteRevoke) {
+        try {
+          const revoked = await revokeProviderGrant(remoteRevoke);
+          providerRevocation = revoked === "REVOKED" ? "REVOKED" : "MANUAL_REQUIRED";
+        } catch {
+          request.log.warn("Provider grant revocation needs attention");
+          providerRevocation = "MANUAL_REQUIRED";
+        }
+      } else if (
+        [
+          "STRIPE",
+          "POSTHOG",
+          "PLAUSIBLE",
+          "GMAIL",
+          "GOOGLE_CALENDAR",
+          "OUTLOOK",
+          "MICROSOFT_CALENDAR",
+          "GA4",
+        ].includes(current.provider)
+      ) {
+        providerRevocation = "MANUAL_REQUIRED";
+      }
+      return reply.send({ integrationId: current.id, status: "REVOKED", providerRevocation });
     } catch {
       await client.query("ROLLBACK");
       return sendIntegrationError(request, reply);

@@ -58,8 +58,12 @@ const environmentSchema = z
     AUTH_EMAIL_FROM: optionalEnvironmentString,
     GOOGLE_CLIENT_ID: optionalEnvironmentString,
     GOOGLE_CLIENT_SECRET: optionalEnvironmentString,
+    GOOGLE_INTEGRATION_CLIENT_ID: optionalEnvironmentString,
+    GOOGLE_INTEGRATION_CLIENT_SECRET: optionalEnvironmentString,
     GITHUB_CLIENT_ID: optionalEnvironmentString,
     GITHUB_CLIENT_SECRET: optionalEnvironmentString,
+    MICROSOFT_INTEGRATION_CLIENT_ID: optionalEnvironmentString,
+    MICROSOFT_INTEGRATION_CLIENT_SECRET: optionalEnvironmentString,
     OPENAI_API_KEY: optionalEnvironmentString,
     OPENAI_MODEL: z.string().trim().min(1).max(120).default("gpt-6-astra"),
     STRIPE_SECRET_KEY: optionalEnvironmentString.pipe(
@@ -100,6 +104,16 @@ const environmentSchema = z
     for (const [provider, clientId, clientSecret] of [
       ["Google", value.GOOGLE_CLIENT_ID, value.GOOGLE_CLIENT_SECRET],
       ["GitHub", value.GITHUB_CLIENT_ID, value.GITHUB_CLIENT_SECRET],
+      [
+        "Google integration",
+        value.GOOGLE_INTEGRATION_CLIENT_ID,
+        value.GOOGLE_INTEGRATION_CLIENT_SECRET,
+      ],
+      [
+        "Microsoft integration",
+        value.MICROSOFT_INTEGRATION_CLIENT_ID,
+        value.MICROSOFT_INTEGRATION_CLIENT_SECRET,
+      ],
     ] as const) {
       if (Boolean(clientId) !== Boolean(clientSecret)) {
         context.addIssue({

@@ -7,7 +7,7 @@ import {
 } from "./integration-adapters.js";
 
 describe("integration adapter contracts", () => {
-  it("only advertises the signed webhook and Public Event API as implemented", () => {
+  it("keeps owner-controlled event adapters separate from vendor sync adapters", () => {
     expect([...integrationAdapters.keys()].sort()).toEqual(["PUBLIC_API", "WEBHOOK"]);
     expect(
       integrationCatalog
@@ -26,6 +26,7 @@ describe("integration adapter contracts", () => {
     ] as const) {
       expect(integrationAdapter(provider)).toBeNull();
       expect(integrationCatalog.find((item) => item.provider === provider)?.available).toBe(false);
+      expect(integrationCatalog.find((item) => item.provider === provider)?.implemented).toBe(true);
     }
   });
 

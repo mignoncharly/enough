@@ -1,6 +1,6 @@
 # Remediation Implementation Plan
 
-Last consolidated: 2026-10-13 (Phase 13 baseline checkpoint `d86670bc83b6aab56b76860ee623e6a5831bc215`; Phase 10 remains checkpointed at `6a6110205276b839534427a05b60f4c1044a3c0e`; Phase 11 ACTIVE, P11-1–P11-3 PASS, P11-4–P11-5 BLOCKED; Phase 12 COMPLETE; Phase 13 COMPLETE; Phase 14 ACTIVE with common Generic/Public API path verified and named vendor adapters still open)
+Last consolidated: 2026-10-13 (Phase 13 baseline checkpoint `d86670bc83b6aab56b76860ee623e6a5831bc215`; Phase 10 remains checkpointed at `6a6110205276b839534427a05b60f4c1044a3c0e`; Phase 11 ACTIVE, P11-1–P11-3 PASS, P11-4–P11-5 BLOCKED; Phase 12 COMPLETE; Phase 13 COMPLETE; Phase 14 deterministic provider and local browser acceptance PASS, six external real-provider gates open; production NO-GO with all 18 dependency-security findings open)
 Source of truth for implementation order: this file. The historical scope remains in `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md`; historical implementation detail and evidence remain in `IMPLEMENTATION_HANDOFF.md`.
 
 ## Objective and current decision 
@@ -277,12 +277,14 @@ production is NO-GO.
 
 **Critical for Phase 27-required providers; Medium for optional analytics adapters**
 
-- [ ] Implement and verify Gmail, Outlook, Google Calendar, and Microsoft Calendar provider authentication, minimum scopes, sync, token refresh/revocation, safe failure recording, and vendor-origin verification. No adapters currently exist.
-- [ ] Verify Stripe billing separately from provider-authenticated customer revenue evidence required by the original integrations scope. Enough's own subscription webhook does not prove a founder's customer payment; owner-controlled events do not establish vendor origin. No Phase 14 Stripe revenue adapter currently exists.
-- [x] Apply isolated migrations `0001`–`0019` in order and pass schema migration precheck; this includes `0002`–`0011`.
+- [x] Implement and deterministically accept Gmail, Outlook, Google Calendar, and Microsoft Calendar provider authentication, read scopes, sync, token refresh/disconnect, and safe failure recording. Dedicated real OAuth round trips remain open.
+- [x] Implement and deterministically accept a separate Stripe customer-revenue integration that confirms signed webhook events through the connected Stripe API. Enough's own subscription webhook remains separate. End-to-end Stripe sandbox delivery remains open.
+- [x] Apply isolated migrations `0001`–`0020` in order, pass migration precheck with no pending migrations, and verify compatibility upgrading from the accepted `0019` schema.
 - [x] Exercise Generic webhook/Public Event API HMAC success/failure, exact-body signing, stale/future timestamp rejection, malformed and out-of-scope monetary payload rejection, identical retry, conflicting event ID, account rate limits, revocation races, account/product ownership, evidence review/reward gating, safe export, and account deletion against isolated PostgreSQL/Redis/API runtime.
-- [ ] Implement PostHog, Plausible and GA4 adapters after core-loop providers at Medium priority, retaining original Phase 14 scope; Phase 0 did not remove these requirements.
-- [ ] Complete vendor sandbox acceptance after adapters exist; current Generic/Public API signatures authenticate the workspace owner's source and do not prove vendor-origin events. Phase 14 does not meet its automatic real-world verification exit criterion.
+- [x] Implement and deterministically accept PostHog, Plausible and GA4 adapters with explicit event mapping and aggregated result storage, retaining the original Phase 14 scope.
+- [x] Pass migration `0020`, provider OAuth/adapter/Stripe suites (18/18 focused tests), and 29/29 Phase 14 PostgreSQL/API runtime tests in the isolated fixture; privacy/export/deletion checks passed.
+- [x] Complete consolidated local browser acceptance by user report, including exactly-once Stripe-origin reward behavior and pending/no-reward owner-controlled Generic/Public API behavior.
+- [ ] Complete dedicated real-provider acceptance for Google OAuth, Microsoft OAuth, PostHog, Plausible, GA4, and Stripe customer-revenue webhook delivery. Generic/Public API signatures authenticate only the workspace owner's source. Phase 14 remains ACTIVE until these gates and the canonical automatic real-world event verification criterion are accepted.
 
 ### Phase 15 — AI Layer
 
@@ -408,7 +410,7 @@ production is NO-GO.
 | High | BullMQ handles only `healthcheck`; notification and privacy timers exist but lack runtime acceptance. | Test existing timers and cleanup; implement required provider/business job handlers with retries/idempotency. |
 | High | Readiness checks prove dependency connectivity, not full downstream behavior; monitor has no external alerts. | Add synthetic service checks and alert routing with tested runbooks. |
 | Medium | Linux Wayland app detection and lock-state behavior vary; extension only blocks top-level navigation and caps evaluated domains. | Define platform/support limits and verify representative devices. |
-| Medium | Analytics adapters (PostHog/Plausible/GA4) remain original Phase 14 scope. | Implement after core-loop providers; do not silently defer agreed scope. |
+| Medium | Analytics adapters are implemented in source but have no provider sandbox acceptance. | Run isolated provider API tests and verify the explicit event mapping/aggregation with test credentials. |
 | Nice to have | Passkeys remain explicitly deferred under the original practical exception. | Do not expand launch scope without a recorded change. |
 
 ## Automated verification and security evidence standard

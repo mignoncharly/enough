@@ -1671,6 +1671,57 @@ button:disabled {
 .integration-form button {
   min-height: 44px;
 }
+.integration-stripe-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+}
+.integration-stripe-form > label,
+.integration-stripe-form > input {
+  min-width: 0;
+  width: 100%;
+}
+.integration-stripe-form input {
+  box-sizing: border-box;
+}
+.integration-stripe-form > .evidence-help,
+.integration-stripe-form > .stripe-event-requirements,
+.integration-stripe-form > button {
+  grid-column: 1 / -1;
+}
+.integration-stripe-form > .evidence-help {
+  line-height: 1.55;
+}
+.stripe-event-requirements {
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+}
+.stripe-event-requirements ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stripe-event-requirements li {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+.stripe-event-requirements code {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 12px;
+}
+.stripe-event-requirements p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
 .integration-credentials {
   display: grid;
   gap: 12px;
@@ -1761,6 +1812,45 @@ button:disabled {
 }
 .integration-planned-list li strong {
   flex: 1;
+}
+.integration-planned-provider {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 5px;
+}
+.integration-provider-setup {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.integration-provider-setup code,
+.integration-provider-setup span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.integration-provider-setup code {
+  color: var(--ink);
+  white-space: normal;
+}
+.integration-provider-setup .integration-webhook-url {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: var(--soft);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  line-height: 1.5;
+  user-select: text;
+}
+.integration-provider-setup .stripe-event-requirements {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
 }
 
 .coach-toolbar {
@@ -2746,6 +2836,12 @@ button:disabled {
     grid-column: auto !important;
   }
   .integration-form {
+    grid-template-columns: 1fr;
+  }
+  .integration-stripe-form {
+    grid-template-columns: 1fr;
+  }
+  .stripe-event-requirements ul {
     grid-template-columns: 1fr;
   }
   .coach-toolbar {

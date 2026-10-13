@@ -242,7 +242,6 @@ const phaseFlag = `--${phase}`;
 const mode = process.argv[2] ?? "test";
 assert.ok(["test", "serve", "prepare"].includes(mode), "Use test, serve or prepare.");
 assert.ok(!phase5 || mode === "test", "Phase 5 is an automated ingestion fixture.");
-assert.ok(!phase14 || mode === "test", "Phase 14 uses its isolated automated acceptance fixture.");
 const extensionOrigins = phase10
   ? (process.argv.find((arg) => /^(?:chrome-extension:\/\/|moz-extension:\/\/)/.test(arg)) ?? "")
   : phase3 ||
@@ -443,7 +442,20 @@ try {
   environment.ENOUGH_PHASE11_MANUAL_ACCOUNT = phase11 ? "1" : "0";
   environment.ENOUGH_PHASE12_MANUAL_ACCOUNT = phase12 ? "1" : "0";
   environment.ENOUGH_PHASE13_MANUAL_ACCOUNT = phase13 ? "1" : "0";
-  environment.ENOUGH_PHASE14_MANUAL_ACCOUNT = "0";
+  environment.ENOUGH_PHASE14_MANUAL_ACCOUNT = phase14 ? "1" : "0";
+  if (phase14) {
+    for (const key of [
+      "GOOGLE_INTEGRATION_CLIENT_ID",
+      "GOOGLE_INTEGRATION_CLIENT_SECRET",
+      "MICROSOFT_INTEGRATION_CLIENT_ID",
+      "MICROSOFT_INTEGRATION_CLIENT_SECRET",
+      "STRIPE_SECRET_KEY",
+      "STRIPE_WEBHOOK_SECRETS",
+      "STRIPE_PRICE_MONTHLY",
+      "STRIPE_PRICE_ANNUAL",
+    ])
+      environment[key] = "";
+  }
   if (phase11) {
     const privatePath = join(fixture, "policy-snapshot-private.pem");
     const publicPath = join(fixture, "policy-snapshot-public.pem");
@@ -747,7 +759,11 @@ try {
           join(root, "node_modules", "vitest", "vitest.mjs"),
           "run",
           "apps/api/src/integration-adapters.test.ts",
+          "apps/api/src/integration-oauth.test.ts",
+          "apps/api/src/integration-provider-adapters.test.ts",
+          "apps/api/src/integration-stripe.test.ts",
           "apps/api/src/integrations.integration.test.ts",
+          "apps/api/src/integration-provider-routes.integration.test.ts",
           "--hookTimeout=60000",
           "--testTimeout=60000",
           "--maxWorkers=1",
@@ -838,25 +854,27 @@ try {
         join(
           root,
           "scripts",
-          phase13
-            ? "phase13-manual-account.mjs"
-            : phase12
-              ? "phase12-manual-account.mjs"
-              : phase11
-                ? "phase11-manual-account.mjs"
-                : phase10
-                  ? "phase10-manual-account.mjs"
-                  : phase9
-                    ? "phase3-manual-account.mjs"
-                    : phase8
-                      ? "phase8-manual-account.mjs"
-                      : phase7
-                        ? "phase7-manual-account.mjs"
-                        : phase6
-                          ? "phase6-manual-account.mjs"
-                          : phase3 || phase4
-                            ? "phase3-manual-account.mjs"
-                            : "phase2-manual-account.mjs",
+          phase14
+            ? "phase14-manual-account.mjs"
+            : phase13
+              ? "phase13-manual-account.mjs"
+              : phase12
+                ? "phase12-manual-account.mjs"
+                : phase11
+                  ? "phase11-manual-account.mjs"
+                  : phase10
+                    ? "phase10-manual-account.mjs"
+                    : phase9
+                      ? "phase3-manual-account.mjs"
+                      : phase8
+                        ? "phase8-manual-account.mjs"
+                        : phase7
+                          ? "phase7-manual-account.mjs"
+                          : phase6
+                            ? "phase6-manual-account.mjs"
+                            : phase3 || phase4
+                              ? "phase3-manual-account.mjs"
+                              : "phase2-manual-account.mjs",
         ),
       ],
       {
@@ -877,7 +895,8 @@ try {
           phase10 ||
           phase11 ||
           phase12 ||
-          phase13
+          phase13 ||
+          phase14
           ? `Fixture serving. Ctrl+C stops this fixture; data stays in TEMP/enough-${phase}.`
           : "Fixture serving. Ctrl+C stops only this fixture; data stays in ignored .runtime/phase2.",
       );

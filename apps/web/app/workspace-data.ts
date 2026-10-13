@@ -899,6 +899,7 @@ export interface IntegrationEventSummary {
   eventId: string;
   eventType: string;
   verificationStatus: "AUTHENTICATED" | "REJECTED";
+  providerOriginVerified: boolean;
   occurredAt: string;
   receivedAt: string;
   completionId: string | null;
@@ -915,6 +916,8 @@ export interface IntegrationAccountSummary {
   status: "ACTIVE" | "ERROR" | "REVOKED";
   health: "CONNECTED" | "IDLE" | "ERROR" | "REVOKED";
   lastReceivedAt: string | null;
+  lastSyncAt: string | null;
+  webhookUrl?: string;
   createdAt: string;
   recentEvents: IntegrationEventSummary[];
 }
@@ -924,7 +927,9 @@ export interface IntegrationCatalogItem {
   name: string;
   mode: string;
   available: boolean;
+  implemented: boolean;
   eventTypes: string[];
+  requiredScopes: string[];
 }
 
 export interface IntegrationWorkspace {
@@ -954,10 +959,71 @@ export function createIntegration(body: {
   return postProductAction("/api/integrations", body);
 }
 
-export function revokeIntegration(
-  integrationId: string,
-): Promise<{ integrationId: string; status: "REVOKED" }> {
+export function revokeIntegration(integrationId: string): Promise<{
+  integrationId: string;
+  status: "REVOKED";
+  providerRevocation: "REVOKED" | "MANUAL_REQUIRED" | "NOT_APPLICABLE";
+}> {
   return postProductAction(`/api/integrations/${integrationId}/revoke`, {});
+}
+
+export function startProviderOAuth(body: {
+  productId: string;
+  provider: string;
+  displayName: string;
+  propertyId?: string;
+  eventMap?: Record<string, string>;
+}): Promise<{ authorizationUrl: string }> {
+  return postProductAction(
+    `/api/integrations/oauth/${encodeURIComponent(body.provider)}/start`,
+    body,
+  );
+}
+
+export function createProviderApiToken(body: {
+  productId: string;
+  provider: "POSTHOG" | "PLAUSIBLE";
+  displayName: string;
+  apiToken: string;
+  projectId?: string;
+  region?: "us" | "eu";
+  siteId?: string;
+  eventMap: Record<string, string>;
+}): Promise<{ integrationId: string; status: "ACTIVE" }> {
+  return postProductAction("/api/integrations/credentials", body);
+}
+
+export function createStripeIntegration(body: {
+  productId: string;
+  displayName: string;
+  restrictedApiKey: string;
+  webhookSigningSecret: string;
+}): Promise<{
+  integrationId: string;
+  status: "ACTIVE";
+  webhookPath: string;
+  webhookUrl: string;
+}> {
+  return postProductAction("/api/integrations/stripe", body);
+}
+
+export function syncIntegration(integrationId: string): Promise<{
+  integrationId: string;
+  eventsReceived: number;
+  rewardsIssued: number;
+}> {
+  return postProductAction(`/api/integrations/${integrationId}/sync`, {});
+}
+
+export function linkIntegrationEventEvidence(
+  integrationId: string,
+  eventId: string,
+  completionId: string,
+): Promise<{ evidenceId: string; verificationStatus: "PENDING" }> {
+  return postProductAction(
+    `/api/integrations/${integrationId}/events/${encodeURIComponent(eventId)}/evidence`,
+    { completionId },
+  );
 }
 
 export function createTaskEvidence(

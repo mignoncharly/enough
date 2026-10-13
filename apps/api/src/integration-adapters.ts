@@ -18,6 +18,7 @@ export type IntegrationProvider = (typeof integrationProviders)[number];
 export const verifiedEventTypes = [
   "email.outreach_sent",
   "email.reply_received",
+  "email.conversation_continued",
   "calendar.interview_completed",
   "calendar.demo_completed",
   "calendar.sales_call_completed",
@@ -25,7 +26,11 @@ export const verifiedEventTypes = [
   "calendar.feedback_call_completed",
   "calendar.retention_call_completed",
   "revenue.payment_received",
+  "revenue.checkout_completed",
   "revenue.subscription_created",
+  "revenue.invoice_paid",
+  "revenue.subscription_cancelled",
+  "revenue.payment_refunded",
   "analytics.user_signup",
   "analytics.user_activated",
   "analytics.trial_started",
@@ -40,6 +45,7 @@ export const integrationCatalog: Array<{
   name: string;
   mode: "SIGNED_WEBHOOK" | "PUBLIC_API" | "OAUTH" | "API_TOKEN";
   available: boolean;
+  implemented: boolean;
   eventTypes: readonly VerifiedEventType[];
 }> = [
   {
@@ -47,13 +53,15 @@ export const integrationCatalog: Array<{
     name: "Gmail",
     mode: "OAUTH",
     available: false,
-    eventTypes: ["email.outreach_sent", "email.reply_received"],
+    implemented: true,
+    eventTypes: ["email.outreach_sent", "email.reply_received", "email.conversation_continued"],
   },
   {
     provider: "GOOGLE_CALENDAR",
     name: "Google Calendar",
     mode: "OAUTH",
     available: false,
+    implemented: true,
     eventTypes: [
       "calendar.interview_completed",
       "calendar.demo_completed",
@@ -68,13 +76,15 @@ export const integrationCatalog: Array<{
     name: "Outlook",
     mode: "OAUTH",
     available: false,
-    eventTypes: ["email.outreach_sent", "email.reply_received"],
+    implemented: true,
+    eventTypes: ["email.outreach_sent", "email.reply_received", "email.conversation_continued"],
   },
   {
     provider: "MICROSOFT_CALENDAR",
     name: "Microsoft Calendar",
     mode: "OAUTH",
     available: false,
+    implemented: true,
     eventTypes: [
       "calendar.interview_completed",
       "calendar.demo_completed",
@@ -86,16 +96,25 @@ export const integrationCatalog: Array<{
   },
   {
     provider: "STRIPE",
-    name: "Stripe",
-    mode: "OAUTH",
+    name: "Stripe customer revenue",
+    mode: "API_TOKEN",
     available: false,
-    eventTypes: ["revenue.payment_received", "revenue.subscription_created"],
+    implemented: true,
+    eventTypes: [
+      "revenue.payment_received",
+      "revenue.checkout_completed",
+      "revenue.subscription_created",
+      "revenue.invoice_paid",
+      "revenue.subscription_cancelled",
+      "revenue.payment_refunded",
+    ],
   },
   {
     provider: "POSTHOG",
     name: "PostHog",
     mode: "API_TOKEN",
     available: false,
+    implemented: true,
     eventTypes: [
       "analytics.user_signup",
       "analytics.user_activated",
@@ -110,6 +129,7 @@ export const integrationCatalog: Array<{
     name: "Plausible",
     mode: "API_TOKEN",
     available: false,
+    implemented: true,
     eventTypes: [
       "analytics.user_signup",
       "analytics.user_activated",
@@ -121,6 +141,7 @@ export const integrationCatalog: Array<{
     name: "Google Analytics 4",
     mode: "OAUTH",
     available: false,
+    implemented: true,
     eventTypes: [
       "analytics.user_signup",
       "analytics.user_activated",
@@ -135,6 +156,7 @@ export const integrationCatalog: Array<{
     name: "Generic webhook",
     mode: "SIGNED_WEBHOOK",
     available: true,
+    implemented: true,
     eventTypes: verifiedEventTypes,
   },
   {
@@ -142,6 +164,7 @@ export const integrationCatalog: Array<{
     name: "Public Event API",
     mode: "PUBLIC_API",
     available: true,
+    implemented: true,
     eventTypes: verifiedEventTypes,
   },
 ];

@@ -359,8 +359,12 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
       );
       expect(conflict.error).toContain("different event data");
 
-      const stored = await pool.query<{ user_reference_hash: string | null; payload_hash: string }>(
-        `SELECT user_reference_hash, payload_hash FROM enough.integration_events
+      const stored = await pool.query<{
+        user_reference_hash: string | null;
+        payload_hash: string;
+        provider_origin_verified: boolean;
+      }>(
+        `SELECT user_reference_hash, payload_hash, provider_origin_verified FROM enough.integration_events
          WHERE integration_account_id = $1 AND provider_event_id = $2`,
         [connected.account.id, event.eventId],
       );
@@ -372,6 +376,7 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
       );
       expect(stored.rows[0].payload_hash).toMatch(/^[a-f0-9]{64}$/);
       expect(stored.rows[0].user_reference_hash).not.toBe(event.userReference);
+      expect(stored.rows[0].provider_origin_verified).toBe(false);
       const connectedListing = await payload(
         await appRequest(`/integrations?productId=${productId}`, owner),
       );
@@ -537,6 +542,25 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
          VALUES ($1, $2, $3, $4, $5, 'FIXTURE_FAILURE', 'Synthetic safe failure')`,
         [randomUUID(), connected.account.id, owner.id, productId, syncRunId],
       );
+      await pool.query(
+        `INSERT INTO enough.integration_provider_configs
+           (integration_account_id, user_id, product_id, configuration, credential_ciphertext)
+         VALUES ($1, $2, $3, '{"fixture":true}'::jsonb, $4)`,
+        [connected.account.id, owner.id, productId, Buffer.from("synthetic-encrypted-fixture")],
+      );
+      await pool.query(
+        `INSERT INTO enough.integration_oauth_states
+           (id, state_hash, user_id, product_id, provider, display_name, scopes,
+            configuration, pkce_verifier_ciphertext, expires_at)
+         VALUES ($1, $2, $3, $4, 'GMAIL', 'Deletion state', '{}', '{}'::jsonb, $5, now() + interval '10 minutes')`,
+        [
+          randomUUID(),
+          createHash("sha256").update(randomUUID()).digest("hex"),
+          owner.id,
+          productId,
+          Buffer.from("synthetic-encrypted-verifier"),
+        ],
+      );
       const deleted = await request(
         "/auth/account",
         owner,
@@ -550,13 +574,17 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
         tokens: string;
         sync_runs: string;
         errors: string;
+        provider_configs: string;
+        oauth_states: string;
       }>(
         `SELECT
            (SELECT count(*)::text FROM enough.integration_accounts WHERE user_id = $1) AS accounts,
            (SELECT count(*)::text FROM enough.integration_events WHERE user_id = $1) AS events,
            (SELECT count(*)::text FROM enough.integration_tokens WHERE user_id = $1) AS tokens,
            (SELECT count(*)::text FROM enough.integration_sync_runs WHERE user_id = $1) AS sync_runs,
-           (SELECT count(*)::text FROM enough.integration_errors WHERE user_id = $1) AS errors`,
+           (SELECT count(*)::text FROM enough.integration_errors WHERE user_id = $1) AS errors,
+           (SELECT count(*)::text FROM enough.integration_provider_configs WHERE user_id = $1) AS provider_configs,
+           (SELECT count(*)::text FROM enough.integration_oauth_states WHERE user_id = $1) AS oauth_states`,
         [owner.id],
       );
       expect(remaining.rows[0]).toEqual({
@@ -565,6 +593,8 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
         tokens: "0",
         sync_runs: "0",
         errors: "0",
+        provider_configs: "0",
+        oauth_states: "0",
       });
     });
 

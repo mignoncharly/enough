@@ -1,8 +1,38 @@
 # Phase 14 — Integrations Acceptance
 
-**Status: ACTIVE — partial common-path acceptance; not ready for final acceptance.**
+**Status: ACTIVE — deterministic provider acceptance PASS; local browser acceptance PASS; external real-provider acceptance remains pending.**
 
-The canonical exit criterion is: **Meaningful real-world events can be verified automatically.** The implemented Generic webhook and Public Event API authenticate a workspace owner's configured source. They do not establish that a Gmail, calendar, Stripe, or analytics vendor originated an event. Any task evidence linked to these sources stays pending for owner review, and event receipt does not grant credits.
+The canonical exit criterion is: **Meaningful real-world events can be verified automatically.** The Generic webhook and Public Event API authenticate only the workspace owner's configured source. Provider OAuth/API connections now authenticate to Gmail, Google and Microsoft calendars/mail, Stripe, PostHog, Plausible, and GA4. Provider sync evidence remains pending owner review. Stripe events are checked against the connected Stripe account; only a confirmed payment event with a matching task completion ID can automatically verify a task and issue its reward.
+
+## Automated provider acceptance — PASS — 2026-10-13
+
+Migration `0020_provider_integrations.sql` passed on a fresh chain through `0020` and as an upgrade from the accepted `0019` schema. Migration precheck reported no pending migrations. Account export, deletion, privacy, and credential non-disclosure behavior passed with the provider state present.
+
+The isolated automated suites passed: 18/18 provider-focused tests, 29/29 Phase 14 PostgreSQL/API runtime tests, and 121/121 default tests. Deterministic Google and Microsoft OAuth protocol coverage passed. Provider adapter contracts passed for Gmail, Google Calendar, Outlook, Microsoft Calendar, Stripe customer revenue, PostHog, Plausible, GA4, Generic webhook, and Public Event API.
+
+- Google OAuth: authorization URL, one-use state/PKCE, least-privilege scopes, token exchange/refresh/expiry, changed or missing scopes, revocation/disconnect, credential-bearing redirect rejection, encrypted persistence/non-disclosure, sync success/failure, and normalized Gmail/Calendar events passed.
+- Microsoft OAuth: `offline_access` issuance behavior, API-scope validation, refresh responses without returned `offline_access`, missing required Graph permissions, token rotation/preservation, expiry, revocation/disconnect, redirect rejection, and sync failure passed.
+- Gmail/Outlook and both calendars: outreach/reply and supported event semantics, duplicate protection, no rewards from raw volume or scheduled-only events, completion/category/time requirements, and no persisted email bodies passed.
+- Stripe customer revenue remains separate from Enough subscription billing. Signature/forgery/replay handling, supported webhook events, normalization, cancellation/refund behavior, and duplicate-credit protection passed deterministically.
+- PostHog, Plausible, and GA4: configuration/auth validation, supported normalized mappings, privacy minimization, replay protection, ownership isolation, and failure/health recording passed.
+- Provider-origin evidence passed the vendor-authenticated verification path and granted the product-scoped Build Credit exactly once. Generic webhook and Public Event API remain owner-controlled, pending evidence sources and grant no automatic reward. Phase 13 transaction/idempotency rules remain intact.
+
+## Consolidated local browser acceptance — PASS — user-reported — 2026-10-13
+
+The user completed the single consolidated browser session and reported PASS for the provider catalog; Google/Microsoft setup controls and disabled OAuth actions; Stripe customer-revenue setup and its separation from Enough billing; GA4 setup entry; seeded healthy, degraded, and revoked states; sync/history privacy and recoverable error state; and the 390px responsive layout. No raw provider errors, tokens, keys, secrets, stack traces, or local paths were exposed. The one-time credential display and secret disappearance after reload passed.
+
+The seeded Stripe vendor-authenticated event appeared as automatically verified task evidence and produced exactly one +5 product-scoped Build Credit reward. Generic webhook and Public Event API evidence stayed pending and produced no automatic reward. Offline setup failure/recovery passed. Phase 14 fixtures were cleaned after the session.
+
+## Remaining external real-provider gates
+
+- Google real OAuth round trip with a dedicated test OAuth configuration and test user.
+- Microsoft real OAuth round trip with a dedicated test tenant and app.
+- PostHog dedicated test project and credentials.
+- Plausible dedicated test site/project and credentials.
+- GA4 dedicated test property and credentials.
+- Stripe end-to-end customer-revenue webhook delivery with a working sandbox/test setup.
+
+Do not use personal production accounts or production credentials for these gates. Deterministic local protocol coverage and browser acceptance do not substitute for the listed external account/sandbox checks.
 
 ## Canonical scope audited
 
@@ -11,9 +41,9 @@ The canonical exit criterion is: **Meaningful real-world events can be verified 
 - Generic signed webhooks and the authenticated Public Event API, including payload validation, provider/source authentication, idempotency, scoping, and failure boundaries.
 - Integration-originated Phase 13 evidence and credit rewards.
 
-## Existing adapters and verified behavior
+## Earlier common-path acceptance record
 
-Only **Generic webhook** (`WEBHOOK`) and **Public Event API** (`PUBLIC_API`) have executable adapters. The catalog contains Gmail, Google Calendar, Outlook, Microsoft Calendar, Stripe, PostHog, Plausible, and GA4 entries marked unavailable. Google/GitHub login is a separate authentication capability. The existing Stripe billing webhook handles Enough subscription events; it is not a founder's Stripe customer-revenue integration. The default suite also passed its 4 Stripe webhook tests and 3 billing-route contract tests for Enough subscriptions; these do not prove customer-revenue integration behavior.
+At the time of the recorded common-path run, only **Generic webhook** (`WEBHOOK`) and **Public Event API** (`PUBLIC_API`) had executable adapters. The existing Stripe billing webhook handles Enough subscription events; it is separate from a founder's Stripe customer-revenue integration. The earlier billing tests covered Enough subscriptions, not customer-revenue verification.
 
 The Phase 14 fixture applied and prechecked migrations `0001`–`0019` in a disposable PostgreSQL database and started isolated Redis, API, worker, and web services. `/integrations` returned HTTP 200. The final isolated run is `pnpm test:integrations:integration`; it runs 3 adapter contract tests and 7 PostgreSQL/API cases.
 
@@ -29,37 +59,25 @@ The Phase 14 fixture applied and prechecked migrations `0001`–`0019` in a disp
 | Evidence and rewards | A linked event creates pending `MANUAL` evidence. Owner verification grants one reward, repeated review/event delivery does not grant again, and the pre-review event grants none. |
 | Export and deletion | Account export includes safe integration records without credentials; account deletion cascades accounts, tokens, sync records, safe error records, and normalized events. |
 
-## Gaps and remaining gates
-
-- Gmail, Google Calendar, Outlook, Microsoft Calendar, Stripe customer-revenue, PostHog, Plausible, and GA4 adapters are not implemented. No provider OAuth/API-token setup, least-privilege scopes, token refresh, provider-side disconnect/revocation, sync executor, or vendor-origin verification currently exists.
-- `integration_sync_runs` and `integration_errors` are schema and export models only. Provider sync execution and safe provider failure recording remain unimplemented.
-- Stripe's existing Enough billing webhook is not customer revenue proof. Refund/cancellation handling for a founder's customer payments is not implemented in Phase 14.
-- Email recipient uniqueness and reply qualification, calendar event-category/completion criteria, and analytics privacy-minimized provider mapping cannot be accepted until those adapters exist. The generic event type list is not a substitute.
-- Generic/Public API events remain pending owner review. They do not meet automatic real-world vendor verification and cannot prove external origin or automatically award credits.
-- No provider sandbox or real-provider end-to-end acceptance was run. This pass did not use or request personal accounts or credentials. The immediate blocker is absent provider adapter functionality; later provider acceptance will require isolated vendor sandbox/test credentials where available.
-
 ## Fixes made
 
 - Reject `amountMinor`/`currency` on non-revenue event types, preserving the required pair check for revenue events.
 - Stop logging raw integration exceptions, which could contain provider responses, database details, or credential fragments. User responses remain generic.
 - Add a marked Phase 14 TEMP fixture on dedicated PostgreSQL/Redis/API/worker/web ports and a cleanup command that verifies its marker, confirms services are stopped, then removes only `TEMP/enough-phase14`.
-
-## Manual acceptance
-
-No browser/manual session was run in this partial pass. The current UI is unchanged, its route returned HTTP 200 in the isolated runtime, and the current common API flow is covered by automated tests. A single consolidated browser session should follow provider adapter implementation, when vendor-backed UI behavior exists to accept.
+- Implement provider OAuth/API-token connections, provider sync, Stripe customer-revenue confirmation, and integration evidence linking; add migration `0020_provider_integrations.sql` and provider-focused unit/API integration coverage.
+- Reject redirects on OAuth, provider API, and Stripe requests carrying bearer/client credentials; preserve Microsoft's `offline_access` grant while validating only scopes returned for its access token.
 
 ## Final checks
 
-- `pnpm test:integrations:integration`: PASS. Fresh migrations `0001`–`0019` applied; migration precheck and runtime readiness passed; 3 adapter tests and 7 PostgreSQL/API tests passed; `/integrations` returned HTTP 200.
-- `pnpm test`: PASS, 106 passed and 157 opt-in integration tests skipped across 31 files. The Phase 14 opt-in cases ran separately above.
-- `pnpm typecheck`: PASS across 12 workspace projects.
-- `pnpm format:check`: PASS, 196 files checked.
-- `pnpm lint`: PASS with 124 repository-wide warnings and no errors.
-- `git diff --check`: PASS; Git printed only line-ending normalization notices for two existing CRLF Markdown trackers.
-- `pnpm test:integrations:clean`: PASS. The services were stopped, then only the marked `TEMP/enough-phase14` fixture was removed.
+- `pnpm test`: PASS, 121/121 default tests (161 opt-in integration/runtime tests skipped).
+- `pnpm typecheck`: PASS across the configured workspace projects.
+- `pnpm format:check`: PASS, 206 files checked.
+- `pnpm lint`: PASS with 129 repository warnings and no errors.
+- `git diff --check`: PASS; Git reported line-ending notices for the two remediation documents.
+- Phase 14 status/documentation consistency checks: PASS. The acceptance record, implementation plan/handoff, security status, launch matrix, remediation summaries, and project/integration docs agree that Phase 14 is ACTIVE; deterministic provider and local browser acceptance are PASS; the six external gates remain open; Phases 11–13 retain their accepted statuses; production remains NO-GO with all 18 dependency-security findings open.
 
 ## Security and release status
 
-The common signed-source flow remains authenticated and owner/product scoped. The signing secret is encrypted at rest; API keys are stored as hashes; event user references are hashed; raw provider/backend exceptions are no longer logged. A valid owner HMAC establishes control of the configured source only. It does **not** establish vendor origin. Do not mark integration evidence automatically verified or award automatic credits through this owner-controlled path.
+The common signed-source flow remains authenticated and owner/product scoped. The signing secret is encrypted at rest; API keys are stored as hashes; event user references are hashed; raw provider/backend exceptions are not exposed. A valid owner HMAC establishes control of the configured source only. It does **not** establish vendor origin. Owner-controlled Generic webhook and Public Event API evidence remains pending and grants no automatic credits. Provider-origin evidence follows the accepted vendor-authenticated path, with automatic Build Credit exactly-once behavior verified for the Stripe fixture.
 
-Phase 11 remains ACTIVE with P11-1, P11-2, P11-3 PASS and P11-4/P11-5 BLOCKED. Phase 13 remains COMPLETE. Production remains **NO-GO** while all 18 dependency-security findings are open. No production deployment, Docker, GitHub Actions, external provider account, or provider credential was used.
+Phase 11 remains ACTIVE with P11-1, P11-2, P11-3 PASS and P11-4/P11-5 BLOCKED. Phase 12 remains COMPLETE. Phase 13 remains COMPLETE. Phase 14 remains ACTIVE until all six external real-provider gates above pass. Production remains **NO-GO** while all 18 dependency-security findings remain open. No personal or production provider account/credential was used.
