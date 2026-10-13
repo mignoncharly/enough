@@ -50,7 +50,7 @@ app.addContentTypeParser("application/json", { parseAs: "buffer" }, (request, bo
   try {
     done(null, JSON.parse(body.toString("utf8")) as unknown);
   } catch {
-    done(new Error("Invalid JSON request body."), undefined);
+    done(Object.assign(new Error("Invalid JSON request body."), { statusCode: 400 }), undefined);
   }
 });
 
@@ -63,7 +63,10 @@ app.addContentTypeParser(
     try {
       done(null, JSON.parse(body.toString("utf8")) as unknown);
     } catch {
-      done(new Error("Invalid integration event JSON."), undefined);
+      done(
+        Object.assign(new Error("Invalid integration event JSON."), { statusCode: 400 }),
+        undefined,
+      );
     }
   },
 );

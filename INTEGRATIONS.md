@@ -67,8 +67,8 @@ The JSON body is strict; extra fields and free-form metadata are rejected.
 | `occurredAt` | Yes | ISO 8601 timestamp with a time zone. Must be within the past year and no more than five minutes in the future. |
 | `completionId` | No | UUID of a completed task in the integration's product. Creates pending evidence for owner review. |
 | `userReference` | No | Opaque external identifier, up to 128 characters. Do not send an email address or other direct personal information. It is HMAC-hashed before storage. |
-| `amountMinor` | No | Non-negative integer amount in the currency's minor unit, such as cents. Must be sent with `currency`. |
-| `currency` | No | Three uppercase ISO-style currency letters. Must be sent with `amountMinor`. |
+| `amountMinor` | No | Non-negative integer amount in the currency's minor unit, such as cents. Must be sent with `currency` and is accepted only for `revenue.*` event types. |
+| `currency` | No | Three uppercase ISO-style currency letters. Must be sent with `amountMinor` and is accepted only for `revenue.*` event types. |
 
 Supported event types:
 

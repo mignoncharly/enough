@@ -179,6 +179,13 @@ const eventSchema = z
         path: ["amountMinor"],
       });
     }
+    if (event.amountMinor !== undefined && !event.eventType.startsWith("revenue.")) {
+      context.addIssue({
+        code: "custom",
+        message: "Amounts are only accepted for revenue events.",
+        path: ["amountMinor"],
+      });
+    }
   });
 
 export type NormalizedIntegrationEvent = z.infer<typeof eventSchema>;

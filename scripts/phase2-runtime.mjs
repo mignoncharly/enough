@@ -33,45 +33,61 @@ const phase10 = process.argv.includes("--phase10");
 const phase11 = process.argv.includes("--phase11");
 const phase12 = process.argv.includes("--phase12");
 const phase13 = process.argv.includes("--phase13");
-const basePhase = phase12
-  ? "phase12"
-  : phase9
-    ? "phase9"
-    : phase8
-      ? "phase8"
-      : phase7
-        ? "phase7"
-        : phase6
-          ? "phase6"
-          : phase5
-            ? "phase5"
-            : phase4
-              ? "phase4"
-              : phase3
-                ? "phase3"
-                : "phase2";
-const phase = phase13
-  ? "phase13"
+const phase14 = process.argv.includes("--phase14");
+const basePhase = phase14
+  ? "phase14"
   : phase12
     ? "phase12"
-    : phase11
-      ? "phase11"
-      : phase10
-        ? "phase10"
-        : basePhase;
+    : phase9
+      ? "phase9"
+      : phase8
+        ? "phase8"
+        : phase7
+          ? "phase7"
+          : phase6
+            ? "phase6"
+            : phase5
+              ? "phase5"
+              : phase4
+                ? "phase4"
+                : phase3
+                  ? "phase3"
+                  : "phase2";
+const phase = phase14
+  ? "phase14"
+  : phase13
+    ? "phase13"
+    : phase12
+      ? "phase12"
+      : phase11
+        ? "phase11"
+        : phase10
+          ? "phase10"
+          : basePhase;
 const baseFixture =
-  phase3 || phase4 || phase5 || phase6 || phase7 || phase8 || phase9 || phase11 || phase12
+  phase3 ||
+  phase4 ||
+  phase5 ||
+  phase6 ||
+  phase7 ||
+  phase8 ||
+  phase9 ||
+  phase11 ||
+  phase12 ||
+  phase14
     ? join(tmpdir(), `enough-${basePhase}`)
     : join(root, ".runtime", basePhase);
-const fixture = phase13
-  ? join(tmpdir(), "enough-phase13")
-  : phase12
-    ? join(tmpdir(), "enough-phase12")
-    : phase11
-      ? join(tmpdir(), "enough-phase11")
-      : phase10
-        ? join(tmpdir(), "enough-phase10")
-        : baseFixture;
+const fixture = phase14
+  ? join(tmpdir(), "enough-phase14")
+  : phase13
+    ? join(tmpdir(), "enough-phase13")
+    : phase12
+      ? join(tmpdir(), "enough-phase12")
+      : phase11
+        ? join(tmpdir(), "enough-phase11")
+        : phase10
+          ? join(tmpdir(), "enough-phase10")
+          : baseFixture;
 const basePgPort = phase12
   ? 55943
   : phase11
@@ -91,7 +107,17 @@ const basePgPort = phase12
                 : phase3
                   ? 55434
                   : 55433;
-const pgPort = phase13 ? 55944 : phase12 ? 55943 : phase11 ? 55942 : phase10 ? 55441 : basePgPort;
+const pgPort = phase14
+  ? 55946
+  : phase13
+    ? 55944
+    : phase12
+      ? 55943
+      : phase11
+        ? 55942
+        : phase10
+          ? 55441
+          : basePgPort;
 const baseRedisPort = phase12
   ? 56405
   : phase11
@@ -111,15 +137,17 @@ const baseRedisPort = phase12
                 : phase3
                   ? 56383
                   : 56381;
-const redisPort = phase13
-  ? 56407
-  : phase12
-    ? 56405
-    : phase11
-      ? 56403
-      : phase10
-        ? 56401
-        : baseRedisPort;
+const redisPort = phase14
+  ? 56409
+  : phase13
+    ? 56407
+    : phase12
+      ? 56405
+      : phase11
+        ? 56403
+        : phase10
+          ? 56401
+          : baseRedisPort;
 const baseWslRedisPort = phase12
   ? "56406"
   : phase11
@@ -139,15 +167,17 @@ const baseWslRedisPort = phase12
                 : phase3
                   ? "56384"
                   : "56382";
-const wslRedisPort = phase13
-  ? "56408"
-  : phase12
-    ? "56406"
-    : phase11
-      ? "56404"
-      : phase10
-        ? "56402"
-        : baseWslRedisPort;
+const wslRedisPort = phase14
+  ? "56410"
+  : phase13
+    ? "56408"
+    : phase12
+      ? "56406"
+      : phase11
+        ? "56404"
+        : phase10
+          ? "56402"
+          : baseWslRedisPort;
 const baseApiPort = phase12
   ? 4422
   : phase11
@@ -167,7 +197,17 @@ const baseApiPort = phase12
                 : phase3
                   ? 4404
                   : 4402;
-const apiPort = phase13 ? 4424 : phase12 ? 4422 : phase11 ? 4420 : phase10 ? 4418 : baseApiPort;
+const apiPort = phase14
+  ? 4426
+  : phase13
+    ? 4424
+    : phase12
+      ? 4422
+      : phase11
+        ? 4420
+        : phase10
+          ? 4418
+          : baseApiPort;
 const baseWebPort = phase12
   ? 3313
   : phase11
@@ -187,11 +227,22 @@ const baseWebPort = phase12
                 : phase3
                   ? 3303
                   : 3302;
-const webPort = phase13 ? 3314 : phase12 ? 3313 : phase11 ? 3312 : phase10 ? 3310 : baseWebPort;
+const webPort = phase14
+  ? 3315
+  : phase13
+    ? 3314
+    : phase12
+      ? 3313
+      : phase11
+        ? 3312
+        : phase10
+          ? 3310
+          : baseWebPort;
 const phaseFlag = `--${phase}`;
 const mode = process.argv[2] ?? "test";
 assert.ok(["test", "serve", "prepare"].includes(mode), "Use test, serve or prepare.");
 assert.ok(!phase5 || mode === "test", "Phase 5 is an automated ingestion fixture.");
+assert.ok(!phase14 || mode === "test", "Phase 14 uses its isolated automated acceptance fixture.");
 const extensionOrigins = phase10
   ? (process.argv.find((arg) => /^(?:chrome-extension:\/\/|moz-extension:\/\/)/.test(arg)) ?? "")
   : phase3 ||
@@ -203,7 +254,8 @@ const extensionOrigins = phase10
       phase9 ||
       phase11 ||
       phase12 ||
-      phase13
+      phase13 ||
+      phase14
     ? ""
     : (process.argv[3] ?? "");
 const suppliedOrigins = extensionOrigins.split(",").filter(Boolean);
@@ -334,6 +386,7 @@ try {
     ...(phase11 ? [4421] : []),
     ...(phase12 ? [4423] : []),
     ...(phase13 ? [4425] : []),
+    ...(phase14 ? [4427] : []),
     ...(phase9 ? [4417] : []),
     ...(phase10 ? [4419] : []),
   ]) {
@@ -352,7 +405,7 @@ try {
     ],
     { windowsHide: true, stdio: "pipe" },
   );
-  if (phase11 || phase12 || phase13) {
+  if (phase11 || phase12 || phase13 || phase14) {
     const markerPath = join(fixture, `${phase}-fixture.json`);
     const existingFixture = await lstat(fixture).catch((error) =>
       error.code === "ENOENT" ? null : Promise.reject(error),
@@ -390,6 +443,7 @@ try {
   environment.ENOUGH_PHASE11_MANUAL_ACCOUNT = phase11 ? "1" : "0";
   environment.ENOUGH_PHASE12_MANUAL_ACCOUNT = phase12 ? "1" : "0";
   environment.ENOUGH_PHASE13_MANUAL_ACCOUNT = phase13 ? "1" : "0";
+  environment.ENOUGH_PHASE14_MANUAL_ACCOUNT = "0";
   if (phase11) {
     const privatePath = join(fixture, "policy-snapshot-private.pem");
     const publicPath = join(fixture, "policy-snapshot-public.pem");
@@ -414,25 +468,25 @@ try {
     }
   }
   environment.ENOUGH_PHASE2_INTEGRATION =
-    phase9 || phase10 || phase11 || phase12 || phase13
+    phase9 || phase10 || phase11 || phase12 || phase13 || phase14
       ? "0"
       : phase3 || phase4 || phase5 || phase6 || phase7 || phase8
         ? "0"
         : "1";
   environment.ENOUGH_PHASE3_INTEGRATION =
-    phase9 || phase10 || phase11 || phase12 || phase13
+    phase9 || phase10 || phase11 || phase12 || phase13 || phase14
       ? "0"
       : phase3 || phase4 || phase5 || phase6 || phase7 || phase8
         ? "1"
         : "0";
   environment.ENOUGH_PHASE4_INTEGRATION =
-    phase9 || phase10 || phase11 || phase12 || phase13
+    phase9 || phase10 || phase11 || phase12 || phase13 || phase14
       ? "0"
       : phase4 || phase5 || phase6 || phase7 || phase8
         ? "1"
         : "0";
   environment.ENOUGH_PHASE5_INTEGRATION =
-    phase9 || phase10 || phase11 || phase12 || phase13
+    phase9 || phase10 || phase11 || phase12 || phase13 || phase14
       ? "0"
       : phase5 || phase6 || phase7 || phase8
         ? "1"
@@ -442,6 +496,7 @@ try {
   environment.ENOUGH_PHASE8_INTEGRATION = phase8 ? "1" : "0";
   environment.ENOUGH_PHASE12_INTEGRATION = phase12 ? "1" : "0";
   environment.ENOUGH_PHASE13_INTEGRATION = phase13 ? "1" : "0";
+  environment.ENOUGH_PHASE14_INTEGRATION = phase14 ? "1" : "0";
   if (phase13) {
     const apiRequire = createRequire(join(root, "apps/api/package.json"));
     const S3rver = apiRequire("s3rver");
@@ -619,7 +674,7 @@ try {
     env: environment,
   });
   const worker =
-    phase9 || phase10 || phase11 || phase12 || phase13
+    phase9 || phase10 || phase11 || phase12 || phase13 || phase14
       ? launch(process.execPath, ["--import", "tsx", "src/server.ts"], {
           cwd: join(root, "apps", "worker"),
           env: environment,
@@ -673,15 +728,33 @@ try {
       assert.equal(response.status, 200, `Phase 13 page failed: ${path}`);
     }
   }
+  if (phase14) {
+    const response = await fetch(`http://127.0.0.1:${webPort}/integrations`);
+    assert.equal(response.status, 200, "Phase 14 integrations page failed.");
+  }
   console.info(
-    phase9 || phase10 || phase11 || phase12 || phase13
-      ? `Isolated PostgreSQL/Redis/API/worker/web ready at ${pgPort}/${redisPort}/${apiPort}/${environment.WORKER_PORT}/${webPort}${phase9 ? "; all Phase 9 routes returned 200" : phase12 ? "; task page returned 200" : phase13 ? "; tasks, evidence and credits pages returned 200" : ""}.`
+    phase9 || phase10 || phase11 || phase12 || phase13 || phase14
+      ? `Isolated PostgreSQL/Redis/API/worker/web ready at ${pgPort}/${redisPort}/${apiPort}/${environment.WORKER_PORT}/${webPort}${phase9 ? "; all Phase 9 routes returned 200" : phase12 ? "; task page returned 200" : phase13 ? "; tasks, evidence and credits pages returned 200" : phase14 ? "; integrations page returned 200" : ""}.`
       : `Isolated API/web ready at ${apiPort}/${webPort}; other runtimes untouched.`,
   );
-  if ((phase9 || phase10 || phase11 || phase12 || phase13) && mode === "test") {
+  if ((phase9 || phase10 || phase11 || phase12 || phase13 || phase14) && mode === "test") {
     console.info(
-      `Phase ${phase13 ? "13" : phase12 ? "12" : phase11 ? "11" : phase10 ? "10" : "9"} isolated migration and full-stack readiness smoke checks passed.`,
+      `Phase ${phase14 ? "14" : phase13 ? "13" : phase12 ? "12" : phase11 ? "11" : phase10 ? "10" : "9"} isolated migration and full-stack readiness smoke checks passed.`,
     );
+    if (phase14) {
+      await runNode(
+        [
+          join(root, "node_modules", "vitest", "vitest.mjs"),
+          "run",
+          "apps/api/src/integration-adapters.test.ts",
+          "apps/api/src/integrations.integration.test.ts",
+          "--hookTimeout=60000",
+          "--testTimeout=60000",
+          "--maxWorkers=1",
+        ],
+        { env: environment },
+      );
+    }
     if (phase13) {
       const fixtureCredentials = JSON.parse(
         await readFile(join(fixture, "credentials.json"), "utf8"),

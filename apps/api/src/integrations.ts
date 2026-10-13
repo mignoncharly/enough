@@ -140,8 +140,9 @@ function canonicalPayload(
   });
 }
 
-function sendIntegrationError(request: FastifyRequest, reply: FastifyReply, error: unknown) {
-  request.log.error({ err: error }, "Integration operation failed");
+function sendIntegrationError(request: FastifyRequest, reply: FastifyReply) {
+  // Provider responses and database errors can contain credentials or payload fragments.
+  request.log.error("Integration operation failed");
   return reply
     .code(503)
     .send({ error: "The integration action could not be completed. Try again shortly." });
@@ -190,8 +191,8 @@ export async function registerIntegrationRoutes(app: FastifyInstance): Promise<v
           accountResponse(account, eventsByAccount.get(account.id) ?? []),
         ),
       });
-    } catch (error) {
-      return sendIntegrationError(request, reply, error);
+    } catch {
+      return sendIntegrationError(request, reply);
     }
   });
 
@@ -263,9 +264,9 @@ export async function registerIntegrationRoutes(app: FastifyInstance): Promise<v
             "sha256=HMAC_SHA256(signingSecret, unixTimestamp + '.' + exactRequestBodyBytes)",
         },
       });
-    } catch (error) {
+    } catch {
       await client.query("ROLLBACK");
-      return sendIntegrationError(request, reply, error);
+      return sendIntegrationError(request, reply);
     } finally {
       client.release();
     }
@@ -327,9 +328,9 @@ export async function registerIntegrationRoutes(app: FastifyInstance): Promise<v
       }
       await client.query("COMMIT");
       return reply.send({ integrationId: current.id, status: "REVOKED" });
-    } catch (error) {
+    } catch {
       await client.query("ROLLBACK");
-      return sendIntegrationError(request, reply, error);
+      return sendIntegrationError(request, reply);
     } finally {
       client.release();
     }
@@ -600,14 +601,14 @@ export async function registerIntegrationRoutes(app: FastifyInstance): Promise<v
           rewardIssued: false,
           creditTransactionId,
         });
-      } catch (error) {
+      } catch {
         await client.query("ROLLBACK");
-        return sendIntegrationError(request, reply, error);
+        return sendIntegrationError(request, reply);
       } finally {
         client.release();
       }
-    } catch (error) {
-      return sendIntegrationError(request, reply, error);
+    } catch {
+      return sendIntegrationError(request, reply);
     }
   });
 }

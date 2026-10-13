@@ -348,25 +348,27 @@ Uploads and screenshots now use private S3-compatible object storage with opaque
 ## Phase 14 implementation map
 
 - `packages/db/migrations/0011_integration_platform.sql`: integration accounts, API credential hashes, encrypted token/signing-secret storage, sync runs, safe errors, normalized events, replay uniqueness, product/user ownership foreign keys, and automatic-vs-manual evidence method tracking.
-- `apps/api/src/integration-adapters.ts` and `apps/api/src/integrations.ts`: shared adapter/catalog contract; signed Generic webhook and Public Event API account creation, revocation, source health, strict normalized event validation, raw-body HMAC verification, timestamp replay bounds, event-ID idempotency, IP/account rate limits, privacy-minimized storage, and audit records.
+- `apps/api/src/integration-adapters.ts` and `apps/api/src/integrations.ts`: shared adapter/catalog contract; signed Generic webhook and Public Event API account creation, revocation, source health, strict normalized event validation, raw-body HMAC verification, timestamp replay bounds, event-ID idempotency, IP/account rate limits, privacy-minimized storage, and audit records. Non-revenue event types reject monetary values; integration error logs omit raw provider/backend exceptions.
 - `apps/api/src/server.ts`, `apps/web/next.config.ts`, and `infra/nginx/enough.conf`: custom raw-body event content type, no-store responses, same-origin workspace API rewrite, and public API proxy routing.
 - `apps/api/src/evidence.ts`, `apps/api/src/credits.ts`, and `apps/web/app/evidence/page.tsx`: integration evidence records the source signature as authenticated, but linked task evidence stays pending for owner review; event receipt itself does not grant credits.
 - `apps/web/app/integrations/page.tsx`, `apps/web/app/workspace-data.ts`, and `apps/web/app/globals.css`: create/revoke controls, one-time credentials, connection health, recent events, pending evidence links, and explicit trust-boundary text.
 - `packages/auth/src/routes.ts`: account export includes safe integration account/event/sync/error data; credential hashes, encrypted secrets, and token values are not exported.
 - `INTEGRATIONS.md` and `apps/web/public/INTEGRATIONS.md`: event API schema, signing example, retry behavior, limits, and trust boundary.
 
-Only Generic webhook and Public Event API are available. The workspace owner controls their signing source; a valid HMAC proves control of the source, not that an outside vendor originated the claim. Linked task evidence is pending manual owner review and cannot directly issue credits. Gmail, Google Calendar, Outlook, Microsoft Calendar, Stripe, PostHog, Plausible, and GA4 OAuth/API adapters and provider-specific signature checks are not implemented. Migration, browser, database, signature, replay, isolation, export/deletion, and reward acceptance remain pending. No tests, builds, or typechecks were run during this implementation turn.
+Only Generic webhook and Public Event API are implemented. The workspace owner controls their signing source; a valid HMAC proves control of that source, not that an outside vendor originated the claim. Linked task evidence remains pending manual owner review and cannot directly issue credits. Gmail, Google Calendar, Outlook, Microsoft Calendar, provider-authenticated Stripe customer revenue, PostHog, Plausible, and GA4 adapters, token refresh/revocation at the provider, sync execution/failure recording, and vendor-origin verification are not implemented. The Phase 14 isolated fixture applied migrations through `0019`, passed runtime readiness and the integrations-page route smoke, and passed the adapter/API suite; details are recorded in `PHASE_14_ACCEPTANCE.md`. Phase 14 remains ACTIVE and is not ready for final acceptance because the canonical automatic real-world event verification criterion is not met.
 
 ## Phase 14 acceptance checklist
 
-- [x] Add the shared integration account, encrypted credential/token, normalized event, sync-run, and error model with ownership constraints.
-- [x] Add Generic webhook and Public Event API creation/revocation with one-time credentials, exact-body HMAC verification, timestamp freshness, event validation, idempotency, rate limits, audit records, and workspace controls.
-- [x] Keep event receipt from issuing task credits; linked evidence remains pending for the existing owner-review flow.
-- [x] Include integration account/event/health/error data in account export without exporting secrets.
-- [ ] Implement provider-specific Gmail, Google Calendar, Outlook, Microsoft Calendar, Stripe, PostHog, Plausible, and GA4 authentication/sync/signature checks.
-- [ ] Apply migrations `0002_authentication.sql` through `0011_integration_platform.sql` in order.
-- [ ] Exercise HMAC success/failure, timestamp expiry, identical retry, conflicting event-ID reuse, rate limits, revocation race, ownership isolation, evidence review, reward gating, export/deletion, and the integrations/evidence pages.
-- [ ] Review implementation and complete requested quality checks before marking Phase 14 complete. No tests, builds, or typechecks were run during this implementation turn.
+- [x] Audit the existing account/event schema and adapter catalog without adding provider functionality that does not exist; confirm only Generic webhook and Public Event API adapters are available.
+- [x] Apply the isolated migration chain through `0019`, including `0011_integration_platform.sql`, and pass migration precheck plus API/worker/web readiness.
+- [x] Exercise Generic webhook and Public Event API HMAC success/failure, exact-body signature validation, stale/future timestamp rejection, normalized payload validation, identical retry, conflicting event-ID reuse, account rate limit, revocation race, and owner/product isolation.
+- [x] Verify hashed API-key and encrypted signing-secret persistence, one-time credential non-disclosure, safe account export, connection/disconnection audit records, revocation, token-row cleanup, and account-deletion cascades for integration records.
+- [x] Link an authenticated event to a task as pending/manual evidence; verify the owner-review flow grants one reward exactly once and replay does not duplicate it.
+- [x] Run the Phase 14 adapter/API integration suite (3 adapter tests and 7 PostgreSQL/API cases), exercise connection create/list/revoke through the same-origin web API rewrite, and verify `/integrations` returns HTTP 200 in the isolated runtime.
+- [ ] Implement and verify Gmail, Google Calendar, Outlook, Microsoft Calendar, provider-authenticated Stripe customer revenue, PostHog, Plausible, and GA4 adapters, including required scopes, vendor-origin checks, token refresh/revocation, normalized sync, and safe failure recording.
+- [ ] Complete real-provider sandbox acceptance for the implemented provider adapters; do not substitute owner-signed Generic webhook events for vendor-origin proof.
+- [ ] Complete one consolidated browser acceptance session after provider-backed UI/runtime paths are available; no manual session was needed to verify the current automated common path.
+- [ ] Re-run the final quality checks after provider work and meet the canonical exit criterion: meaningful real-world events can be verified automatically without double-granting credits.
 
 ## Phase 15 implementation map
 

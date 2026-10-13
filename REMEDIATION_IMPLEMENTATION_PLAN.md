@@ -1,6 +1,6 @@
 # Remediation Implementation Plan
 
-Last consolidated: 2026-10-13 (Phase 10 checkpointed at `6a6110205276b839534427a05b60f4c1044a3c0e`; Phase 11 ACTIVE, P11-1–P11-3 PASS, P11-4–P11-5 BLOCKED; Phase 12 COMPLETE; Phase 13 COMPLETE)
+Last consolidated: 2026-10-13 (Phase 13 baseline checkpoint `d86670bc83b6aab56b76860ee623e6a5831bc215`; Phase 10 remains checkpointed at `6a6110205276b839534427a05b60f4c1044a3c0e`; Phase 11 ACTIVE, P11-1–P11-3 PASS, P11-4–P11-5 BLOCKED; Phase 12 COMPLETE; Phase 13 COMPLETE; Phase 14 ACTIVE with common Generic/Public API path verified and named vendor adapters still open)
 Source of truth for implementation order: this file. The historical scope remains in `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md`; historical implementation detail and evidence remain in `IMPLEMENTATION_HANDOFF.md`.
 
 ## Objective and current decision 
@@ -277,11 +277,12 @@ production is NO-GO.
 
 **Critical for Phase 27-required providers; Medium for optional analytics adapters**
 
-- [ ] Implement and verify Gmail, Outlook, Google Calendar, and Microsoft Calendar provider authentication, scopes, sync, token refresh/revocation, and vendor-origin verification.
-- [ ] Verify Stripe billing and separately implement provider-authenticated customer revenue evidence required by the original integrations scope. Enough's own subscription events do not prove a founder's customer payment; owner-controlled events do not establish vendor origin.
-- [ ] Apply migrations `0002`–`0011` in order.
-- [ ] Exercise Generic webhook/Public Event API HMAC success/failure, timestamp expiry, identical retry, conflicting event ID, rate limits, revocation races, ownership, evidence review/reward gating, export, and deletion.
+- [ ] Implement and verify Gmail, Outlook, Google Calendar, and Microsoft Calendar provider authentication, minimum scopes, sync, token refresh/revocation, safe failure recording, and vendor-origin verification. No adapters currently exist.
+- [ ] Verify Stripe billing separately from provider-authenticated customer revenue evidence required by the original integrations scope. Enough's own subscription webhook does not prove a founder's customer payment; owner-controlled events do not establish vendor origin. No Phase 14 Stripe revenue adapter currently exists.
+- [x] Apply isolated migrations `0001`–`0019` in order and pass schema migration precheck; this includes `0002`–`0011`.
+- [x] Exercise Generic webhook/Public Event API HMAC success/failure, exact-body signing, stale/future timestamp rejection, malformed and out-of-scope monetary payload rejection, identical retry, conflicting event ID, account rate limits, revocation races, account/product ownership, evidence review/reward gating, safe export, and account deletion against isolated PostgreSQL/Redis/API runtime.
 - [ ] Implement PostHog, Plausible and GA4 adapters after core-loop providers at Medium priority, retaining original Phase 14 scope; Phase 0 did not remove these requirements.
+- [ ] Complete vendor sandbox acceptance after adapters exist; current Generic/Public API signatures authenticate the workspace owner's source and do not prove vendor-origin events. Phase 14 does not meet its automatic real-world verification exit criterion.
 
 ### Phase 15 — AI Layer
 

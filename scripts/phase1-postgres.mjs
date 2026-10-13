@@ -19,47 +19,54 @@ const phase10 = process.argv.includes("--phase10");
 const phase11 = process.argv.includes("--phase11");
 const phase12 = process.argv.includes("--phase12");
 const phase13 = process.argv.includes("--phase13");
-const basePhase = phase12
-  ? "phase12"
-  : phase9
-    ? "phase9"
-    : phase8
-      ? "phase8"
-      : phase7
-        ? "phase7"
-        : phase6
-          ? "phase6"
-          : phase5
-            ? "phase5"
-            : phase4
-              ? "phase4"
-              : phase3
-                ? "phase3"
-                : phase2
-                  ? "phase2"
-                  : "phase1";
-const phase = phase13
-  ? "phase13"
+const phase14 = process.argv.includes("--phase14");
+const basePhase = phase14
+  ? "phase14"
   : phase12
     ? "phase12"
-    : phase11
-      ? "phase11"
-      : phase10
-        ? "phase10"
-        : basePhase;
+    : phase9
+      ? "phase9"
+      : phase8
+        ? "phase8"
+        : phase7
+          ? "phase7"
+          : phase6
+            ? "phase6"
+            : phase5
+              ? "phase5"
+              : phase4
+                ? "phase4"
+                : phase3
+                  ? "phase3"
+                  : phase2
+                    ? "phase2"
+                    : "phase1";
+const phase = phase14
+  ? "phase14"
+  : phase13
+    ? "phase13"
+    : phase12
+      ? "phase12"
+      : phase11
+        ? "phase11"
+        : phase10
+          ? "phase10"
+          : basePhase;
 const baseFixture =
-  phase3 || phase4 || phase5 || phase6 || phase7 || phase8 || phase9 || phase12
+  phase3 || phase4 || phase5 || phase6 || phase7 || phase8 || phase9 || phase12 || phase14
     ? join(tmpdir(), `enough-${basePhase}`)
     : join(root, ".runtime", basePhase);
-const fixture = phase13
-  ? join(tmpdir(), "enough-phase13")
-  : phase12
-    ? join(tmpdir(), "enough-phase12")
-    : phase11
-      ? join(tmpdir(), "enough-phase11")
-      : phase10
-        ? join(tmpdir(), "enough-phase10")
-        : baseFixture;
+const fixture = phase14
+  ? join(tmpdir(), "enough-phase14")
+  : phase13
+    ? join(tmpdir(), "enough-phase13")
+    : phase12
+      ? join(tmpdir(), "enough-phase12")
+      : phase11
+        ? join(tmpdir(), "enough-phase11")
+        : phase10
+          ? join(tmpdir(), "enough-phase10")
+          : baseFixture;
 const data = join(fixture, "pgdata");
 const basePort = phase9
   ? "55440"
@@ -78,15 +85,17 @@ const basePort = phase9
               : phase2
                 ? "55433"
                 : "55432";
-const port = phase13
-  ? "55944"
-  : phase12
-    ? "55943"
-    : phase11
-      ? "55942"
-      : phase10
-        ? "55441"
-        : basePort;
+const port = phase14
+  ? "55946"
+  : phase13
+    ? "55944"
+    : phase12
+      ? "55943"
+      : phase11
+        ? "55942"
+        : phase10
+          ? "55441"
+          : basePort;
 const admin = `enough_${phase}_admin`;
 const database = `enough_${phase}`;
 const baseRedisPort = phase9
@@ -106,15 +115,17 @@ const baseRedisPort = phase9
               : phase2
                 ? "56381"
                 : "56379";
-const redisPort = phase13
-  ? "56407"
-  : phase12
-    ? "56405"
-    : phase11
-      ? "56403"
-      : phase10
-        ? "56401"
-        : baseRedisPort;
+const redisPort = phase14
+  ? "56409"
+  : phase13
+    ? "56407"
+    : phase12
+      ? "56405"
+      : phase11
+        ? "56403"
+        : phase10
+          ? "56401"
+          : baseRedisPort;
 const baseWebPort = phase9
   ? "3309"
   : phase8
@@ -132,15 +143,17 @@ const baseWebPort = phase9
               : phase2
                 ? "3302"
                 : "3301";
-const webPort = phase13
-  ? "3314"
-  : phase12
-    ? "3313"
-    : phase11
-      ? "3312"
-      : phase10
-        ? "3310"
-        : baseWebPort;
+const webPort = phase14
+  ? "3315"
+  : phase13
+    ? "3314"
+    : phase12
+      ? "3313"
+      : phase11
+        ? "3312"
+        : phase10
+          ? "3310"
+          : baseWebPort;
 const baseApiPort = phase9
   ? "4416"
   : phase8
@@ -158,15 +171,17 @@ const baseApiPort = phase9
               : phase2
                 ? "4402"
                 : "4400";
-const apiPort = phase13
-  ? "4424"
-  : phase12
-    ? "4422"
-    : phase11
-      ? "4420"
-      : phase10
-        ? "4418"
-        : baseApiPort;
+const apiPort = phase14
+  ? "4426"
+  : phase13
+    ? "4424"
+    : phase12
+      ? "4422"
+      : phase11
+        ? "4420"
+        : phase10
+          ? "4418"
+          : baseApiPort;
 const credentialPath = join(fixture, "credentials.json");
 const action = process.argv[2] ?? "start";
 if (!["start", "stop", "status"].includes(action)) throw new Error("Use start, stop or status.");
@@ -272,7 +287,7 @@ if (action !== "start") {
       `REDIS_URL=redis://127.0.0.1:${redisPort}/0`,
       `WEB_PORT=${webPort}`,
       `API_PORT=${apiPort}`,
-      `WORKER_PORT=${phase13 ? "4425" : phase12 ? "4423" : phase11 ? "4421" : phase10 ? "4419" : phase9 ? "4417" : phase8 ? "4415" : phase7 ? "4413" : phase6 ? "4411" : phase5 ? "4409" : phase4 ? "4407" : phase3 ? "4405" : phase2 ? "4403" : "4401"}`,
+      `WORKER_PORT=${phase14 ? "4427" : phase13 ? "4425" : phase12 ? "4423" : phase11 ? "4421" : phase10 ? "4419" : phase9 ? "4417" : phase8 ? "4415" : phase7 ? "4413" : phase6 ? "4411" : phase5 ? "4409" : phase4 ? "4407" : phase3 ? "4405" : phase2 ? "4403" : "4401"}`,
       `APP_BASE_URL=http://127.0.0.1:${webPort}`,
       `API_BASE_URL=http://127.0.0.1:${apiPort}`,
       `AUTH_SECRET=${credentials.auth}`,

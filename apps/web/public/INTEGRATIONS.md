@@ -45,7 +45,7 @@ Reuse the same `eventId` on retries. An identical retry returns the saved event;
 
 ## Event schema
 
-Bodies reject extra fields and free-form metadata. Required fields are `eventId` (1–255 allowed characters; use an opaque identifier without personal information), `eventType` (one of the types below), and `occurredAt` (ISO 8601 with a time zone, within the past year and no more than five minutes in the future). Optional `completionId` links the event to a completed task in this product and creates evidence pending owner review. Optional `userReference` must be an opaque identifier, not an email or direct personal information; Enough HMAC-hashes it before storage. Optional `amountMinor` and `currency` must be provided together.
+Bodies reject extra fields and free-form metadata. Required fields are `eventId` (1–255 allowed characters; use an opaque identifier without personal information), `eventType` (one of the types below), and `occurredAt` (ISO 8601 with a time zone, within the past year and no more than five minutes in the future). Optional `completionId` links the event to a completed task in this product and creates evidence pending owner review. Optional `userReference` must be an opaque identifier, not an email or direct personal information; Enough HMAC-hashes it before storage. Optional `amountMinor` and `currency` must be provided together and are accepted only for `revenue.*` event types.
 
 Supported types:
 
