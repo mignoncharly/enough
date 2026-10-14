@@ -1,6 +1,6 @@
 # Phase 14 — Integrations Acceptance
 
-**Status: ACTIVE — deterministic provider acceptance PASS; local browser acceptance PASS; external real-provider acceptance remains pending.**
+**Status: ACTIVE — deterministic provider acceptance PASS; local browser acceptance PASS; Google and Stripe external acceptance PASS; four external real-provider gates remain pending.**
 
 The canonical exit criterion is: **Meaningful real-world events can be verified automatically.** The Generic webhook and Public Event API authenticate only the workspace owner's configured source. Provider OAuth/API connections now authenticate to Gmail, Google and Microsoft calendars/mail, Stripe, PostHog, Plausible, and GA4. Provider sync evidence remains pending owner review. Stripe events are checked against the connected Stripe account; only a confirmed payment event with a matching task completion ID can automatically verify a task and issue its reward.
 
@@ -23,16 +23,23 @@ The user completed the single consolidated browser session and reported PASS for
 
 The seeded Stripe vendor-authenticated event appeared as automatically verified task evidence and produced exactly one +5 product-scoped Build Credit reward. Generic webhook and Public Event API evidence stayed pending and produced no automatic reward. Offline setup failure/recovery passed. Phase 14 fixtures were cleaned after the session.
 
+## External provider acceptance — Google — PASS — user-reported — 2026-10-14
+
+- **Gmail:** real Google OAuth and Gmail metadata API sync passed. Outreach, reply, and conversation-continuation events were provider authenticated; immediate re-sync produced no duplicate events. Email bodies were not required or displayed by Enough.
+- **Google Calendar:** real Google OAuth and Calendar API sync passed. A past customer interview normalized as one completed interview; a future event and unrelated entries produced no completed event. Re-sync produced no duplicates, and real token refresh succeeded while preserving the existing refresh token when Google returned no replacement.
+- **Shared revocation:** one real Calendar connection had encrypted access and refresh credentials, and its access token was usable before disconnect. Enough's normal Disconnect returned HTTP 200; Google's revoke endpoint returned HTTP 200 with audit result `REVOKED`; the local integration became `REVOKED` and its token row was removed. The same pre-disconnect access token then received HTTP 401 from Google. Exactly one active non-fixture Calendar connection existed before revocation; the seeded test fixture row was not a second real connection.
+- **OAuth security:** tampered state, missing authorization code, callback replay, and insufficient granted scope were rejected by automated coverage. Provider failures remain sanitized.
+
+The fixture issue found during acceptance is also closed: cleanup had removed `google-oauth.env`, and its absence was previously treated as empty configuration. Manual Google fixture startup now fails clearly when that configuration is required. The loader accepts only the two Google integration client settings, verifies their presence in the API child environment before application modules initialize, and never logs credential values. Synthetic configured/unconfigured catalog regression coverage confirms Gmail, Google Calendar, and GA4 availability behavior without contacting Google.
+
 ## Remaining external real-provider gates
 
-- Google real OAuth round trip with a dedicated test OAuth configuration and test user.
 - Microsoft real OAuth round trip with a dedicated test tenant and app.
 - PostHog dedicated test project and credentials.
 - Plausible dedicated test site/project and credentials.
 - GA4 dedicated test property and credentials.
-- Stripe end-to-end customer-revenue webhook delivery with a working sandbox/test setup.
 
-Do not use personal production accounts or production credentials for these gates. Deterministic local protocol coverage and browser acceptance do not substitute for the listed external account/sandbox checks.
+Do not use personal production accounts or production credentials for these gates. Deterministic local protocol coverage and browser acceptance do not substitute for the listed external account checks.
 
 ## Canonical scope audited
 
@@ -66,18 +73,22 @@ The Phase 14 fixture applied and prechecked migrations `0001`–`0019` in a disp
 - Add a marked Phase 14 TEMP fixture on dedicated PostgreSQL/Redis/API/worker/web ports and a cleanup command that verifies its marker, confirms services are stopped, then removes only `TEMP/enough-phase14`.
 - Implement provider OAuth/API-token connections, provider sync, Stripe customer-revenue confirmation, and integration evidence linking; add migration `0020_provider_integrations.sql` and provider-focused unit/API integration coverage.
 - Reject redirects on OAuth, provider API, and Stripe requests carrying bearer/client credentials; preserve Microsoft's `offline_access` grant while validating only scopes returned for its access token.
+- Prevent duplicate Google connections for the same user/product/provider/identity while keeping Gmail, Google Calendar, and GA4 as distinct provider integrations; preserve an existing matching Google refresh token on reconnect when no replacement is returned; record safe callback failure and provider-revocation metadata.
+- Load the dedicated Google OAuth fixture settings before API configuration initialization, fail clearly when required manual-fixture settings are missing, and test configured/unconfigured catalog availability with synthetic values only.
 
 ## Final checks
 
-- `pnpm test`: PASS, 121/121 default tests (161 opt-in integration/runtime tests skipped).
+- `pnpm test`: PASS, 129/129 default tests (164 opt-in integration/runtime tests skipped). Google OAuth protocol tests passed 7/7 and Google fixture/config tests passed 4/4 in this serial run.
+- `pnpm test:integrations:integration`: PASS, 36/36 Phase 14 PostgreSQL/API/runtime tests; migration chain through `0020`, migration precheck, and no-pending-migrations check passed.
 - `pnpm typecheck`: PASS across the configured workspace projects.
-- `pnpm format:check`: PASS, 206 files checked.
+- `pnpm format:check`: PASS, 209 files checked.
 - `pnpm lint`: PASS with 129 repository warnings and no errors.
-- `git diff --check`: PASS; Git reported line-ending notices for the two remediation documents.
-- Phase 14 status/documentation consistency checks: PASS. The acceptance record, implementation plan/handoff, security status, launch matrix, remediation summaries, and project/integration docs agree that Phase 14 is ACTIVE; deterministic provider and local browser acceptance are PASS; the six external gates remain open; Phases 11–13 retain their accepted statuses; production remains NO-GO with all 18 dependency-security findings open.
+- `pnpm audit --json`: findings remain open; 21 package/advisory entries (3 critical, 9 high, 9 moderate) across `@vitest/mocker`, `dicer`, `esbuild`, `fast-xml-parser`, `sprintf-js`, `tar`, `tinypool`, and `vitest`. The 18 previously tracked entries remain unresolved; the fresh registry report adds `GHSA-wm7h-9275-46v2` (dicer) and `GHSA-x3cc-x39p-42qx` / `GHSA-gh4j-gqv2-49f6` (fast-xml-parser). No dependency or lockfile changes were made. Production remains NO-GO.
+- `git diff --check`: PASS.
+- Phase 14 status/documentation consistency checks: PASS. The acceptance record and current status summaries agree that Phase 14 is ACTIVE; deterministic provider and local browser acceptance are PASS; Google and Stripe external acceptance are PASS; Microsoft, PostHog, Plausible, and GA4 remain open; Phases 11–13 retain their accepted statuses; production remains NO-GO with the 18 previously tracked dependency-security findings still open and the 3 additional audit entries unresolved.
 
 ## Security and release status
 
 The common signed-source flow remains authenticated and owner/product scoped. The signing secret is encrypted at rest; API keys are stored as hashes; event user references are hashed; raw provider/backend exceptions are not exposed. A valid owner HMAC establishes control of the configured source only. It does **not** establish vendor origin. Owner-controlled Generic webhook and Public Event API evidence remains pending and grants no automatic credits. Provider-origin evidence follows the accepted vendor-authenticated path, with automatic Build Credit exactly-once behavior verified for the Stripe fixture.
 
-Phase 11 remains ACTIVE with P11-1, P11-2, P11-3 PASS and P11-4/P11-5 BLOCKED. Phase 12 remains COMPLETE. Phase 13 remains COMPLETE. Phase 14 remains ACTIVE until all six external real-provider gates above pass. Production remains **NO-GO** while all 18 dependency-security findings remain open. No personal or production provider account/credential was used.
+Phase 11 remains ACTIVE with P11-1, P11-2, P11-3 PASS and P11-4/P11-5 BLOCKED. Phase 12 remains COMPLETE. Phase 13 remains COMPLETE. Phase 14 remains ACTIVE until the four remaining external gates above pass. Production remains **NO-GO** while the 18 previously tracked dependency-security findings and the three additional findings from the latest audit remain unresolved. No personal or production provider account/credential was used.

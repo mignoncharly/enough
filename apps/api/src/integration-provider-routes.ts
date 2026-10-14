@@ -156,6 +156,54 @@ function safeErrorCode(error: unknown): string {
   return "PROVIDER_SYNC_FAILED";
 }
 
+type OAuthCallbackStage =
+  | "TOKEN_EXCHANGE"
+  | "REFRESH_TOKEN_CHECK"
+  | "PROVIDER_IDENTITY"
+  | "CONNECTION_PERSISTENCE";
+
+function safeOAuthCallbackFailureCode(error: unknown, stage: OAuthCallbackStage): string {
+  const code = safeErrorCode(error);
+  if (code !== "PROVIDER_SYNC_FAILED") return code;
+  return stage === "CONNECTION_PERSISTENCE"
+    ? "CONNECTION_PERSISTENCE_FAILED"
+    : "OAUTH_CALLBACK_FAILED";
+}
+
+async function recordOAuthCallbackFailure(input: {
+  request: FastifyRequest;
+  userId: string;
+  deviceId: string | null;
+  provider: OAuthIntegrationProvider;
+  productId: string;
+  failureCode: string;
+  callbackStage: OAuthCallbackStage;
+}): Promise<void> {
+  let client: DbClient | null = null;
+  try {
+    client = await pool.connect();
+    await client.query(
+      `INSERT INTO enough.auth_audit_events (id, user_id, device_id, event_type, metadata)
+       VALUES ($1, $2, $3, 'integration.connection_failed', $4::jsonb)`,
+      [
+        randomUUID(),
+        input.userId,
+        input.deviceId,
+        JSON.stringify({
+          productId: input.productId,
+          provider: input.provider,
+          failureCode: input.failureCode,
+          callbackStage: input.callbackStage,
+        }),
+      ],
+    );
+  } catch {
+    input.request.log.error("Provider connection failure could not be audited");
+  } finally {
+    client?.release();
+  }
+}
+
 function getProviderConfig(options: ProviderIntegrationRouteOptions): IntegrationOAuthRuntime {
   return options.oauthRuntime ?? integrationOAuthRuntimeFromEnvironment();
 }
@@ -176,14 +224,17 @@ async function insertOAuthConnection(input: {
   providerAccountId: string;
   configuration: Record<string, unknown>;
   accessToken: string;
-  refreshToken: string;
+  refreshToken: string | null;
   tokenType: string;
   expiresAt: Date;
   scopes: string[];
   deviceId: string | null;
+  setCallbackStage: (stage: OAuthCallbackStage) => void;
 }): Promise<void> {
   const client = await pool.connect();
-  const accountId = randomUUID();
+  const providerAccountHash = createHmac("sha256", env.AUTH_SECRET)
+    .update(input.providerAccountId)
+    .digest("hex");
   try {
     await client.query("BEGIN");
     const product = await client.query(
@@ -191,23 +242,93 @@ async function insertOAuthConnection(input: {
       [input.productId, input.userId],
     );
     if (product.rowCount !== 1) throw new ProviderApiError("PRODUCT_NOT_FOUND");
-    await client.query(
-      `INSERT INTO enough.integration_accounts
-         (id, user_id, product_id, provider, display_name, scopes)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [accountId, input.userId, input.productId, input.provider, input.displayName, input.scopes],
+    const existing = await client.query<{ id: string; status: string }>(
+      `SELECT account.id, account.status
+       FROM enough.integration_accounts account
+       JOIN enough.integration_provider_configs config ON config.integration_account_id = account.id
+       WHERE account.user_id = $1 AND account.product_id = $2 AND account.provider = $3
+         AND config.provider_account_hash = $4
+       ORDER BY CASE account.status WHEN 'ACTIVE' THEN 0 WHEN 'ERROR' THEN 1 ELSE 2 END,
+                account.created_at ASC
+       FOR UPDATE OF account`,
+      [input.userId, input.productId, input.provider, providerAccountHash],
     );
+    const accountId = existing.rows[0]?.id ?? randomUUID();
+    let refreshToken = input.refreshToken;
+    if (!refreshToken) {
+      input.setCallbackStage("REFRESH_TOKEN_CHECK");
+      if (oauthFamily(input.provider) === "google") {
+        for (const candidate of existing.rows.filter((row) => row.status === "ACTIVE")) {
+          const stored = await client.query<{ refresh_token_ciphertext: Buffer | null }>(
+            `SELECT refresh_token_ciphertext FROM enough.integration_tokens
+             WHERE integration_account_id = $1 AND user_id = $2 AND product_id = $3
+             FOR UPDATE`,
+            [candidate.id, input.userId, input.productId],
+          );
+          const encryptedRefresh = stored.rows[0]?.refresh_token_ciphertext;
+          if (!encryptedRefresh) continue;
+          try {
+            const existingRefreshToken = decryptIntegrationSecret(encryptedRefresh);
+            if (existingRefreshToken.trim()) {
+              refreshToken = existingRefreshToken;
+              break;
+            }
+          } catch {
+            // An unreadable stored token cannot satisfy the refresh requirement.
+          }
+        }
+      }
+      if (!refreshToken) throw new OAuthProtocolError("REFRESH_TOKEN_REQUIRED");
+      input.setCallbackStage("CONNECTION_PERSISTENCE");
+    }
+    const duplicateIds = existing.rows
+      .slice(1)
+      .filter((row) => row.status !== "REVOKED")
+      .map((row) => row.id);
+    if (duplicateIds.length > 0) {
+      await client.query(
+        `UPDATE enough.integration_accounts
+         SET status = 'REVOKED', revoked_at = now(), updated_at = now()
+         WHERE id = ANY($1::uuid[]) AND status <> 'REVOKED'`,
+        [duplicateIds],
+      );
+      await client.query(
+        "DELETE FROM enough.integration_tokens WHERE integration_account_id = ANY($1::uuid[])",
+        [duplicateIds],
+      );
+    }
+    if (existing.rows[0]) {
+      await client.query(
+        `UPDATE enough.integration_accounts
+         SET display_name = $2, scopes = $3, status = 'ACTIVE', connected_at = now(),
+             revoked_at = NULL, updated_at = now()
+         WHERE id = $1`,
+        [accountId, input.displayName, input.scopes],
+      );
+    } else {
+      await client.query(
+        `INSERT INTO enough.integration_accounts
+           (id, user_id, product_id, provider, display_name, scopes)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [accountId, input.userId, input.productId, input.provider, input.displayName, input.scopes],
+      );
+    }
     await client.query(
       `INSERT INTO enough.integration_tokens
          (integration_account_id, user_id, product_id, access_token_ciphertext,
           refresh_token_ciphertext, token_type, scopes, expires_at, refreshed_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+       ON CONFLICT (integration_account_id) DO UPDATE
+         SET access_token_ciphertext = EXCLUDED.access_token_ciphertext,
+             refresh_token_ciphertext = EXCLUDED.refresh_token_ciphertext,
+             token_type = EXCLUDED.token_type, scopes = EXCLUDED.scopes,
+             expires_at = EXCLUDED.expires_at, refreshed_at = now(), updated_at = now()`,
       [
         accountId,
         input.userId,
         input.productId,
         encryptIntegrationSecret(input.accessToken),
-        encryptIntegrationSecret(input.refreshToken),
+        encryptIntegrationSecret(refreshToken),
         input.tokenType,
         input.scopes,
         input.expiresAt,
@@ -217,14 +338,19 @@ async function insertOAuthConnection(input: {
       `INSERT INTO enough.integration_provider_configs
          (integration_account_id, user_id, product_id, configuration,
           provider_account_ciphertext, provider_account_hash)
-       VALUES ($1, $2, $3, $4::jsonb, $5, $6)`,
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6)
+       ON CONFLICT (integration_account_id) DO UPDATE
+         SET configuration = EXCLUDED.configuration,
+             provider_account_ciphertext = EXCLUDED.provider_account_ciphertext,
+             provider_account_hash = EXCLUDED.provider_account_hash,
+             updated_at = now()`,
       [
         accountId,
         input.userId,
         input.productId,
         JSON.stringify(input.configuration),
         encryptIntegrationSecret(input.providerAccountId),
-        createHmac("sha256", env.AUTH_SECRET).update(input.providerAccountId).digest("hex"),
+        providerAccountHash,
       ],
     );
     await client.query(
@@ -717,8 +843,18 @@ export async function registerProviderIntegrationRoutes(
       client.release();
     }
     if (query.error || !code) {
+      await recordOAuthCallbackFailure({
+        request,
+        userId: stateRow.user_id,
+        deviceId: stateRow.device_id,
+        provider: stateRow.provider,
+        productId: stateRow.product_id,
+        failureCode: query.error ? "PROVIDER_AUTHORIZATION_DENIED" : "AUTHORIZATION_CODE_MISSING",
+        callbackStage: "TOKEN_EXCHANGE",
+      });
       return reply.redirect(safeReturnUrl(stateRow.provider, "failed"));
     }
+    let callbackStage: OAuthCallbackStage = "TOKEN_EXCHANGE";
     try {
       const tokenSet = await exchangeProviderAuthorizationCode({
         provider: stateRow.provider,
@@ -729,12 +865,13 @@ export async function registerProviderIntegrationRoutes(
         scopes: stateRow.scopes,
         fetcher: options.fetcher,
       });
-      if (!tokenSet.refreshToken) throw new OAuthProtocolError("REFRESH_TOKEN_REQUIRED");
+      callbackStage = "PROVIDER_IDENTITY";
       const providerAccountId = await readProviderAccountId({
         provider: stateRow.provider,
         accessToken: tokenSet.accessToken,
         fetcher: options.fetcher,
       });
+      callbackStage = "CONNECTION_PERSISTENCE";
       await insertOAuthConnection({
         provider: stateRow.provider,
         userId: stateRow.user_id,
@@ -748,29 +885,22 @@ export async function registerProviderIntegrationRoutes(
         expiresAt: tokenSet.expiresAt,
         scopes: tokenSet.scopes,
         deviceId: stateRow.device_id,
+        setCallbackStage: (stage) => {
+          callbackStage = stage;
+        },
       });
       return reply.redirect(safeReturnUrl(stateRow.provider, "connected"));
-    } catch {
-      const client = await pool.connect();
-      try {
-        await client.query(
-          `INSERT INTO enough.auth_audit_events (id, user_id, device_id, event_type, metadata)
-           VALUES ($1, $2, $3, 'integration.connection_failed', $4::jsonb)`,
-          [
-            randomUUID(),
-            stateRow.user_id,
-            stateRow.device_id,
-            JSON.stringify({
-              productId: stateRow.product_id,
-              provider: stateRow.provider,
-            }),
-          ],
-        );
-      } catch {
-        request.log.error("Provider connection failure could not be audited");
-      } finally {
-        client.release();
-      }
+    } catch (error) {
+      const failureCode = safeOAuthCallbackFailureCode(error, callbackStage);
+      await recordOAuthCallbackFailure({
+        request,
+        userId: stateRow.user_id,
+        deviceId: stateRow.device_id,
+        provider: stateRow.provider,
+        productId: stateRow.product_id,
+        failureCode,
+        callbackStage,
+      });
       return reply.redirect(safeReturnUrl(stateRow.provider, "failed"));
     }
   });

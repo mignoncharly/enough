@@ -1,6 +1,6 @@
 # Remediation Implementation Plan
 
-Last consolidated: 2026-10-13 (Phase 13 baseline checkpoint `d86670bc83b6aab56b76860ee623e6a5831bc215`; Phase 10 remains checkpointed at `6a6110205276b839534427a05b60f4c1044a3c0e`; Phase 11 ACTIVE, P11-1–P11-3 PASS, P11-4–P11-5 BLOCKED; Phase 12 COMPLETE; Phase 13 COMPLETE; Phase 14 deterministic provider and local browser acceptance PASS, six external real-provider gates open; production NO-GO with all 18 dependency-security findings open)
+Last consolidated: 2026-10-14 (Phase 13 baseline checkpoint `d86670bc83b6aab56b76860ee623e6a5831bc215`; Phase 10 remains checkpointed at `6a6110205276b839534427a05b60f4c1044a3c0e`; Phase 11 ACTIVE, P11-1–P11-3 PASS, P11-4–P11-5 BLOCKED; Phase 12 COMPLETE; Phase 13 COMPLETE; Phase 14 deterministic provider, local browser, Google external, and Stripe external acceptance PASS, four external real-provider gates open; production NO-GO with all 18 dependency-security findings open)
 Source of truth for implementation order: this file. The historical scope remains in `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md`; historical implementation detail and evidence remain in `IMPLEMENTATION_HANDOFF.md`.
 
 ## Objective and current decision 
@@ -277,14 +277,15 @@ production is NO-GO.
 
 **Critical for Phase 27-required providers; Medium for optional analytics adapters**
 
-- [x] Implement and deterministically accept Gmail, Outlook, Google Calendar, and Microsoft Calendar provider authentication, read scopes, sync, token refresh/disconnect, and safe failure recording. Dedicated real OAuth round trips remain open.
-- [x] Implement and deterministically accept a separate Stripe customer-revenue integration that confirms signed webhook events through the connected Stripe API. Enough's own subscription webhook remains separate. End-to-end Stripe sandbox delivery remains open.
+- [x] Implement and deterministically accept Gmail, Outlook, Google Calendar, and Microsoft Calendar provider authentication, read scopes, sync, token refresh/disconnect, and safe failure recording. Real Gmail and Google Calendar OAuth/API, refresh, and revocation acceptance passed; Microsoft real OAuth remains open.
+- [x] Implement and accept a separate Stripe customer-revenue integration that confirms signed webhook events through the connected Stripe API. Enough's own subscription webhook remains separate. End-to-end Stripe anonymous sandbox delivery passed.
 - [x] Apply isolated migrations `0001`–`0020` in order, pass migration precheck with no pending migrations, and verify compatibility upgrading from the accepted `0019` schema.
 - [x] Exercise Generic webhook/Public Event API HMAC success/failure, exact-body signing, stale/future timestamp rejection, malformed and out-of-scope monetary payload rejection, identical retry, conflicting event ID, account rate limits, revocation races, account/product ownership, evidence review/reward gating, safe export, and account deletion against isolated PostgreSQL/Redis/API runtime.
 - [x] Implement and deterministically accept PostHog, Plausible and GA4 adapters with explicit event mapping and aggregated result storage, retaining the original Phase 14 scope.
 - [x] Pass migration `0020`, provider OAuth/adapter/Stripe suites (18/18 focused tests), and 29/29 Phase 14 PostgreSQL/API runtime tests in the isolated fixture; privacy/export/deletion checks passed.
 - [x] Complete consolidated local browser acceptance by user report, including exactly-once Stripe-origin reward behavior and pending/no-reward owner-controlled Generic/Public API behavior.
-- [ ] Complete dedicated real-provider acceptance for Google OAuth, Microsoft OAuth, PostHog, Plausible, GA4, and Stripe customer-revenue webhook delivery. Generic/Public API signatures authenticate only the workspace owner's source. Phase 14 remains ACTIVE until these gates and the canonical automatic real-world event verification criterion are accepted.
+- [x] Complete dedicated Google OAuth and Stripe customer-revenue sandbox acceptance; see `PHASE_14_ACCEPTANCE.md`.
+- [ ] Complete the remaining dedicated real-provider acceptance for Microsoft OAuth, PostHog, Plausible, and GA4. Generic/Public API signatures authenticate only the workspace owner's source. Phase 14 remains ACTIVE until these gates and the canonical automatic real-world event verification criterion are accepted.
 
 ### Phase 15 — AI Layer
 

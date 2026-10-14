@@ -6,6 +6,7 @@ import {
   copyFile,
   lstat,
   mkdir,
+  readdir,
   readFile,
   realpath,
   symlink,
@@ -17,8 +18,9 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseEnv } from "node:util";
+import { readPhase14GoogleIntegrationConfig } from "./phase14-google-config.mjs";
 
 // Fixed, separately owned targets. Never loads the root .env or resets another service.
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -88,6 +90,7 @@ const fixture = phase14
         : phase10
           ? join(tmpdir(), "enough-phase10")
           : baseFixture;
+
 const basePgPort = phase12
   ? 55943
   : phase11
@@ -411,6 +414,30 @@ try {
     );
     if (existingFixture) {
       assert.ok(existingFixture.isDirectory() && !existingFixture.isSymbolicLink());
+      let markerStatus = await lstat(markerPath).catch((error) =>
+        error.code === "ENOENT" ? null : Promise.reject(error),
+      );
+      if (!markerStatus && phase14) {
+        const entries = await readdir(fixture);
+        const configPath = join(fixture, "google-oauth.env");
+        const configStatus = await lstat(configPath).catch((error) =>
+          error.code === "ENOENT" ? null : Promise.reject(error),
+        );
+        assert.ok(
+          entries.length === 1 &&
+            entries[0] === "google-oauth.env" &&
+            configStatus?.isFile() &&
+            !configStatus.isSymbolicLink(),
+          "An uninitialized Phase 14 folder may contain only the Google OAuth config file.",
+        );
+        await writeFile(
+          markerPath,
+          `${JSON.stringify({ fixture: `enough-${phase}`, version: 1 })}\n`,
+          { mode: 0o600, flag: "wx" },
+        );
+        markerStatus = await lstat(markerPath);
+      }
+      assert.ok(markerStatus, "The existing Phase 14 fixture is missing its marker.");
       const marker = JSON.parse(await readFile(markerPath, "utf8"));
       assert.equal(marker.fixture, `enough-${phase}`);
       assert.equal(marker.version, 1);
@@ -444,9 +471,21 @@ try {
   environment.ENOUGH_PHASE13_MANUAL_ACCOUNT = phase13 ? "1" : "0";
   environment.ENOUGH_PHASE14_MANUAL_ACCOUNT = phase14 ? "1" : "0";
   if (phase14) {
+    const googleIntegrationConfig = await readPhase14GoogleIntegrationConfig(
+      join(fixture, "google-oauth.env"),
+    );
+    console.info(
+      `Phase 14 Google config presence: file=${googleIntegrationConfig.fileExists}, clientId=${googleIntegrationConfig.clientIdPresent}, clientSecret=${googleIntegrationConfig.clientSecretPresent}.`,
+    );
+    if (
+      mode !== "test" &&
+      (!googleIntegrationConfig.clientIdPresent || !googleIntegrationConfig.clientSecretPresent)
+    ) {
+      throw new Error(
+        "Phase 14 Google OAuth config is required to serve the manual fixture; credentials were not loaded.",
+      );
+    }
     for (const key of [
-      "GOOGLE_INTEGRATION_CLIENT_ID",
-      "GOOGLE_INTEGRATION_CLIENT_SECRET",
       "MICROSOFT_INTEGRATION_CLIENT_ID",
       "MICROSOFT_INTEGRATION_CLIENT_SECRET",
       "STRIPE_SECRET_KEY",
@@ -455,6 +494,9 @@ try {
       "STRIPE_PRICE_ANNUAL",
     ])
       environment[key] = "";
+    environment.GOOGLE_INTEGRATION_CLIENT_ID = googleIntegrationConfig.clientId;
+    environment.GOOGLE_INTEGRATION_CLIENT_SECRET = googleIntegrationConfig.clientSecret;
+    environment.ENOUGH_PHASE14_REQUIRE_GOOGLE_OAUTH_CONFIG = mode === "test" ? "0" : "1";
   }
   if (phase11) {
     const privatePath = join(fixture, "policy-snapshot-private.pem");
@@ -681,10 +723,21 @@ try {
         "junction",
       );
   }
-  const api = launch(process.execPath, ["--import", "tsx", "src/server.ts"], {
-    cwd: join(root, "apps", "api"),
-    env: environment,
-  });
+  const api = launch(
+    process.execPath,
+    [
+      ...(phase14
+        ? ["--import", pathToFileURL(join(root, "scripts", "phase14-api-env-preload.mjs")).href]
+        : []),
+      "--import",
+      "tsx",
+      "src/server.ts",
+    ],
+    {
+      cwd: join(root, "apps", "api"),
+      env: environment,
+    },
+  );
   const worker =
     phase9 || phase10 || phase11 || phase12 || phase13 || phase14
       ? launch(process.execPath, ["--import", "tsx", "src/server.ts"], {

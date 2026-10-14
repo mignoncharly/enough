@@ -1,4 +1,4 @@
-import { env } from "@enough/config";
+import { type AppEnvironment, env } from "@enough/config";
 
 export type OAuthIntegrationProvider =
   | "GMAIL"
@@ -61,20 +61,28 @@ export function requiredOAuthScopes(provider: OAuthIntegrationProvider): string[
   return [...GOOGLE_SCOPES[provider]];
 }
 
-export function integrationOAuthRuntimeFromEnvironment(): IntegrationOAuthRuntime {
+export function integrationOAuthRuntimeFromEnvironment(
+  source: Pick<
+    AppEnvironment,
+    | "GOOGLE_INTEGRATION_CLIENT_ID"
+    | "GOOGLE_INTEGRATION_CLIENT_SECRET"
+    | "MICROSOFT_INTEGRATION_CLIENT_ID"
+    | "MICROSOFT_INTEGRATION_CLIENT_SECRET"
+  > = env,
+): IntegrationOAuthRuntime {
   return {
     google:
-      env.GOOGLE_INTEGRATION_CLIENT_ID && env.GOOGLE_INTEGRATION_CLIENT_SECRET
+      source.GOOGLE_INTEGRATION_CLIENT_ID && source.GOOGLE_INTEGRATION_CLIENT_SECRET
         ? {
-            clientId: env.GOOGLE_INTEGRATION_CLIENT_ID,
-            clientSecret: env.GOOGLE_INTEGRATION_CLIENT_SECRET,
+            clientId: source.GOOGLE_INTEGRATION_CLIENT_ID,
+            clientSecret: source.GOOGLE_INTEGRATION_CLIENT_SECRET,
           }
         : undefined,
     microsoft:
-      env.MICROSOFT_INTEGRATION_CLIENT_ID && env.MICROSOFT_INTEGRATION_CLIENT_SECRET
+      source.MICROSOFT_INTEGRATION_CLIENT_ID && source.MICROSOFT_INTEGRATION_CLIENT_SECRET
         ? {
-            clientId: env.MICROSOFT_INTEGRATION_CLIENT_ID,
-            clientSecret: env.MICROSOFT_INTEGRATION_CLIENT_SECRET,
+            clientId: source.MICROSOFT_INTEGRATION_CLIENT_ID,
+            clientSecret: source.MICROSOFT_INTEGRATION_CLIENT_SECRET,
           }
         : undefined,
   };
@@ -290,13 +298,19 @@ export async function readProviderAccountId(input: {
   return id;
 }
 
+export type ProviderGrantRevocationResult =
+  | { result: "REVOKED"; httpStatus: number }
+  | { result: "FAILED"; httpStatus: number | null }
+  | { result: "MANUAL_PROVIDER_REVOCATION_REQUIRED"; httpStatus: null };
+
 export async function revokeProviderGrant(input: {
   provider: OAuthIntegrationProvider;
   token: string;
   fetcher?: typeof fetch;
-}): Promise<"REVOKED" | "MANUAL_PROVIDER_REVOCATION_REQUIRED"> {
+}): Promise<ProviderGrantRevocationResult> {
   const family = oauthFamily(input.provider);
-  if (family === "microsoft") return "MANUAL_PROVIDER_REVOCATION_REQUIRED";
+  if (family === "microsoft")
+    return { result: "MANUAL_PROVIDER_REVOCATION_REQUIRED", httpStatus: null };
   const endpoint = "https://oauth2.googleapis.com/revoke";
   const form = new URLSearchParams({ token: input.token });
   const response = await (input.fetcher ?? fetch)(endpoint, {
@@ -306,6 +320,8 @@ export async function revokeProviderGrant(input: {
     redirect: "error",
     signal: AbortSignal.timeout(10_000),
   }).catch(() => null);
-  if (!response?.ok) throw new OAuthProtocolError("PROVIDER_REVOCATION_FAILED");
-  return "REVOKED";
+  if (!response) return { result: "FAILED", httpStatus: null };
+  return response.ok
+    ? { result: "REVOKED", httpStatus: response.status }
+    : { result: "FAILED", httpStatus: response.status };
 }

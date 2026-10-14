@@ -117,6 +117,30 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
       return result.product.id as string;
     }
 
+    it("reports Google OAuth catalog availability from the isolated API environment", async () => {
+      const owner = await account();
+      const productId = await product(owner, "Phase 14 OAuth catalog product");
+      const listing = await payload(await request(`/integrations?productId=${productId}`, owner));
+      const expectedAvailable = Boolean(
+        process.env.GOOGLE_INTEGRATION_CLIENT_ID && process.env.GOOGLE_INTEGRATION_CLIENT_SECRET,
+      );
+      for (const provider of ["GMAIL", "GOOGLE_CALENDAR", "GA4"]) {
+        expect(
+          listing.catalog.find((item: { provider: string }) => item.provider === provider)
+            ?.available,
+          `${provider} catalog availability should reflect the isolated API environment`,
+        ).toBe(expectedAvailable);
+      }
+      expect(
+        listing.catalog.find((item: { provider: string }) => item.provider === "OUTLOOK")
+          ?.available,
+      ).toBe(false);
+      expect(
+        listing.catalog.find((item: { provider: string }) => item.provider === "MICROSOFT_CALENDAR")
+          ?.available,
+      ).toBe(false);
+    });
+
     async function completedTask(user: Account, productId: string, rewardCredits = 5) {
       const created = await payload(
         await request("/growth-tasks", user, {

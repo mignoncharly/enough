@@ -360,7 +360,7 @@ Uploads and screenshots now use private S3-compatible object storage with opaque
 - `packages/auth/src/routes.ts`: account export includes safe integration account/event/sync/error data; credential hashes, encrypted secrets, and token values are not exported.
 - `INTEGRATIONS.md` and `apps/web/public/INTEGRATIONS.md`: event API schema, signing example, retry behavior, limits, and trust boundary.
 
-The implementation follow-up adds provider OAuth/API-token adapters, provider sync, and Stripe customer-revenue confirmation. Deterministic provider acceptance and the consolidated local browser acceptance passed; migration `0020` passed fresh-chain and `0019` upgrade checks. Generic webhook and Public Event API still authenticate only the workspace owner's signing source; their linked task evidence stays pending and cannot directly issue credits. Provider sync data is authenticated to the connected vendor but still enters owner review. Only a Stripe-confirmed payment with a valid task completion match uses automatic verification. Phase 14 remains ACTIVE pending the six dedicated real-provider gates listed in `PHASE_14_ACCEPTANCE.md`.
+The implementation follow-up adds provider OAuth/API-token adapters, provider sync, and Stripe customer-revenue confirmation. Deterministic provider acceptance and the consolidated local browser acceptance passed; migration `0020` passed fresh-chain and `0019` upgrade checks. Gmail, Google Calendar, and Stripe external acceptance also passed; see `PHASE_14_ACCEPTANCE.md`. Generic webhook and Public Event API still authenticate only the workspace owner's signing source; their linked task evidence stays pending and cannot directly issue credits. Provider sync data is authenticated to the connected vendor but still enters owner review. Only a Stripe-confirmed payment with a valid task completion match uses automatic verification. Phase 14 remains ACTIVE pending the four dedicated real-provider gates listed in `PHASE_14_ACCEPTANCE.md`.
 
 ### Phase 14 implementation follow-up — 2026-10-13
 
@@ -371,7 +371,8 @@ The implementation follow-up adds provider OAuth/API-token adapters, provider sy
 - [x] Pass Google/Microsoft deterministic OAuth protocols, provider adapter contracts, Stripe customer-revenue, analytics, and PostgreSQL/API route coverage (18/18 provider-focused tests; 29/29 runtime tests).
 - [x] Apply and precheck migration `0020_provider_integrations.sql` on a fresh chain and as an upgrade from `0019`; confirm no pending migrations and account export/deletion/privacy behavior.
 - [x] Complete the single consolidated local browser acceptance session; user-reported PASS, including Stripe verified evidence, exactly-once +5 reward, owner-controlled pending evidence, responsive behavior, and fixture cleanup.
-- [ ] Complete dedicated real-provider acceptance: Google OAuth, Microsoft OAuth, PostHog, Plausible, GA4, and Stripe customer-revenue webhook delivery. No personal production accounts or production credentials are permitted.
+- [x] Complete dedicated Google OAuth and Stripe customer-revenue sandbox acceptance. Gmail and Calendar real-provider behavior, refresh, revocation, and provider-origin verification are recorded in `PHASE_14_ACCEPTANCE.md`.
+- [ ] Complete the remaining dedicated real-provider acceptance: Microsoft OAuth, PostHog, Plausible, and GA4. No personal production accounts or production credentials are permitted.
 
 ## Earlier Phase 14 common-path acceptance checklist
 
@@ -384,9 +385,10 @@ The implementation follow-up adds provider OAuth/API-token adapters, provider sy
 
 ## Current Phase 14 provider acceptance checklist
 - [x] Implement and deterministically verify Gmail, Google Calendar, Outlook, Microsoft Calendar, provider-authenticated Stripe customer revenue, PostHog, Plausible, and GA4 adapters, including scopes, vendor-origin checks, token lifecycle, normalized sync, and safe failure recording.
-- [ ] Complete the six real-provider gates in `PHASE_14_ACCEPTANCE.md`; do not substitute owner-signed Generic webhook events for vendor-origin proof.
+- [x] Complete the Google and Stripe external gates in `PHASE_14_ACCEPTANCE.md`; do not substitute owner-signed Generic webhook events for vendor-origin proof.
+- [ ] Complete the four remaining real-provider gates in `PHASE_14_ACCEPTANCE.md`.
 - [x] Complete one consolidated browser acceptance session. Local provider UI, fixture states, privacy, Stripe evidence/reward, owner-controlled pending evidence, responsive layout, error recovery, one-time secret display, and fixture cleanup passed by user report.
-- [x] Pass the final automated suites and workspace quality checks. Keep Phase 14 ACTIVE until the external real-provider gates and canonical exit criterion are accepted.
+- [x] Pass the final automated suites and workspace quality checks. Keep Phase 14 ACTIVE until the four remaining external real-provider gates and canonical exit criterion are accepted.
 
 ## Phase 15 implementation map
 

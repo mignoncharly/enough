@@ -322,7 +322,11 @@ export async function registerIntegrationRoutes(
     if (!integrationId.success) return reply.code(400).send({ error: "Invalid integration ID." });
     const client = await pool.connect();
     let providerRevocation: "REVOKED" | "MANUAL_REQUIRED" | "NOT_APPLICABLE" = "NOT_APPLICABLE";
-    let remoteRevoke: { provider: OAuthIntegrationProvider; token: string } | null = null;
+    let remoteRevoke: {
+      integrationId: string;
+      provider: OAuthIntegrationProvider;
+      token: string;
+    } | null = null;
     try {
       await client.query("BEGIN");
       const account = await client.query<{
@@ -358,6 +362,7 @@ export async function registerIntegrationRoutes(
           const ciphertext = stored?.refresh_token_ciphertext ?? stored?.access_token_ciphertext;
           if (ciphertext) {
             remoteRevoke = {
+              integrationId: current.id,
               provider: current.provider as OAuthIntegrationProvider,
               token: decryptIntegrationSecret(ciphertext),
             };
@@ -391,12 +396,44 @@ export async function registerIntegrationRoutes(
       }
       await client.query("COMMIT");
       if (remoteRevoke) {
+        let httpStatus: number | null = null;
+        let resultCategory: "REVOKED" | "ATTENTION_REQUIRED" | "MANUAL_REQUIRED" =
+          "ATTENTION_REQUIRED";
         try {
           const revoked = await revokeProviderGrant(remoteRevoke);
-          providerRevocation = revoked === "REVOKED" ? "REVOKED" : "MANUAL_REQUIRED";
+          httpStatus = revoked.httpStatus;
+          if (revoked.result === "REVOKED") {
+            providerRevocation = "REVOKED";
+            resultCategory = "REVOKED";
+          } else if (revoked.result === "MANUAL_PROVIDER_REVOCATION_REQUIRED") {
+            providerRevocation = "MANUAL_REQUIRED";
+            resultCategory = "MANUAL_REQUIRED";
+          } else {
+            providerRevocation = "MANUAL_REQUIRED";
+          }
         } catch {
-          request.log.warn("Provider grant revocation needs attention");
           providerRevocation = "MANUAL_REQUIRED";
+        }
+        const revokeMetadata = {
+          integrationId: remoteRevoke.integrationId,
+          provider: remoteRevoke.provider,
+          httpStatus,
+          resultCategory,
+        };
+        if (resultCategory === "REVOKED")
+          request.log.info(revokeMetadata, "Integration provider revocation result");
+        else request.log.warn(revokeMetadata, "Provider grant revocation needs attention");
+        try {
+          await client.query(
+            `INSERT INTO enough.auth_audit_events (id, user_id, device_id, event_type, metadata)
+             VALUES ($1, $2, $3, 'integration.provider_revocation_result', $4::jsonb)`,
+            [randomUUID(), session.id, session.deviceId, JSON.stringify(revokeMetadata)],
+          );
+        } catch {
+          request.log.error(
+            { integrationId: remoteRevoke.integrationId, provider: remoteRevoke.provider },
+            "Provider revocation result could not be audited",
+          );
         }
       } else if (
         [

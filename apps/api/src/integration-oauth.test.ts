@@ -1,9 +1,12 @@
+import { parseEnvironment } from "@enough/config";
 import { describe, expect, it, vi } from "vitest";
 import {
   buildProviderAuthorizationUrl,
   exchangeProviderAuthorizationCode,
   type IntegrationOAuthRuntime,
+  integrationOAuthRuntimeFromEnvironment,
   OAuthProtocolError,
+  oauthClientConfig,
   readProviderAccountId,
   refreshProviderAccessToken,
   requiredOAuthScopes,
@@ -23,6 +26,28 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe("provider OAuth protocol", () => {
+  it("marks Gmail, Calendar, and GA4 catalog providers available only with a Google client pair", () => {
+    const providers = ["GMAIL", "GOOGLE_CALENDAR", "GA4"] as const;
+    const absent = integrationOAuthRuntimeFromEnvironment(
+      parseEnvironment({ GOOGLE_INTEGRATION_CLIENT_ID: "", GOOGLE_INTEGRATION_CLIENT_SECRET: "" }),
+    );
+    const configured = integrationOAuthRuntimeFromEnvironment(
+      parseEnvironment({
+        GOOGLE_INTEGRATION_CLIENT_ID: "synthetic-google-client-id",
+        GOOGLE_INTEGRATION_CLIENT_SECRET: "synthetic-google-client-secret",
+      }),
+    );
+
+    for (const provider of providers) {
+      expect(oauthClientConfig(provider, absent)).toBeNull();
+      expect(oauthClientConfig(provider, configured)).toMatchObject({
+        clientId: "synthetic-google-client-id",
+        clientSecret: "synthetic-google-client-secret",
+      });
+    }
+    expect(configured.microsoft).toBeUndefined();
+  });
+
   it("requests only the provider-specific minimum read scopes with state and PKCE", () => {
     const cases = [
       ["GMAIL", ["openid", "https://www.googleapis.com/auth/gmail.metadata"]],
@@ -45,6 +70,10 @@ describe("provider OAuth protocol", () => {
       expect(url.searchParams.get("code_challenge")).toBe("pkce-challenge");
       expect(url.searchParams.get("scope")?.split(" ")).toEqual(scopes);
       expect(url.searchParams.get("response_type")).toBe("code");
+      if (["GMAIL", "GOOGLE_CALENDAR", "GA4"].includes(provider)) {
+        expect(url.searchParams.get("access_type")).toBe("offline");
+        expect(url.searchParams.get("prompt")).toBe("consent");
+      }
     }
   });
 
@@ -203,12 +232,26 @@ describe("provider OAuth protocol", () => {
       expect(new URLSearchParams(String(init?.body)).get("token")).toBe("refresh-token");
       return new Response(null, { status: 200 });
     });
-    expect(await revokeProviderGrant({ provider: "GMAIL", token: "refresh-token", fetcher })).toBe(
-      "REVOKED",
-    );
+    expect(
+      await revokeProviderGrant({ provider: "GMAIL", token: "refresh-token", fetcher }),
+    ).toEqual({ result: "REVOKED", httpStatus: 200 });
     expect(
       await revokeProviderGrant({ provider: "OUTLOOK", token: "refresh-token", fetcher }),
-    ).toBe("MANUAL_PROVIDER_REVOCATION_REQUIRED");
+    ).toEqual({ result: "MANUAL_PROVIDER_REVOCATION_REQUIRED", httpStatus: null });
     expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("reports only safe status metadata when Google revocation fails", async () => {
+    const fetcher = vi.fn<typeof fetch>(async (_url, init) => {
+      expect(init?.redirect).toBe("error");
+      return new Response("sensitive provider response body", { status: 503 });
+    });
+    const result = await revokeProviderGrant({
+      provider: "GOOGLE_CALENDAR",
+      token: "private-token",
+      fetcher,
+    });
+    expect(result).toEqual({ result: "FAILED", httpStatus: 503 });
+    expect(JSON.stringify(result)).not.toContain("sensitive provider response body");
   });
 });
