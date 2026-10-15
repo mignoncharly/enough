@@ -47,7 +47,7 @@ const GOOGLE_SCOPES: Record<
 
 const MICROSOFT_SCOPES: Record<"OUTLOOK" | "MICROSOFT_CALENDAR", string[]> = {
   OUTLOOK: ["openid", "offline_access", "User.Read", "Mail.ReadBasic"],
-  MICROSOFT_CALENDAR: ["openid", "offline_access", "User.Read", "Calendars.ReadBasic"],
+  MICROSOFT_CALENDAR: ["openid", "offline_access", "User.Read", "Calendars.Read"],
 };
 
 export function oauthFamily(provider: OAuthIntegrationProvider): "google" | "microsoft" {

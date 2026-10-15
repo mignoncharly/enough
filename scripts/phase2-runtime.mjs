@@ -21,6 +21,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseEnv } from "node:util";
 import { readPhase14GoogleIntegrationConfig } from "./phase14-google-config.mjs";
+import { readPhase14MicrosoftIntegrationConfig } from "./phase14-microsoft-config.mjs";
 
 // Fixed, separately owned targets. Never loads the root .env or resets another service.
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -35,7 +36,8 @@ const phase10 = process.argv.includes("--phase10");
 const phase11 = process.argv.includes("--phase11");
 const phase12 = process.argv.includes("--phase12");
 const phase13 = process.argv.includes("--phase13");
-const phase14 = process.argv.includes("--phase14");
+const phase14Microsoft = process.argv.includes("--phase14-microsoft");
+const phase14 = process.argv.includes("--phase14") || phase14Microsoft;
 const basePhase = phase14
   ? "phase14"
   : phase12
@@ -471,21 +473,9 @@ try {
   environment.ENOUGH_PHASE13_MANUAL_ACCOUNT = phase13 ? "1" : "0";
   environment.ENOUGH_PHASE14_MANUAL_ACCOUNT = phase14 ? "1" : "0";
   if (phase14) {
-    const googleIntegrationConfig = await readPhase14GoogleIntegrationConfig(
-      join(fixture, "google-oauth.env"),
-    );
-    console.info(
-      `Phase 14 Google config presence: file=${googleIntegrationConfig.fileExists}, clientId=${googleIntegrationConfig.clientIdPresent}, clientSecret=${googleIntegrationConfig.clientSecretPresent}.`,
-    );
-    if (
-      mode !== "test" &&
-      (!googleIntegrationConfig.clientIdPresent || !googleIntegrationConfig.clientSecretPresent)
-    ) {
-      throw new Error(
-        "Phase 14 Google OAuth config is required to serve the manual fixture; credentials were not loaded.",
-      );
-    }
     for (const key of [
+      "GOOGLE_INTEGRATION_CLIENT_ID",
+      "GOOGLE_INTEGRATION_CLIENT_SECRET",
       "MICROSOFT_INTEGRATION_CLIENT_ID",
       "MICROSOFT_INTEGRATION_CLIENT_SECRET",
       "STRIPE_SECRET_KEY",
@@ -494,9 +484,46 @@ try {
       "STRIPE_PRICE_ANNUAL",
     ])
       environment[key] = "";
-    environment.GOOGLE_INTEGRATION_CLIENT_ID = googleIntegrationConfig.clientId;
-    environment.GOOGLE_INTEGRATION_CLIENT_SECRET = googleIntegrationConfig.clientSecret;
-    environment.ENOUGH_PHASE14_REQUIRE_GOOGLE_OAUTH_CONFIG = mode === "test" ? "0" : "1";
+    environment.ENOUGH_PHASE14_REQUIRE_GOOGLE_OAUTH_CONFIG = "0";
+    environment.ENOUGH_PHASE14_REQUIRE_MICROSOFT_OAUTH_CONFIG = "0";
+    if (mode !== "test" && phase14Microsoft) {
+      const microsoftIntegrationConfig = await readPhase14MicrosoftIntegrationConfig(
+        join(fixture, "microsoft-oauth.env"),
+      );
+      console.info(
+        `Phase 14 Microsoft config presence: file=${microsoftIntegrationConfig.fileExists}, clientId=${microsoftIntegrationConfig.clientIdPresent}, clientSecret=${microsoftIntegrationConfig.clientSecretPresent}.`,
+      );
+      if (
+        !microsoftIntegrationConfig.clientIdPresent ||
+        !microsoftIntegrationConfig.clientSecretPresent
+      ) {
+        throw new Error(
+          "Phase 14 Microsoft OAuth config is required to serve the manual Microsoft fixture; credentials were not loaded.",
+        );
+      }
+      environment.MICROSOFT_INTEGRATION_CLIENT_ID = microsoftIntegrationConfig.clientId;
+      environment.MICROSOFT_INTEGRATION_CLIENT_SECRET = microsoftIntegrationConfig.clientSecret;
+      environment.ENOUGH_PHASE14_REQUIRE_MICROSOFT_OAUTH_CONFIG = "1";
+      environment.ENOUGH_PHASE14_MICROSOFT_LOCALHOST_CALLBACK = "1";
+    } else if (mode !== "test") {
+      const googleIntegrationConfig = await readPhase14GoogleIntegrationConfig(
+        join(fixture, "google-oauth.env"),
+      );
+      console.info(
+        `Phase 14 Google config presence: file=${googleIntegrationConfig.fileExists}, clientId=${googleIntegrationConfig.clientIdPresent}, clientSecret=${googleIntegrationConfig.clientSecretPresent}.`,
+      );
+      if (
+        !googleIntegrationConfig.clientIdPresent ||
+        !googleIntegrationConfig.clientSecretPresent
+      ) {
+        throw new Error(
+          "Phase 14 Google OAuth config is required to serve the manual fixture; credentials were not loaded.",
+        );
+      }
+      environment.GOOGLE_INTEGRATION_CLIENT_ID = googleIntegrationConfig.clientId;
+      environment.GOOGLE_INTEGRATION_CLIENT_SECRET = googleIntegrationConfig.clientSecret;
+      environment.ENOUGH_PHASE14_REQUIRE_GOOGLE_OAUTH_CONFIG = "1";
+    }
   }
   if (phase11) {
     const privatePath = join(fixture, "policy-snapshot-private.pem");
@@ -813,6 +840,8 @@ try {
           "run",
           "apps/api/src/integration-adapters.test.ts",
           "apps/api/src/integration-oauth.test.ts",
+          "scripts/phase14-google-config.test.ts",
+          "scripts/phase14-microsoft-config.test.ts",
           "apps/api/src/integration-provider-adapters.test.ts",
           "apps/api/src/integration-stripe.test.ts",
           "apps/api/src/integrations.integration.test.ts",
@@ -900,41 +929,64 @@ try {
       { env: environment },
     );
   } else {
-    await runNode(
-      [
-        "--import",
-        "tsx",
-        join(
-          root,
-          "scripts",
-          phase14
-            ? "phase14-manual-account.mjs"
-            : phase13
-              ? "phase13-manual-account.mjs"
-              : phase12
-                ? "phase12-manual-account.mjs"
-                : phase11
-                  ? "phase11-manual-account.mjs"
-                  : phase10
-                    ? "phase10-manual-account.mjs"
-                    : phase9
-                      ? "phase3-manual-account.mjs"
-                      : phase8
-                        ? "phase8-manual-account.mjs"
-                        : phase7
-                          ? "phase7-manual-account.mjs"
-                          : phase6
-                            ? "phase6-manual-account.mjs"
-                            : phase3 || phase4
-                              ? "phase3-manual-account.mjs"
-                              : "phase2-manual-account.mjs",
-        ),
-      ],
-      {
-        cwd: join(root, "apps", "api"),
-        env: environment,
-      },
-    );
+    const manualAccountPath = join(fixture, "manual-account.json");
+    const existingPhase14Account =
+      phase14 && mode === "serve"
+        ? await readFile(manualAccountPath, "utf8").catch((error) => {
+            if (error.code === "ENOENT") return null;
+            throw error;
+          })
+        : null;
+    if (existingPhase14Account) {
+      const account = JSON.parse(existingPhase14Account);
+      assert.equal(
+        account.fixture,
+        true,
+        "The existing Phase 14 account must be a disposable fixture.",
+      );
+      assert.equal(account.webBaseUrl, environment.APP_BASE_URL);
+      assert.equal(typeof account.email, "string");
+      assert.equal(typeof account.password, "string");
+      assert.equal(typeof account.productId, "string");
+      assert.ok(account.productId.length > 0);
+      console.info("Reusing the existing Phase 14 manual account; fixture seeding was skipped.");
+    } else {
+      await runNode(
+        [
+          "--import",
+          "tsx",
+          join(
+            root,
+            "scripts",
+            phase14
+              ? "phase14-manual-account.mjs"
+              : phase13
+                ? "phase13-manual-account.mjs"
+                : phase12
+                  ? "phase12-manual-account.mjs"
+                  : phase11
+                    ? "phase11-manual-account.mjs"
+                    : phase10
+                      ? "phase10-manual-account.mjs"
+                      : phase9
+                        ? "phase3-manual-account.mjs"
+                        : phase8
+                          ? "phase8-manual-account.mjs"
+                          : phase7
+                            ? "phase7-manual-account.mjs"
+                            : phase6
+                              ? "phase6-manual-account.mjs"
+                              : phase3 || phase4
+                                ? "phase3-manual-account.mjs"
+                                : "phase2-manual-account.mjs",
+          ),
+        ],
+        {
+          cwd: join(root, "apps", "api"),
+          env: environment,
+        },
+      );
+    }
     if (mode === "prepare") {
       console.info("Manual fixture preparation verified; stopping fixture services.");
     } else {

@@ -15,6 +15,7 @@ function sync(
   provider: Parameters<typeof integrationProviderAdapter>[0],
   fetcher: typeof fetch,
   configuration: Record<string, unknown> = {},
+  syncNow = now,
 ) {
   const adapter = integrationProviderAdapter(provider);
   if (!adapter) throw new Error(`Missing provider adapter: ${provider}`);
@@ -26,7 +27,7 @@ function sync(
     provider,
     accessToken: "opaque-test-token",
     configuration,
-    now,
+    now: syncNow,
     fetcher: guardedFetcher,
   });
 }
@@ -118,6 +119,67 @@ describe("provider sync contracts", () => {
     ]);
     expect(events[0].userReference).not.toContain("alice@example.com");
     expect(urls.every((url) => !url.searchParams.get("$select")?.includes("body"))).toBe(true);
+    const repeatedEvents = await sync("OUTLOOK", fetcher, {}, new Date(now.getTime() + 60_000));
+    expect(repeatedEvents).toEqual(events);
+  });
+
+  it("skips out-of-window Outlook messages without failing valid mail normalization", async () => {
+    const fetcher: typeof fetch = async (value) => {
+      const url = new URL(String(value));
+      if (url.pathname.endsWith("/sentitems/messages"))
+        return json({
+          value: [
+            {
+              id: "outlook-too-old",
+              conversationId: "old-conversation",
+              sentDateTime: "2024-01-01T10:00:00Z",
+              toRecipients: [{ emailAddress: { address: "old@example.test" } }],
+            },
+            {
+              id: "outlook-future",
+              conversationId: "future-conversation",
+              sentDateTime: "2026-10-13T12:06:00Z",
+              toRecipients: [{ emailAddress: { address: "future@example.test" } }],
+            },
+            {
+              id: "outlook-current",
+              conversationId: "current-conversation",
+              sentDateTime: "2026-10-12T10:00:00Z",
+              toRecipients: [{ emailAddress: { address: "current@example.test" } }],
+            },
+          ],
+        });
+      return json({
+        value: [
+          {
+            id: "reply-too-old",
+            conversationId: "old-conversation",
+            receivedDateTime: "2024-01-02T10:00:00Z",
+            from: { emailAddress: { address: "old@example.test" } },
+          },
+          {
+            id: "reply-future",
+            conversationId: "future-conversation",
+            receivedDateTime: "2026-10-13T12:06:00Z",
+            from: { emailAddress: { address: "future@example.test" } },
+          },
+          ...["reply-current-a", "reply-current-b"].map((id) => ({
+            id,
+            conversationId: "current-conversation",
+            receivedDateTime: "2026-10-12T11:00:00Z",
+            from: { emailAddress: { address: "current@example.test" } },
+          })),
+        ],
+      });
+    };
+    const events = await sync("OUTLOOK", fetcher);
+    expect(events.map((event) => event.eventType)).toEqual([
+      "email.outreach_sent",
+      "email.reply_received",
+      "email.reply_received",
+      "email.conversation_continued",
+    ]);
+    expect(events.some((event) => /too-old|future/.test(event.eventId))).toBe(false);
   });
 
   it("only emits completed, categorized calendar events and never makes them automatically eligible", async () => {

@@ -130,7 +130,11 @@ const oauthProviders: OAuthIntegrationProvider[] = [
 ];
 
 function redirectUri(family: "google" | "microsoft"): string {
-  return new URL(`/integrations/oauth/${family}/callback`, env.API_BASE_URL).toString();
+  const uri = new URL(`/integrations/oauth/${family}/callback`, env.API_BASE_URL);
+  if (family === "microsoft" && process.env.ENOUGH_PHASE14_MICROSOFT_LOCALHOST_CALLBACK === "1") {
+    uri.hostname = "localhost";
+  }
+  return uri.toString();
 }
 
 function safeReturnUrl(provider: OAuthIntegrationProvider, status: "connected" | "failed"): string {
@@ -487,13 +491,42 @@ async function insertVendorEvent(
     ],
   );
   if (!insertion.rows[0]) {
-    const existing = await client.query<{ id: string; payload_hash: string }>(
-      `SELECT id, payload_hash FROM enough.integration_events
+    const existing = await client.query<{
+      id: string;
+      payload_hash: string;
+      event_type: string;
+      user_reference_hash: string | null;
+      amount_minor: string | null;
+      currency: string | null;
+      completion_id: string | null;
+    }>(
+      `SELECT id, payload_hash, event_type, user_reference_hash,
+              amount_minor::text AS amount_minor, currency, completion_id
+       FROM enough.integration_events
        WHERE integration_account_id = $1 AND provider_event_id = $2`,
       [account.id, providerEvent.eventId],
     );
-    if (existing.rows[0] && existing.rows[0].payload_hash !== payloadHash)
-      throw new ProviderApiError("EVENT_ID_CONFLICT");
+    if (existing.rows[0] && existing.rows[0].payload_hash !== payloadHash) {
+      const previous = existing.rows[0];
+      const stableContinuationTimestampCorrection =
+        ["GMAIL", "OUTLOOK"].includes(account.provider) &&
+        providerEvent.eventType === "email.conversation_continued" &&
+        previous.event_type === "email.conversation_continued" &&
+        previous.user_reference_hash === null &&
+        previous.amount_minor === null &&
+        previous.currency === null &&
+        previous.completion_id === null &&
+        (providerEvent.userReference === undefined || providerEvent.userReference === null) &&
+        (providerEvent.amountMinor === undefined || providerEvent.amountMinor === null) &&
+        (providerEvent.currency === undefined || providerEvent.currency === null) &&
+        (providerEvent.completionId === undefined || providerEvent.completionId === null);
+      if (!stableContinuationTimestampCorrection) throw new ProviderApiError("EVENT_ID_CONFLICT");
+      await client.query(
+        `UPDATE enough.integration_events SET occurred_at = $2, payload_hash = $3
+         WHERE id = $1`,
+        [previous.id, occurredAt, payloadHash],
+      );
+    }
     return { inserted: false, evidenceId: null, rewardTransactionId: null };
   }
 

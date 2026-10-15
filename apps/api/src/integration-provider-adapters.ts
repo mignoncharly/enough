@@ -86,6 +86,15 @@ function normalizedEvent(input: {
   };
 }
 
+function isWithinAcceptedEventWindow(value: string | Date, now: Date): boolean {
+  const time = new Date(value).getTime();
+  return (
+    Number.isFinite(time) &&
+    time <= now.getTime() + 5 * 60_000 &&
+    time >= now.getTime() - 366 * 86400_000
+  );
+}
+
 function uniqueEvents(events: ProviderSyncEvent[], limit = 100): ProviderSyncEvent[] {
   const seen = new Set<string>();
   return events
@@ -259,12 +268,17 @@ async function syncMicrosoftEmail(input: ProviderSyncInput): Promise<ProviderSyn
   const sentBody = objectValue(await providerJson(input, urlFor("sentitems"), {}, true));
   const sent = listValue(sentBody?.value).slice(0, 25);
   const sentConversations = new Set<string>();
-  const incomingByConversation = new Map<string, number>();
+  const incomingByConversation = new Map<
+    string,
+    { count: number; latestReplyAt: string | Date; latestReplyAtMs: number }
+  >();
   const result: ProviderSyncEvent[] = [];
   for (const value of sent) {
     const row = objectValue(value);
     if (!row || typeof row.id !== "string") continue;
     if (typeof row.conversationId === "string") sentConversations.add(row.conversationId);
+    const occurredAt = typeof row.sentDateTime === "string" ? row.sentDateTime : now;
+    if (!isWithinAcceptedEventWindow(occurredAt, now)) continue;
     const recipients = [
       ...new Set(
         listValue(row.toRecipients)
@@ -278,7 +292,7 @@ async function syncMicrosoftEmail(input: ProviderSyncInput): Promise<ProviderSyn
         provider: input.provider,
         id: `${row.id}:${opaqueReference("recipient", recipient)}`,
         eventType: "email.outreach_sent",
-        occurredAt: typeof row.sentDateTime === "string" ? row.sentDateTime : now,
+        occurredAt,
         userReference: recipient,
       });
       if (event) result.push(event);
@@ -295,26 +309,35 @@ async function syncMicrosoftEmail(input: ProviderSyncInput): Promise<ProviderSyn
     )
       continue;
     const sender = objectValue(objectValue(row.from)?.emailAddress)?.address;
+    const occurredAt = typeof row.receivedDateTime === "string" ? row.receivedDateTime : now;
+    if (!isWithinAcceptedEventWindow(occurredAt, now)) continue;
     const event = normalizedEvent({
       provider: input.provider,
       id: row.id,
       eventType: "email.reply_received",
-      occurredAt: typeof row.receivedDateTime === "string" ? row.receivedDateTime : now,
+      occurredAt,
       userReference: typeof sender === "string" ? sender : null,
     });
     if (event) result.push(event);
-    incomingByConversation.set(
-      row.conversationId,
-      (incomingByConversation.get(row.conversationId) ?? 0) + 1,
-    );
+    const occurredAtMs = occurredAt instanceof Date ? occurredAt.getTime() : Date.parse(occurredAt);
+    const previous = incomingByConversation.get(row.conversationId);
+    incomingByConversation.set(row.conversationId, {
+      count: (previous?.count ?? 0) + 1,
+      latestReplyAt:
+        previous && previous.latestReplyAtMs > occurredAtMs ? previous.latestReplyAt : occurredAt,
+      latestReplyAtMs: Math.max(
+        previous?.latestReplyAtMs ?? Number.NEGATIVE_INFINITY,
+        occurredAtMs,
+      ),
+    });
   }
-  for (const [conversation, count] of incomingByConversation) {
-    if (count < 2) continue;
+  for (const [conversation, replySummary] of incomingByConversation) {
+    if (replySummary.count < 2) continue;
     const event = normalizedEvent({
       provider: input.provider,
       id: `${conversation}:continued`,
       eventType: "email.conversation_continued",
-      occurredAt: now,
+      occurredAt: replySummary.latestReplyAt,
     });
     if (event) result.push(event);
   }

@@ -1,6 +1,6 @@
 # Phase 14 — Integrations Acceptance
 
-**Status: ACTIVE — deterministic provider acceptance PASS; local browser acceptance PASS; Google and Stripe external acceptance PASS; four external real-provider gates remain pending.**
+**Status: ACTIVE — deterministic provider acceptance PASS; local browser acceptance PASS; Google and Stripe external acceptance PASS; Microsoft provider sync acceptance PASS with provider-side revocation BLOCKED; PostHog, Plausible, and GA4 remain pending.**
 
 The canonical exit criterion is: **Meaningful real-world events can be verified automatically.** The Generic webhook and Public Event API authenticate only the workspace owner's configured source. Provider OAuth/API connections now authenticate to Gmail, Google and Microsoft calendars/mail, Stripe, PostHog, Plausible, and GA4. Provider sync evidence remains pending owner review. Stripe events are checked against the connected Stripe account; only a confirmed payment event with a matching task completion ID can automatically verify a task and issue its reward.
 
@@ -34,10 +34,20 @@ The fixture issue found during acceptance is also closed: cleanup had removed `g
 
 ## Remaining external real-provider gates
 
-- Microsoft real OAuth round trip with a dedicated test tenant and app.
+- Microsoft: Calendar normalization, deduplication, and real refresh passed. The combined Microsoft gate is **BLOCKED** because the same previously valid access token still succeeds against Graph after local Disconnect; provider revocation is `MANUAL_REQUIRED` for this `PERSONAL_MSA` account.
 - PostHog dedicated test project and credentials.
 - Plausible dedicated test site/project and credentials.
 - GA4 dedicated test property and credentials.
+
+## External provider acceptance — Microsoft — BLOCKED — 2026-10-15
+
+- **Outlook — PASS:** real OAuth and Microsoft Graph metadata access passed. Sync normalized `email.outreach_sent`, `email.reply_received`, and `email.conversation_continued`. Two immediate normal syncs returned HTTP 200 with zero new events; persisted event counts stayed unchanged, confirming deduplication.
+- **Microsoft Calendar identity:** classified as `PERSONAL_MSA` from the Graph profile's consumer-mail UPN domain in memory; the address and account identifier were not emitted.
+- **Microsoft Calendar OAuth/API — PASS:** on this `PERSONAL_MSA` test account, `Calendars.ReadBasic` did not provide compatible Calendar access. The minimum Calendar-only adjustment to `Calendars.Read` resolved it; Outlook remains `openid offline_access User.Read Mail.ReadBasic`, and no `Calendars.ReadWrite` permission is requested. The user completed one reauthorization after changing consent. Fixture inspection found exactly one active non-fixture Calendar connection, encrypted access and refresh tokens that both decrypt, and stored scopes `openid offline_access User.Read Calendars.Read`. Graph `/me`, `/me/calendar`, `/me/calendars`, and the supported 90-day `calendarView` request returned HTTP 200.
+- **Microsoft Calendar normalization/dedup — PASS:** the existing `Phase 14 Customer Interview` event was synced through the normal Calendar endpoint. Sync one returned HTTP 200 and inserted one `calendar.interview_completed` event, dated 14 October 2026 with normalized `occurred_at` `2026-10-14T10:15:00.000Z`. The immediate second sync returned HTTP 200 with zero events; persisted Calendar event count remained one.
+- **Microsoft refresh — PASS:** before the normal sync, the stored access token returned Graph HTTP 401 `InvalidAuthenticationToken`. The normal sync refreshed it and returned HTTP 200 with one event. The refreshed access token differed from the expired one, was stored encrypted, had a future expiry, retained `Calendars.Read`, and returned HTTP 200 from Graph `/me`. Refresh-token rotation/storage also passed in the real refresh check.
+- **Local Disconnect/revocation:** the normal Disconnect endpoint returned HTTP 200. The connection became `REVOKED` and its local token row count became zero. The provider response was `providerRevocation: MANUAL_REQUIRED`. Using the same access token that returned Graph HTTP 200 immediately before Disconnect, the post-disconnect Graph `/me` request also returned HTTP 200. A local sync after Disconnect returned HTTP 409 and did not run.
+- **Provider-side blocker:** Microsoft did not invalidate the previously valid access token immediately. For a `PERSONAL_MSA` account, provider-side revocation may remain `MANUAL_REQUIRED` / **BLOCKED** even when Enough completes local Disconnect and deletes its credentials. The combined Microsoft gate is therefore **BLOCKED** until Microsoft-side revocation is confirmed; the app does not claim that the Graph grant was revoked.
 
 Do not use personal production accounts or production credentials for these gates. Deterministic local protocol coverage and browser acceptance do not substitute for the listed external account checks.
 
@@ -91,4 +101,4 @@ The Phase 14 fixture applied and prechecked migrations `0001`–`0019` in a disp
 
 The common signed-source flow remains authenticated and owner/product scoped. The signing secret is encrypted at rest; API keys are stored as hashes; event user references are hashed; raw provider/backend exceptions are not exposed. A valid owner HMAC establishes control of the configured source only. It does **not** establish vendor origin. Owner-controlled Generic webhook and Public Event API evidence remains pending and grants no automatic credits. Provider-origin evidence follows the accepted vendor-authenticated path, with automatic Build Credit exactly-once behavior verified for the Stripe fixture.
 
-Phase 11 remains ACTIVE with P11-1, P11-2, P11-3 PASS and P11-4/P11-5 BLOCKED. Phase 12 remains COMPLETE. Phase 13 remains COMPLETE. Phase 14 remains ACTIVE until the four remaining external gates above pass. Production remains **NO-GO** while the 18 previously tracked dependency-security findings and the three additional findings from the latest audit remain unresolved. No personal or production provider account/credential was used.
+Phase 11 remains ACTIVE with P11-1, P11-2, P11-3 PASS and P11-4/P11-5 BLOCKED. Phase 12 remains COMPLETE. Phase 13 remains COMPLETE. Phase 14 remains ACTIVE until the four remaining external gates above pass. Production remains **NO-GO** while the 18 previously tracked dependency-security findings and the three additional findings from the latest audit remain unresolved. No production provider account or credential was used; the Microsoft Calendar check used the dedicated `PERSONAL_MSA` test account described above.

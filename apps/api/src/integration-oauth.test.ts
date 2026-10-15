@@ -53,7 +53,7 @@ describe("provider OAuth protocol", () => {
       ["GMAIL", ["openid", "https://www.googleapis.com/auth/gmail.metadata"]],
       ["GOOGLE_CALENDAR", ["openid", "https://www.googleapis.com/auth/calendar.events.readonly"]],
       ["OUTLOOK", ["openid", "offline_access", "User.Read", "Mail.ReadBasic"]],
-      ["MICROSOFT_CALENDAR", ["openid", "offline_access", "User.Read", "Calendars.ReadBasic"]],
+      ["MICROSOFT_CALENDAR", ["openid", "offline_access", "User.Read", "Calendars.Read"]],
       ["GA4", ["openid", "https://www.googleapis.com/auth/analytics.readonly"]],
     ] as const;
     for (const [provider, scopes] of cases) {

@@ -1,9 +1,9 @@
-import { createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { decryptIntegrationSecret } from "@enough/auth";
 import { pool } from "@enough/db";
 import type { FastifyRequest } from "fastify";
 import Fastify from "fastify";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createSession } from "../../../packages/auth/src/session.js";
 import type { IntegrationOAuthRuntime } from "./integration-oauth.js";
 import { registerIntegrationRoutes } from "./integrations.js";
@@ -15,6 +15,7 @@ const oauthRuntime: IntegrationOAuthRuntime = {
   microsoft: { clientId: "phase14-ms-client", clientSecret: "phase14-ms-secret" },
 };
 const userIds: string[] = [];
+let microsoftCallbackFlagBeforeTest: string | undefined;
 const fixtureFetch: typeof fetch = globalThis.fetch.bind(globalThis);
 let activeFetcher: typeof fetch = async () => {
   throw new Error("No provider protocol fixture installed.");
@@ -90,6 +91,15 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
       ]);
       await pool.query("DELETE FROM enough.auth_users WHERE id = ANY($1::uuid[])", [userIds]);
       await pool.end();
+    });
+
+    afterEach(() => {
+      if (microsoftCallbackFlagBeforeTest === undefined) {
+        delete process.env.ENOUGH_PHASE14_MICROSOFT_LOCALHOST_CALLBACK;
+      } else {
+        process.env.ENOUGH_PHASE14_MICROSOFT_LOCALHOST_CALLBACK = microsoftCallbackFlagBeforeTest;
+      }
+      microsoftCallbackFlagBeforeTest = undefined;
     });
 
     async function account() {
@@ -999,6 +1009,8 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
     });
 
     it("verifies Microsoft scopes, refresh rotation, expiry, disconnect, and sync health", async () => {
+      microsoftCallbackFlagBeforeTest = process.env.ENOUGH_PHASE14_MICROSOFT_LOCALHOST_CALLBACK;
+      process.env.ENOUGH_PHASE14_MICROSOFT_LOCALHOST_CALLBACK = "1";
       let mode: "oauth" | "refresh" | "refresh-preserve" | "sync-fail" = "oauth";
       const expectedScopes = "openid offline_access User.Read Mail.ReadBasic";
       const fetcher: typeof fetch = async (value, init) => {
@@ -1006,7 +1018,10 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
         const url = String(value);
         if (url.includes("login.microsoftonline.com") && url.endsWith("/token")) {
           const form = new URLSearchParams(String(init?.body));
-          if (form.get("grant_type") === "authorization_code")
+          if (form.get("grant_type") === "authorization_code") {
+            expect(form.get("redirect_uri")).toBe(
+              "http://localhost:4426/integrations/oauth/microsoft/callback",
+            );
             return json({
               access_token: "fixture-ms-original-access",
               refresh_token: "fixture-ms-original-refresh",
@@ -1014,6 +1029,7 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
               expires_in: 3600,
               scope: "User.Read Mail.ReadBasic",
             });
+          }
           expect(form.get("grant_type")).toBe("refresh_token");
           expect(form.get("refresh_token")).toBe(
             mode === "refresh-preserve"
@@ -1065,7 +1081,14 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
               ],
             });
           expect(new URL(url).searchParams.get("$select")).not.toContain("body");
-          return json({ value: [] });
+          return json({
+            value: ["fixture-ms-reply-a", "fixture-ms-reply-b"].map((id) => ({
+              id,
+              conversationId: "fixture-ms-conversation",
+              receivedDateTime: "2026-10-12T11:00:00Z",
+              from: { emailAddress: { address: "customer@example.test" } },
+            })),
+          });
         }
         throw new Error(`Unexpected Microsoft fixture request: ${url}`);
       };
@@ -1083,6 +1106,26 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
         (started.json() as { authorizationUrl: string }).authorizationUrl,
       );
       expect(authorizationUrl.searchParams.get("scope")).toBe(expectedScopes);
+      const calendarStarted = await providerRequest(
+        owner,
+        "POST",
+        "/integrations/oauth/MICROSOFT_CALENDAR/start",
+        {
+          productId,
+          provider: "MICROSOFT_CALENDAR",
+          displayName: "Synthetic Microsoft Calendar",
+        },
+      );
+      expect(calendarStarted.statusCode, calendarStarted.body).toBe(200);
+      const calendarAuthorizationUrl = new URL(
+        (calendarStarted.json() as { authorizationUrl: string }).authorizationUrl,
+      );
+      expect(calendarAuthorizationUrl.searchParams.get("scope")).toBe(
+        "openid offline_access User.Read Calendars.Read",
+      );
+      expect(authorizationUrl.searchParams.get("redirect_uri")).toBe(
+        "http://localhost:4426/integrations/oauth/microsoft/callback",
+      );
       expect(authorizationUrl.searchParams.get("state")).toBeTruthy();
       const state = authorizationUrl.searchParams.get("state");
       if (!state)
@@ -1122,6 +1165,7 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
         {},
       );
       expect(firstSync.statusCode, firstSync.body).toBe(200);
+      expect(firstSync.json()).toMatchObject({ eventsReceived: 4 });
       const rotatedTokens = await pool.query<{
         scopes: string[];
         refresh_token_ciphertext: Buffer;
@@ -1144,10 +1188,39 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
         [integrationId],
       );
       expect(syncedEvents.rows[0]).toEqual({
-        count: "1",
+        count: "4",
         provider_origin_verified: true,
         evidence_id: null,
       });
+
+      const continuedEvent = await pool.query<{
+        id: string;
+        provider_event_id: string;
+        event_type: string;
+      }>(
+        `SELECT id, provider_event_id, event_type FROM enough.integration_events
+         WHERE integration_account_id = $1 AND event_type = 'email.conversation_continued'`,
+        [integrationId],
+      );
+      expect(continuedEvent.rowCount).toBe(1);
+      const legacyOccurredAt = new Date();
+      const legacyPayloadHash = createHash("sha256")
+        .update(
+          JSON.stringify({
+            eventId: continuedEvent.rows[0].provider_event_id,
+            eventType: continuedEvent.rows[0].event_type,
+            occurredAt: legacyOccurredAt.toISOString(),
+            completionId: null,
+            userReference: null,
+            amountMinor: null,
+            currency: null,
+          }),
+        )
+        .digest("hex");
+      await pool.query(
+        `UPDATE enough.integration_events SET occurred_at = $2, payload_hash = $3 WHERE id = $1`,
+        [continuedEvent.rows[0].id, legacyOccurredAt, legacyPayloadHash],
+      );
 
       await pool.query(
         "UPDATE enough.integration_tokens SET expires_at = now() - interval '1 minute' WHERE integration_account_id = $1",
@@ -1161,6 +1234,7 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
         {},
       );
       expect(repeatedSync.statusCode, repeatedSync.body).toBe(200);
+      expect(repeatedSync.json()).toMatchObject({ eventsReceived: 0 });
       const preservedTokens = await pool.query<{ refresh_token_ciphertext: Buffer }>(
         "SELECT refresh_token_ciphertext FROM enough.integration_tokens WHERE integration_account_id = $1",
         [integrationId],
@@ -1172,7 +1246,15 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
         "SELECT count(*)::text AS count FROM enough.integration_events WHERE integration_account_id = $1",
         [integrationId],
       );
-      expect(eventCount.rows[0].count).toBe("1");
+      expect(eventCount.rows[0].count).toBe("4");
+      const correctedContinuation = await pool.query<{ occurred_at: Date }>(
+        `SELECT occurred_at FROM enough.integration_events
+         WHERE integration_account_id = $1 AND event_type = 'email.conversation_continued'`,
+        [integrationId],
+      );
+      expect(correctedContinuation.rows[0].occurred_at.toISOString()).toBe(
+        "2026-10-12T11:00:00.000Z",
+      );
 
       mode = "sync-fail";
       const failure = await providerRequest(

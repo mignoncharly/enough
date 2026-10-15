@@ -13,12 +13,22 @@ assert.deepEqual(
 assert.equal(process.env.APP_BASE_URL, "http://127.0.0.1:3315");
 assert.equal(process.env.API_BASE_URL, "http://127.0.0.1:4426");
 assert.equal(process.env.REDIS_URL, "redis://127.0.0.1:56409/0");
-assert.equal(
-  Boolean(process.env.GOOGLE_INTEGRATION_CLIENT_ID),
-  Boolean(process.env.GOOGLE_INTEGRATION_CLIENT_SECRET),
-  "Phase 14 Google integration client settings must be supplied together.",
-);
-assert.equal(process.env.MICROSOFT_INTEGRATION_CLIENT_ID, "");
+const microsoftFixture = process.env.ENOUGH_PHASE14_REQUIRE_MICROSOFT_OAUTH_CONFIG === "1";
+if (microsoftFixture) {
+  assert.ok(
+    process.env.MICROSOFT_INTEGRATION_CLIENT_ID && process.env.MICROSOFT_INTEGRATION_CLIENT_SECRET,
+    "Phase 14 Microsoft integration client settings are required together.",
+  );
+  assert.equal(process.env.GOOGLE_INTEGRATION_CLIENT_ID, "");
+  assert.equal(process.env.GOOGLE_INTEGRATION_CLIENT_SECRET, "");
+} else {
+  assert.equal(
+    Boolean(process.env.GOOGLE_INTEGRATION_CLIENT_ID),
+    Boolean(process.env.GOOGLE_INTEGRATION_CLIENT_SECRET),
+    "Phase 14 Google integration client settings must be supplied together.",
+  );
+  assert.equal(process.env.MICROSOFT_INTEGRATION_CLIENT_ID, "");
+}
 assert.equal(process.env.STRIPE_SECRET_KEY, "");
 
 const { encryptIntegrationSecret, hashIntegrationCredential, newIntegrationCredential } =

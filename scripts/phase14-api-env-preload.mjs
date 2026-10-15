@@ -2,17 +2,28 @@ import {
   assertPhase14GoogleIntegrationSettings,
   googleIntegrationSettingPresence,
 } from "./phase14-google-config.mjs";
+import {
+  assertPhase14MicrosoftIntegrationSettings,
+  microsoftIntegrationSettingPresence,
+} from "./phase14-microsoft-config.mjs";
 
-const presence = googleIntegrationSettingPresence(process.env);
+const googlePresence = googleIntegrationSettingPresence(process.env);
+const microsoftPresence = microsoftIntegrationSettingPresence(process.env);
 
 console.info(
   JSON.stringify({
-    phase14ApiGoogleClientIdPresent: presence.clientIdPresent,
-    phase14ApiGoogleClientSecretPresent: presence.clientSecretPresent,
+    phase14ApiGoogleClientIdPresent: googlePresence.clientIdPresent,
+    phase14ApiGoogleClientSecretPresent: googlePresence.clientSecretPresent,
+    phase14ApiMicrosoftClientIdPresent: microsoftPresence.clientIdPresent,
+    phase14ApiMicrosoftClientSecretPresent: microsoftPresence.clientSecretPresent,
   }),
 );
 
 assertPhase14GoogleIntegrationSettings(
-  presence,
+  googlePresence,
   process.env.ENOUGH_PHASE14_REQUIRE_GOOGLE_OAUTH_CONFIG === "1",
+);
+assertPhase14MicrosoftIntegrationSettings(
+  microsoftPresence,
+  process.env.ENOUGH_PHASE14_REQUIRE_MICROSOFT_OAUTH_CONFIG === "1",
 );
