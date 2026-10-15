@@ -38,7 +38,9 @@ const phase12 = process.argv.includes("--phase12");
 const phase13 = process.argv.includes("--phase13");
 const phase14Microsoft = process.argv.includes("--phase14-microsoft");
 const phase14PostHog = process.argv.includes("--phase14-posthog");
-const phase14 = process.argv.includes("--phase14") || phase14Microsoft || phase14PostHog;
+const phase14Plausible = process.argv.includes("--phase14-plausible");
+const phase14 =
+  process.argv.includes("--phase14") || phase14Microsoft || phase14PostHog || phase14Plausible;
 const basePhase = phase14
   ? "phase14"
   : phase12
@@ -506,7 +508,7 @@ try {
       environment.MICROSOFT_INTEGRATION_CLIENT_SECRET = microsoftIntegrationConfig.clientSecret;
       environment.ENOUGH_PHASE14_REQUIRE_MICROSOFT_OAUTH_CONFIG = "1";
       environment.ENOUGH_PHASE14_MICROSOFT_LOCALHOST_CALLBACK = "1";
-    } else if (mode !== "test" && !phase14PostHog) {
+    } else if (mode !== "test" && !phase14PostHog && !phase14Plausible) {
       const googleIntegrationConfig = await readPhase14GoogleIntegrationConfig(
         join(fixture, "google-oauth.env"),
       );
@@ -844,6 +846,7 @@ try {
           "scripts/phase14-google-config.test.ts",
           "scripts/phase14-microsoft-config.test.ts",
           "scripts/phase14-posthog-config.test.ts",
+          "scripts/phase14-plausible-config.test.ts",
           "apps/api/src/integration-provider-adapters.test.ts",
           "apps/api/src/integration-stripe.test.ts",
           "apps/api/src/integrations.integration.test.ts",

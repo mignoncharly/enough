@@ -89,7 +89,15 @@ const apiCredentialSchema = z
       .regex(/^\d{1,12}$/)
       .optional(),
     region: z.enum(["us", "eu"]).optional(),
-    siteId: z.string().trim().min(1).max(255).optional(),
+    siteId: z
+      .string()
+      .trim()
+      .min(1)
+      .max(253)
+      .regex(
+        /^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*$/,
+      )
+      .optional(),
     eventMap: z.record(z.string().trim().min(1).max(100), z.enum(analyticsEventTypes)),
   })
   .strict();

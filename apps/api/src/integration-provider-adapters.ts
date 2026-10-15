@@ -454,8 +454,18 @@ async function syncPostHog(input: ProviderSyncInput): Promise<ProviderSyncEvent[
 }
 
 async function syncPlausible(input: ProviderSyncInput): Promise<ProviderSyncEvent[]> {
-  const siteId = z.string().trim().min(1).max(255).parse(input.configuration.siteId);
-  if (/[/\s]/.test(siteId)) throw new ProviderApiError("INVALID_CONFIGURATION");
+  const now = input.now ?? new Date();
+  // The observed provider resolution of "7d" excluded today's events.
+  // Explicit timestamps preserve a seven-day window through the current sync.
+  const dateRange = [new Date(now.getTime() - 7 * 86_400_000).toISOString(), now.toISOString()];
+  const siteId = z.string().trim().min(1).max(253).safeParse(input.configuration.siteId);
+  if (
+    !siteId.success ||
+    !/^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*$/.test(
+      siteId.data,
+    )
+  )
+    throw new ProviderApiError("INVALID_CONFIGURATION");
   const mapping = configuredEventMap(input.configuration);
   const result: ProviderSyncEvent[] = [];
   for (const [goal, eventType] of Object.entries(mapping)) {
@@ -467,9 +477,9 @@ async function syncPlausible(input: ProviderSyncInput): Promise<ProviderSyncEven
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            site_id: siteId,
+            site_id: siteId.data,
             metrics: ["events"],
-            date_range: "7d",
+            date_range: dateRange,
             dimensions: ["time:day"],
             filters: [["is", "event:goal", [goal]]],
           }),
@@ -477,18 +487,37 @@ async function syncPlausible(input: ProviderSyncInput): Promise<ProviderSyncEven
         true,
       ),
     );
-    for (const value of listValue(response?.results).slice(0, 10)) {
+    if (!Array.isArray(response?.results)) throw new ProviderApiError("PROVIDER_INVALID_RESPONSE");
+    for (const value of response.results.slice(0, 10)) {
       const row = objectValue(value);
       const dimensions = listValue(row?.dimensions);
       const metrics = listValue(row?.metrics);
       const day = dimensions[0];
-      const count = Number(metrics[0]);
-      if (typeof day !== "string" || !Number.isFinite(count) || count <= 0) continue;
+      const parsedDay =
+        typeof day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day)
+          ? new Date(`${day}T00:00:00.000Z`)
+          : null;
+      const rawCount = metrics[0];
+      const count =
+        typeof rawCount === "number" || (typeof rawCount === "string" && rawCount.trim().length > 0)
+          ? Number(rawCount)
+          : Number.NaN;
+      if (
+        typeof day !== "string" ||
+        !parsedDay ||
+        !Number.isFinite(parsedDay.getTime()) ||
+        parsedDay.toISOString().slice(0, 10) !== day ||
+        !Number.isFinite(count)
+      )
+        throw new ProviderApiError("PROVIDER_INVALID_RESPONSE");
+      if (count <= 0) continue;
       const event = normalizedEvent({
         provider: input.provider,
         id: `${goal}:${day}`,
         eventType,
-        occurredAt: `${day}T23:59:59.000Z`,
+        // Plausible returns a reporting-timezone day bucket, not an event timestamp.
+        // Use a stable UTC midnight marker for that date so replay IDs and timestamps agree.
+        occurredAt: `${day}T00:00:00.000Z`,
       });
       if (event) result.push(event);
     }

@@ -325,21 +325,85 @@ describe("provider sync contracts", () => {
     expect(temporaryFailure).toHaveBeenCalledTimes(2);
   });
 
-  it("uses aggregated Plausible and GA4 events without raw identifiers and stable daily IDs", async () => {
-    const plausibleFetcher: typeof fetch = async (url, init) => {
-      expect(String(url)).toBe("https://plausible.io/api/v2/query");
-      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer opaque-test-token");
-      expect(String(init?.body)).not.toContain("user_id");
-      return json({ results: [{ dimensions: ["2026-10-12"], metrics: [5] }] });
+  it("includes today's Plausible goal in the seven-day window and keeps its identity on resync", async () => {
+    const fetcher: typeof fetch = async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      expect(Array.isArray(body.date_range)).toBe(true);
+      const [start, end] = body.date_range.map((value: string) => Date.parse(value));
+      expect(end - start).toBe(7 * 86_400_000);
+      expect(new Date(end).toISOString().slice(0, 10)).toBe("2026-10-13");
+      return json({ results: [{ dimensions: ["2026-10-13"], metrics: [2] }] });
     };
+    const configuration = {
+      siteId: "example.test",
+      eventMap: { phase14_acceptance_probe: "analytics.user_signup" },
+    };
+    const first = await sync("PLAUSIBLE", fetcher, configuration);
+    const second = await sync(
+      "PLAUSIBLE",
+      fetcher,
+      configuration,
+      new Date(now.getTime() + 60_000),
+    );
+    expect(first).toHaveLength(1);
+    expect(first[0].occurredAt).toBe("2026-10-13T00:00:00.000Z");
+    expect(second).toEqual(first);
+  });
+
+  it("uses the Plausible Stats API v2 goal query and normalizes UTC day buckets once", async () => {
+    const plausibleFetcher = vi.fn<typeof fetch>(async (url, init) => {
+      expect(String(url)).toBe("https://plausible.io/api/v2/query");
+      expect(init?.method).toBe("POST");
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer opaque-test-token");
+      expect(JSON.parse(String(init?.body))).toEqual({
+        site_id: "example.test",
+        metrics: ["events"],
+        date_range: ["2026-10-06T12:00:00.000Z", "2026-10-13T12:00:00.000Z"],
+        dimensions: ["time:day"],
+        filters: [["is", "event:goal", ["phase14_acceptance_probe"]]],
+      });
+      return json({
+        results: [
+          { dimensions: ["2026-10-12"], metrics: [5] },
+          { dimensions: ["2026-10-13"], metrics: [0] },
+        ],
+      });
+    });
     const plausibleConfiguration = {
       siteId: "example.test",
-      eventMap: { Signup: "analytics.user_signup" },
+      eventMap: { phase14_acceptance_probe: "analytics.user_signup" },
     };
     const plausible = await sync("PLAUSIBLE", plausibleFetcher, plausibleConfiguration);
     const plausibleReplay = await sync("PLAUSIBLE", plausibleFetcher, plausibleConfiguration);
-    expect(plausible[0].eventType).toBe("analytics.user_signup");
+    expect(plausible).toHaveLength(1);
+    expect(plausible[0]).toMatchObject({
+      eventType: "analytics.user_signup",
+      occurredAt: "2026-10-12T00:00:00.000Z",
+      providerOriginVerified: true,
+      automaticVerificationEligible: false,
+    });
+    expect(plausible[0].userReference).toBeUndefined();
     expect(plausibleReplay[0].eventId).toBe(plausible[0].eventId);
+    expect(plausibleFetcher).toHaveBeenCalledTimes(2);
+
+    const invalidSiteFetcher = vi.fn<typeof fetch>();
+    await expect(
+      sync("PLAUSIBLE", invalidSiteFetcher, {
+        siteId: "https://example.test/path",
+        eventMap: { probe: "analytics.user_signup" },
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_CONFIGURATION" });
+    expect(invalidSiteFetcher).not.toHaveBeenCalled();
+
+    for (const malformed of [
+      {},
+      { results: [{ dimensions: ["2026-02-30"], metrics: [1] }] },
+      { results: [{ dimensions: ["2026-10-12"], metrics: ["not-a-count"] }] },
+    ]) {
+      await expect(
+        sync("PLAUSIBLE", async () => json(malformed), plausibleConfiguration),
+      ).rejects.toMatchObject({ code: "PROVIDER_INVALID_RESPONSE" });
+    }
 
     const ga4Fetcher: typeof fetch = async (url, init) => {
       expect(new Headers(init?.headers).get("authorization")).toBe("Bearer opaque-test-token");
@@ -364,7 +428,6 @@ describe("provider sync contracts", () => {
     const ga4Replay = await sync("GA4", ga4Fetcher, ga4Configuration);
     expect(ga4[0].eventType).toBe("analytics.conversion_completed");
     expect(ga4Replay[0].eventId).toBe(ga4[0].eventId);
-    expect(plausible[0].userReference).toBeUndefined();
     expect(ga4[0].userReference).toBeUndefined();
     expect(ga4[0].automaticVerificationEligible).toBe(false);
     await expect(
@@ -423,6 +486,16 @@ describe("provider sync contracts", () => {
     await expect(
       sync("GMAIL", async () => json({ error: "private provider diagnostic" }, 401)),
     ).rejects.toMatchObject({ code: "PROVIDER_HTTP_401" });
+    await expect(
+      sync(
+        "PLAUSIBLE",
+        async () => json({ error: "synthetic private Stats API diagnostic" }, 503),
+        {
+          siteId: "example.test",
+          eventMap: { phase14_acceptance_probe: "analytics.user_signup" },
+        },
+      ),
+    ).rejects.toMatchObject({ code: "PROVIDER_HTTP_503" });
     try {
       await sync("GMAIL", async () => json({ error: "secret" }, 401));
     } catch (error) {

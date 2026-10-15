@@ -144,7 +144,13 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
           ?.available,
       ).toBe(true);
       expect(
-        listing.accounts.some((item: { provider: string }) => item.provider === "POSTHOG"),
+        listing.catalog.find((item: { provider: string }) => item.provider === "PLAUSIBLE")
+          ?.available,
+      ).toBe(true);
+      expect(
+        listing.accounts.some((item: { provider: string }) =>
+          ["POSTHOG", "PLAUSIBLE"].includes(item.provider),
+        ),
       ).toBe(false);
     });
 

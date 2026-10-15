@@ -66,6 +66,8 @@
     "test:integrations:integration": "node scripts/phase2-runtime.mjs test --phase14",
     "test:integrations:serve": "node scripts/phase2-runtime.mjs serve --phase14",
     "test:integrations:clean": "node scripts/phase14-clean.mjs",
+    "phase14:plausible:acceptance": "node scripts/phase14-plausible-acceptance.mjs",
+    "phase14:plausible:verify-revocation": "node scripts/phase14-plausible-acceptance.mjs --verify-provider-revocation",
     "db:migrate:evidence-storage": "node --env-file-if-exists=.env scripts/phase13-evidence-storage-upgrade.mjs",
     "db:phase5:migration-check": "node scripts/phase5-migration-check.mjs"
   },
