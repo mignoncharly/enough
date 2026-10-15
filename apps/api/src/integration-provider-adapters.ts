@@ -424,7 +424,7 @@ async function syncPostHog(input: ProviderSyncInput): Promise<ProviderSyncEvent[
   if (names.some((name) => !/^[A-Za-z0-9_.:-]{1,100}$/.test(name)))
     throw new ProviderApiError("INVALID_CONFIGURATION");
   const sqlNames = names.map((name) => `'${name}'`).join(", ");
-  const sql = `SELECT event, toDate(timestamp) AS event_date, count() AS total FROM events WHERE event IN (${sqlNames}) AND timestamp >= now() - INTERVAL 7 DAY GROUP BY event, event_date ORDER BY event_date LIMIT 500`;
+  const sql = `SELECT event, toDate(timestamp) AS event_date, count() AS total FROM events WHERE event IN (${sqlNames}) AND timestamp >= now() - INTERVAL 7 DAY AND timestamp <= now() GROUP BY event, event_date ORDER BY event_date LIMIT 500`;
   const response = objectValue(
     await providerJson(
       input,
@@ -446,7 +446,7 @@ async function syncPostHog(input: ProviderSyncInput): Promise<ProviderSyncEvent[
       provider: input.provider,
       id: `${day}:${name}`,
       eventType: mapping[name],
-      occurredAt: `${day}T23:59:59.000Z`,
+      occurredAt: `${day}T00:00:00.000Z`,
     });
     if (event) result.push(event);
   }

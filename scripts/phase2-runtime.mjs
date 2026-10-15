@@ -37,7 +37,8 @@ const phase11 = process.argv.includes("--phase11");
 const phase12 = process.argv.includes("--phase12");
 const phase13 = process.argv.includes("--phase13");
 const phase14Microsoft = process.argv.includes("--phase14-microsoft");
-const phase14 = process.argv.includes("--phase14") || phase14Microsoft;
+const phase14PostHog = process.argv.includes("--phase14-posthog");
+const phase14 = process.argv.includes("--phase14") || phase14Microsoft || phase14PostHog;
 const basePhase = phase14
   ? "phase14"
   : phase12
@@ -505,7 +506,7 @@ try {
       environment.MICROSOFT_INTEGRATION_CLIENT_SECRET = microsoftIntegrationConfig.clientSecret;
       environment.ENOUGH_PHASE14_REQUIRE_MICROSOFT_OAUTH_CONFIG = "1";
       environment.ENOUGH_PHASE14_MICROSOFT_LOCALHOST_CALLBACK = "1";
-    } else if (mode !== "test") {
+    } else if (mode !== "test" && !phase14PostHog) {
       const googleIntegrationConfig = await readPhase14GoogleIntegrationConfig(
         join(fixture, "google-oauth.env"),
       );
@@ -842,6 +843,7 @@ try {
           "apps/api/src/integration-oauth.test.ts",
           "scripts/phase14-google-config.test.ts",
           "scripts/phase14-microsoft-config.test.ts",
+          "scripts/phase14-posthog-config.test.ts",
           "apps/api/src/integration-provider-adapters.test.ts",
           "apps/api/src/integration-stripe.test.ts",
           "apps/api/src/integrations.integration.test.ts",

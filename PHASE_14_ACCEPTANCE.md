@@ -1,8 +1,8 @@
 # Phase 14 — Integrations Acceptance
 
-**Status: ACTIVE — deterministic provider acceptance PASS; local browser acceptance PASS; Google and Stripe external acceptance PASS; Microsoft provider sync acceptance PASS with provider-side revocation BLOCKED; PostHog, Plausible, and GA4 remain pending.**
+**Status: ACTIVE — deterministic provider acceptance PASS; local browser acceptance PASS; Google and Stripe external acceptance PASS; Microsoft functional acceptance PASS with provider-side revocation BLOCKED; PostHog external acceptance PASS; Plausible and GA4 remain pending.**
 
-The canonical exit criterion is: **Meaningful real-world events can be verified automatically.** The Generic webhook and Public Event API authenticate only the workspace owner's configured source. Provider OAuth/API connections now authenticate to Gmail, Google and Microsoft calendars/mail, Stripe, PostHog, Plausible, and GA4. Provider sync evidence remains pending owner review. Stripe events are checked against the connected Stripe account; only a confirmed payment event with a matching task completion ID can automatically verify a task and issue its reward.
+The canonical exit criterion is: **Meaningful real-world events can be verified automatically.** The Generic webhook and Public Event API authenticate only the workspace owner's configured source. Provider OAuth/API connections now authenticate to Gmail, Google and Microsoft calendars/mail, Stripe, PostHog, Plausible, and GA4. External provider evidence and remaining gates are recorded below. Stripe events are checked against the connected Stripe account; only a confirmed payment event with a matching task completion ID can automatically verify a task and issue its reward.
 
 ## Automated provider acceptance — PASS — 2026-10-13
 
@@ -35,7 +35,6 @@ The fixture issue found during acceptance is also closed: cleanup had removed `g
 ## Remaining external real-provider gates
 
 - Microsoft: Calendar normalization, deduplication, and real refresh passed. The combined Microsoft gate is **BLOCKED** because the same previously valid access token still succeeds against Graph after local Disconnect; provider revocation is `MANUAL_REQUIRED` for this `PERSONAL_MSA` account.
-- PostHog dedicated test project and credentials.
 - Plausible dedicated test site/project and credentials.
 - GA4 dedicated test property and credentials.
 
@@ -48,6 +47,16 @@ The fixture issue found during acceptance is also closed: cleanup had removed `g
 - **Microsoft refresh — PASS:** before the normal sync, the stored access token returned Graph HTTP 401 `InvalidAuthenticationToken`. The normal sync refreshed it and returned HTTP 200 with one event. The refreshed access token differed from the expired one, was stored encrypted, had a future expiry, retained `Calendars.Read`, and returned HTTP 200 from Graph `/me`. Refresh-token rotation/storage also passed in the real refresh check.
 - **Local Disconnect/revocation:** the normal Disconnect endpoint returned HTTP 200. The connection became `REVOKED` and its local token row count became zero. The provider response was `providerRevocation: MANUAL_REQUIRED`. Using the same access token that returned Graph HTTP 200 immediately before Disconnect, the post-disconnect Graph `/me` request also returned HTTP 200. A local sync after Disconnect returned HTTP 409 and did not run.
 - **Provider-side blocker:** Microsoft did not invalidate the previously valid access token immediately. For a `PERSONAL_MSA` account, provider-side revocation may remain `MANUAL_REQUIRED` / **BLOCKED** even when Enough completes local Disconnect and deletes its credentials. The combined Microsoft gate is therefore **BLOCKED** until Microsoft-side revocation is confirmed; the app does not claim that the Graph grant was revoked.
+
+## External provider acceptance — PostHog — FUNCTIONAL/DATA PASS; PROVIDER-SIDE REVOCATION PASS; COMBINED GATE PASS — 2026-10-15
+
+- **Credential and project access — PASS:** Enough accepted the configured PostHog personal API key with `query:read`, project ID, and US/EU region configuration. The private project Query API returned HTTP 200 for the configured project. The project token was used only by the isolated acceptance runner to send one synthetic event through PostHog's public ingestion endpoint; neither credential was printed or stored in the repository.
+- **Event retrieval/normalization — PASS:** PostHog returned the synthetic `phase14.acceptance_probe` event from the configured project. The event map normalized it to `analytics.user_signup`; its provider timestamp was handled as the expected UTC day marker (`2026-10-15T00:00:00.000Z`). Provider origin was verified, while automatic verification eligibility remained false.
+- **Exactly-once sync — PASS:** the first normal Enough sync returned one event and persisted exactly one normalized row. The immediate second sync returned zero new events, and the persisted row count stayed at one.
+- **Credential storage/local Disconnect — PASS:** the personal API key was encrypted at rest. Enough Disconnect returned HTTP 200, local status became `REVOKED`, and the local token row count became zero. A subsequent Enough sync returned HTTP 409. Rechecked against the existing isolated fixture after provider revocation: status remained `REVOKED`, token row count remained zero, and sync still returned HTTP 409.
+- **Provider-side revocation — PASS:** the same key first returned HTTP 200 from the configured US private Query API. PostHog's official regional `POST /api/revoke_leaked_key/` returned HTTP 200 and reported `found=true` for a personal API key. The same key was rejected by that Query API with HTTP 403 on the immediate follow-up probe; no propagation retry was needed. The PostHog project token was not submitted to the revocation endpoint.
+- **Combined PostHog gate — PASS:** API access, project identity, event retrieval and normalization, timestamp handling, exactly-once persistence, immediate resync deduplication, encrypted local credential storage, local Disconnect, and provider-side personal-key revocation all passed.
+- **Fixture state:** the isolated Phase 14 fixture passed migration precheck through `0020` with no pending migrations. The disposable fixture account was disconnected after acceptance.
 
 Do not use personal production accounts or production credentials for these gates. Deterministic local protocol coverage and browser acceptance do not substitute for the listed external account checks.
 
@@ -88,17 +97,18 @@ The Phase 14 fixture applied and prechecked migrations `0001`–`0019` in a disp
 
 ## Final checks
 
-- `pnpm test`: PASS, 129/129 default tests (164 opt-in integration/runtime tests skipped). Google OAuth protocol tests passed 7/7 and Google fixture/config tests passed 4/4 in this serial run.
-- `pnpm test:integrations:integration`: PASS, 36/36 Phase 14 PostgreSQL/API/runtime tests; migration chain through `0020`, migration precheck, and no-pending-migrations check passed.
+- `pnpm test:integrations:integration`: PASS, 50 tests across 9 files; migration precheck through `0020` passed with no pending migrations.
+- Focused PostHog tests: PASS, 11 tests across the config and provider adapter suites.
+- `pnpm test`: PASS, 138 tests passed and 165 opt-in integration/runtime tests skipped across 38 files.
 - `pnpm typecheck`: PASS across the configured workspace projects.
-- `pnpm format:check`: PASS, 209 files checked.
+- `pnpm format:check`: PASS, 216 files checked.
 - `pnpm lint`: PASS with 129 repository warnings and no errors.
 - `pnpm audit --json`: findings remain open; 21 package/advisory entries (3 critical, 9 high, 9 moderate) across `@vitest/mocker`, `dicer`, `esbuild`, `fast-xml-parser`, `sprintf-js`, `tar`, `tinypool`, and `vitest`. The 18 previously tracked entries remain unresolved; the fresh registry report adds `GHSA-wm7h-9275-46v2` (dicer) and `GHSA-x3cc-x39p-42qx` / `GHSA-gh4j-gqv2-49f6` (fast-xml-parser). No dependency or lockfile changes were made. Production remains NO-GO.
 - `git diff --check`: PASS.
-- Phase 14 status/documentation consistency checks: PASS. The acceptance record and current status summaries agree that Phase 14 is ACTIVE; deterministic provider and local browser acceptance are PASS; Google and Stripe external acceptance are PASS; Microsoft, PostHog, Plausible, and GA4 remain open; Phases 11–13 retain their accepted statuses; production remains NO-GO with the 18 previously tracked dependency-security findings still open and the 3 additional audit entries unresolved.
+- Phase 14 status/documentation consistency checks: PASS. Phase 14 is ACTIVE; deterministic provider and local browser acceptance are PASS; Google and Stripe external acceptance are PASS; PostHog combined acceptance is PASS; Microsoft remains BLOCKED solely by provider-side revocation; Plausible and GA4 remain pending; Phases 11–13 retain their accepted statuses; production remains NO-GO with 21 dependency audit entries open.
 
 ## Security and release status
 
 The common signed-source flow remains authenticated and owner/product scoped. The signing secret is encrypted at rest; API keys are stored as hashes; event user references are hashed; raw provider/backend exceptions are not exposed. A valid owner HMAC establishes control of the configured source only. It does **not** establish vendor origin. Owner-controlled Generic webhook and Public Event API evidence remains pending and grants no automatic credits. Provider-origin evidence follows the accepted vendor-authenticated path, with automatic Build Credit exactly-once behavior verified for the Stripe fixture.
 
-Phase 11 remains ACTIVE with P11-1, P11-2, P11-3 PASS and P11-4/P11-5 BLOCKED. Phase 12 remains COMPLETE. Phase 13 remains COMPLETE. Phase 14 remains ACTIVE until the four remaining external gates above pass. Production remains **NO-GO** while the 18 previously tracked dependency-security findings and the three additional findings from the latest audit remain unresolved. No production provider account or credential was used; the Microsoft Calendar check used the dedicated `PERSONAL_MSA` test account described above.
+Phase 11 remains ACTIVE with P11-1, P11-2, P11-3 PASS and P11-4/P11-5 BLOCKED. Phase 12 remains COMPLETE. Phase 13 remains COMPLETE. Phase 14 remains ACTIVE until Microsoft provider-side revocation and the Plausible and GA4 external gates pass. Production remains **NO-GO** while the 21 dependency audit entries and remaining external gates are unresolved. No production provider account or credential was used; the Microsoft Calendar and PostHog checks used dedicated test credentials described above.

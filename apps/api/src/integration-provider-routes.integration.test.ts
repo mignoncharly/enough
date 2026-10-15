@@ -1338,6 +1338,118 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
       expect(health.rows[0]).toEqual({ status: "ERROR", error_code: "PROVIDER_HTTP_503" });
     });
 
+    it("stores PostHog credentials encrypted, normalizes one event exactly once, and deletes locally on Disconnect", async () => {
+      const owner = await account();
+      const { productId } = await createProductAndCompletion(owner);
+      const token = "phc_phase14_fixture_token";
+      const day = new Date().toISOString().slice(0, 10);
+      let calls = 0;
+      activeFetcher = async (value, init) => {
+        calls += 1;
+        expect(String(value)).toBe("https://eu.posthog.com/api/projects/12345/query/");
+        expect(new Headers(init?.headers).get("authorization")).toBe(`Bearer ${token}`);
+        expect(init?.redirect).toBe("error");
+        return json({ results: [["phase14.acceptance_probe", day, 1]] });
+      };
+
+      const catalogResponse = await providerRequest(
+        owner,
+        "GET",
+        `/integrations?productId=${productId}`,
+      );
+      expect(catalogResponse.statusCode).toBe(200);
+      const posthogEntry = (
+        catalogResponse.json() as {
+          catalog: Array<{ provider: string; available: boolean }>;
+        }
+      ).catalog.find((item) => item.provider === "POSTHOG");
+      expect(posthogEntry).toMatchObject({ provider: "POSTHOG", available: true });
+
+      const connected = await providerRequest(owner, "POST", "/integrations/credentials", {
+        productId,
+        provider: "POSTHOG",
+        displayName: "Phase 14 PostHog acceptance",
+        apiToken: token,
+        projectId: "12345",
+        region: "eu",
+        eventMap: { "phase14.acceptance_probe": "analytics.user_signup" },
+      });
+      expect(connected.statusCode, connected.body).toBe(201);
+      const integrationId = (connected.json() as { integrationId: string }).integrationId;
+      const storedToken = await pool.query<{ access_token_ciphertext: Buffer }>(
+        "SELECT access_token_ciphertext FROM enough.integration_tokens WHERE integration_account_id = $1",
+        [integrationId],
+      );
+      expect(storedToken.rowCount).toBe(1);
+      expect(storedToken.rows[0].access_token_ciphertext.toString()).not.toContain(token);
+      expect(decryptIntegrationSecret(storedToken.rows[0].access_token_ciphertext)).toBe(token);
+
+      const firstSync = await providerRequest(
+        owner,
+        "POST",
+        `/integrations/${integrationId}/sync`,
+        {},
+      );
+      expect(firstSync.statusCode, firstSync.body).toBe(200);
+      expect(firstSync.json()).toMatchObject({ eventsReceived: 1 });
+      const persisted = await pool.query<{
+        event_type: string;
+        occurred_at: Date;
+        provider_origin_verified: boolean;
+      }>(
+        `SELECT event_type, occurred_at, provider_origin_verified
+         FROM enough.integration_events WHERE integration_account_id = $1`,
+        [integrationId],
+      );
+      expect(persisted.rows).toEqual([
+        {
+          event_type: "analytics.user_signup",
+          occurred_at: new Date(`${day}T00:00:00.000Z`),
+          provider_origin_verified: true,
+        },
+      ]);
+
+      const repeatedSync = await providerRequest(
+        owner,
+        "POST",
+        `/integrations/${integrationId}/sync`,
+        {},
+      );
+      expect(repeatedSync.statusCode, repeatedSync.body).toBe(200);
+      expect(repeatedSync.json()).toMatchObject({ eventsReceived: 0 });
+      expect(calls).toBe(3);
+
+      const disconnected = await providerRequest(
+        owner,
+        "POST",
+        `/integrations/${integrationId}/revoke`,
+        {},
+      );
+      expect(disconnected.statusCode).toBe(200);
+      expect(disconnected.json()).toMatchObject({
+        status: "REVOKED",
+        providerRevocation: "MANUAL_REQUIRED",
+      });
+      const localState = await pool.query<{ status: string }>(
+        "SELECT status FROM enough.integration_accounts WHERE id = $1",
+        [integrationId],
+      );
+      const remainingTokens = await pool.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM enough.integration_tokens WHERE integration_account_id = $1",
+        [integrationId],
+      );
+      expect(localState.rows[0].status).toBe("REVOKED");
+      expect(remainingTokens.rows[0].count).toBe("0");
+      const rejectedSync = await providerRequest(
+        owner,
+        "POST",
+        `/integrations/${integrationId}/sync`,
+        {},
+      );
+      expect(rejectedSync.statusCode).toBe(409);
+      expect(calls).toBe(3);
+    });
+
     it("confirms Stripe test-mode events through Stripe, creates one automatic reward, and keeps owner HMAC distinct", async () => {
       const owner = await account();
       const { productId, completionId } = await createProductAndCompletion(owner);

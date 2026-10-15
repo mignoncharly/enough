@@ -139,6 +139,13 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
         listing.catalog.find((item: { provider: string }) => item.provider === "MICROSOFT_CALENDAR")
           ?.available,
       ).toBe(false);
+      expect(
+        listing.catalog.find((item: { provider: string }) => item.provider === "POSTHOG")
+          ?.available,
+      ).toBe(true);
+      expect(
+        listing.accounts.some((item: { provider: string }) => item.provider === "POSTHOG"),
+      ).toBe(false);
     });
 
     async function completedTask(user: Account, productId: string, rewardCredits = 5) {

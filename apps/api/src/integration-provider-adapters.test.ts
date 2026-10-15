@@ -299,7 +299,7 @@ describe("provider sync contracts", () => {
       expect(new Headers(init?.headers).get("authorization")).toBe("Bearer opaque-test-token");
       const body = JSON.parse(String(init?.body)) as { query: { query: string } };
       queries.push(body.query.query);
-      return json({ results: [["signup", "2026-10-12", queries.length === 1 ? 3 : 8]] });
+      return json({ results: [["signup", "2026-10-13", queries.length === 1 ? 3 : 8]] });
     });
     const configuration = {
       projectId: "12345",
@@ -310,8 +310,11 @@ describe("provider sync contracts", () => {
     const second = await sync("POSTHOG", fetcher, configuration);
     expect(first[0].eventId).toBe(second[0].eventId);
     expect(first[0].eventType).toBe("analytics.user_signup");
+    expect(first[0].occurredAt).toBe("2026-10-13T00:00:00.000Z");
     expect(queries[0]).toContain("count()");
     expect(queries[0]).toContain("event IN ('signup')");
+    expect(queries[0]).toContain("timestamp >= now() - INTERVAL 7 DAY");
+    expect(queries[0]).toContain("timestamp <= now()");
     expect(JSON.stringify(first)).not.toContain("distinct_id");
 
     const temporaryFailure = vi
@@ -379,6 +382,28 @@ describe("provider sync contracts", () => {
         eventMap: { signup: "analytics.user_signup" },
       }),
     ).rejects.toThrow();
+    await expect(
+      sync("POSTHOG", invalidConfigFetcher, {
+        projectId: "12345",
+        region: "apac",
+        eventMap: { signup: "analytics.user_signup" },
+      }),
+    ).rejects.toThrow();
+    await expect(
+      sync("POSTHOG", invalidConfigFetcher, {
+        projectId: "12345",
+        region: "us",
+        eventMap: { "bad'name": "analytics.user_signup" },
+      }),
+    ).rejects.toThrow();
+    await expect(
+      sync("POSTHOG", invalidConfigFetcher, {
+        projectId: "12345",
+        region: "us",
+        eventMap: {},
+      }),
+    ).rejects.toThrow();
+    expect(invalidConfigFetcher).not.toHaveBeenCalled();
     await expect(
       sync("PLAUSIBLE", invalidConfigFetcher, {
         siteId: "https://example.test/path",
