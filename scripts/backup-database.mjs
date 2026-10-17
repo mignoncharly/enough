@@ -4,6 +4,7 @@ import { mkdir, readdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { postgresCliEnvironment } from "./postgres-env.mjs";
+import { isolatedEnvironment } from "./subprocess-environment.mjs";
 
 process.umask(0o077);
 const appRoot = process.env.ENOUGH_APP_ROOT || "/home/enough/apps/enough";
@@ -71,18 +72,7 @@ const timestamp = new Date()
 const filename = `enough-db-${timestamp}-${randomUUID().slice(0, 8)}.dump.age`;
 const finalPath = path.join(backupRealPath, filename);
 const partialPath = `${finalPath}.${randomUUID()}.partial`;
-const toolEnvironment = { ...process.env };
-for (const key of [
-  "DATABASE_URL",
-  "REDIS_URL",
-  "AUTH_SECRET",
-  "RESEND_API_KEY",
-  "STRIPE_SECRET_KEY",
-  "STRIPE_WEBHOOK_SECRETS",
-  "OPENAI_API_KEY",
-]) {
-  delete toolEnvironment[key];
-}
+const toolEnvironment = isolatedEnvironment(process.env);
 const pgDump = spawn("pg_dump", ["--format=custom", "--no-owner", "--no-acl"], {
   stdio: ["ignore", "pipe", "inherit"],
   env: postgresCliEnvironment(databaseUrl),

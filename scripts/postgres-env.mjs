@@ -1,3 +1,5 @@
+import { isolatedEnvironment } from "./subprocess-environment.mjs";
+
 const optionEnvironmentNames = new Map([
   ["sslmode", "PGSSLMODE"],
   ["sslrootcert", "PGSSLROOTCERT"],
@@ -18,24 +20,7 @@ export function postgresCliEnvironment(connectionString, databaseOverride) {
   if (!database && !databaseOverride)
     throw new Error("The PostgreSQL connection URL must name a database.");
 
-  const environment = { ...process.env };
-  for (const key of Object.keys(environment)) {
-    if (key.startsWith("PG")) delete environment[key];
-  }
-  for (const key of [
-    "DATABASE_URL",
-    "REDIS_URL",
-    "AUTH_SECRET",
-    "RESEND_API_KEY",
-    "STRIPE_SECRET_KEY",
-    "STRIPE_WEBHOOK_SECRETS",
-    "OPENAI_API_KEY",
-    "RESTORE_ADMIN_DATABASE_URL",
-    "BACKUP_AGE_RECIPIENT",
-    "BACKUP_AGE_IDENTITY_FILE",
-    "BACKUP_RCLONE_DEST",
-  ])
-    delete environment[key];
+  const environment = isolatedEnvironment(process.env);
 
   Object.assign(environment, {
     PGHOST: url.hostname.replace(/^\[|\]$/g, ""),

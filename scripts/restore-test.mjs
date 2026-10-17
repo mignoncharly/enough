@@ -3,6 +3,7 @@ import { access, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { postgresCliEnvironment } from "./postgres-env.mjs";
+import { isolatedEnvironment } from "./subprocess-environment.mjs";
 
 const appRoot = process.env.ENOUGH_APP_ROOT || "/home/enough/apps/enough";
 const backupDirectory = path.resolve(appRoot, "shared", "backups");
@@ -111,9 +112,7 @@ try {
 
   const decrypt = spawn("age", ["--decrypt", "--identity", identityFile, backupPath], {
     stdio: ["ignore", "pipe", "inherit"],
-    env: Object.fromEntries(
-      Object.entries(process.env).filter(([key]) => key !== "RESTORE_ADMIN_DATABASE_URL"),
-    ),
+    env: isolatedEnvironment(process.env),
   });
   const restore = spawn(
     "pg_restore",

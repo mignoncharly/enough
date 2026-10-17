@@ -1,5 +1,13 @@
 # Deployment Status
 
+## Current Phase 15 / slice 15A
+
+**PRODUCTION NO-GO.** Releases are operator-controlled on a local/release host, with no Docker or GitHub Actions. Slice 15A reconciles production configuration, isolates install/test/build environments and protects integration OAuth callback logs. See [infra/README.md](infra/README.md) for the current contract and remaining gates. No deployment, credential change or host operation is part of this slice.
+
+Historical Phases 24–27 below use older numbering. Claims that provider adapters are absent or migrations through 0015 remain locally unaccepted are historical, superseded by Phase 12–14 records. They do not establish production deployment acceptance. GA4 standard reporting/normalization/cleanup stays deferred; Microsoft PERSONAL_MSA revocation stays blocked by provider behavior.
+
+## Historical deployment record
+
 Last updated: 2026-10-07
 
 Phase 25 adds a release-based Ubuntu VPS deployment layout under `/home/enough/apps/enough`, dedicated `enough` services, TLS Nginx templates for separate app/API hosts, database/Redis setup notes, systemd service and timer units, encrypted off-host PostgreSQL backups, isolated restore verification, a migration precheck, and deployment/rollback scripts. See [infra/README.md](infra/README.md) for setup and operations.

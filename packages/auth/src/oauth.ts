@@ -504,8 +504,9 @@ export async function registerOAuthRoutes(app: FastifyInstance): Promise<void> {
       const destination = new URL("/oauth/complete", env.APP_BASE_URL);
       destination.hash = `token=${exchangeToken}`;
       return reply.redirect(destination.toString());
-    } catch (error) {
-      request.log.warn({ err: error, provider }, "OAuth sign-in did not complete");
+    } catch {
+      // Provider/network errors can embed credentials or callback query values.
+      request.log.warn({ provider }, "OAuth sign-in did not complete");
       return reply.redirect(providerRedirect(provider, "error"));
     }
   });

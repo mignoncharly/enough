@@ -1,5 +1,13 @@
 # Security Status
 
+## Phase 15A release boundary update
+
+**PRODUCTION NO-GO.** Install/test/static subprocesses use an OS/tool allowlist; web builds receive public origins and disposable values. Runtime preflight is separate. Policy signing, evidence storage and integration OAuth configuration are documented in `infra/README.md`. Nginx excludes integration callbacks from access logs; sign-in callback failures log safe messages instead of raw exception objects.
+
+The dependency baseline remains **21 findings (3 critical / 9 high / 9 moderate)**; no remediation or waiver is part of this slice. Remaining gates: migration/evidence-storage orchestration, coordinated backup/restore, monitoring/alerting, hosted/staging/device acceptance, external security/upload-risk approval, legal/publication and operator/recovery approval. Environment isolation is not a filesystem sandbox. Older phase labels below are historical; current release readiness is Phase 15.
+
+Phase 14 exceptions remain: GA4 standard reporting/normalization/cleanup DEFERRED, Microsoft PERSONAL_MSA provider-side revocation BLOCKED. Neither is reopened or labeled a product implementation failure.
+
 Last updated: 2026-10-14
 
 ## Current status

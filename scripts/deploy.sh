@@ -84,14 +84,15 @@ run_with_env() {
 echo "Installing the approved revision $COMMIT."
 run_with_env --clean /usr/bin/pnpm install --frozen-lockfile
 run_with_env --test /usr/bin/pnpm test
-run_with_env /usr/bin/pnpm --filter @enough/web build
-run_with_env /usr/bin/pnpm --filter @enough/db db:precheck
+run_with_env --runtime /usr/bin/pnpm --filter @enough/api exec tsx ../../scripts/release-config-preflight.ts
+run_with_env --build /usr/bin/pnpm --filter @enough/web build
+run_with_env --runtime /usr/bin/pnpm --filter @enough/db db:precheck
 
 echo "Creating and uploading the encrypted pre-deployment database backup."
-run_with_env /usr/bin/node "$STAGING_DIR/scripts/backup-database.mjs"
+run_with_env --runtime /usr/bin/node "$STAGING_DIR/scripts/backup-database.mjs"
 
 echo "Applying reviewed, checksum-verified database migrations."
-run_with_env /usr/bin/pnpm --filter @enough/db db:migrate
+run_with_env --runtime /usr/bin/pnpm --filter @enough/db db:migrate
 
 mv -- "$STAGING_DIR" "$RELEASE_DIR"
 STAGING_DIR=""

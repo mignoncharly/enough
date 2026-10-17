@@ -7,6 +7,22 @@ const optionalEnvironmentString = z.preprocess(
 );
 const DEVELOPMENT_AUTH_SECRET = "enough-local-development-secret-change-before-deploy";
 
+function isProductionOrigin(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      url.pathname === "/"
+    );
+  } catch {
+    return false;
+  }
+}
+
 const environmentSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -54,6 +70,11 @@ const environmentSchema = z
     ),
     AUTH_ALLOWED_ORIGINS: z.string().default(""),
     ADMIN_EMAILS: z.string().default(""),
+    EVIDENCE_STORAGE_BUCKET: optionalEnvironmentString,
+    EVIDENCE_STORAGE_REGION: optionalEnvironmentString,
+    EVIDENCE_STORAGE_ACCESS_KEY_ID: optionalEnvironmentString,
+    EVIDENCE_STORAGE_SECRET_ACCESS_KEY: optionalEnvironmentString,
+    EVIDENCE_STORAGE_ENDPOINT: optionalEnvironmentString,
     RESEND_API_KEY: optionalEnvironmentString,
     AUTH_EMAIL_FROM: optionalEnvironmentString,
     GOOGLE_CLIENT_ID: optionalEnvironmentString,
@@ -101,6 +122,44 @@ const environmentSchema = z
     ),
   })
   .superRefine((value, context) => {
+    const storageKeys = [
+      "EVIDENCE_STORAGE_BUCKET",
+      "EVIDENCE_STORAGE_REGION",
+      "EVIDENCE_STORAGE_ACCESS_KEY_ID",
+      "EVIDENCE_STORAGE_SECRET_ACCESS_KEY",
+    ] as const;
+    if (storageKeys.some((key) => value[key]) || value.EVIDENCE_STORAGE_ENDPOINT) {
+      for (const key of storageKeys) {
+        if (!value[key]?.trim())
+          context.addIssue({
+            code: "custom",
+            path: [key],
+            message: "All four evidence storage settings are required when storage is configured",
+          });
+      }
+    }
+    if (value.EVIDENCE_STORAGE_ENDPOINT) {
+      try {
+        const endpoint = new URL(value.EVIDENCE_STORAGE_ENDPOINT.trim());
+        const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(endpoint.hostname);
+        if (
+          !["https:", "http:"].includes(endpoint.protocol) ||
+          (endpoint.protocol === "http:" && !loopback) ||
+          endpoint.username ||
+          endpoint.password ||
+          endpoint.search ||
+          endpoint.hash
+        )
+          throw new Error();
+      } catch {
+        context.addIssue({
+          code: "custom",
+          path: ["EVIDENCE_STORAGE_ENDPOINT"],
+          message:
+            "Evidence endpoint must use HTTPS (HTTP only for loopback), without credentials, query or fragment",
+        });
+      }
+    }
     for (const [provider, clientId, clientSecret] of [
       ["Google", value.GOOGLE_CLIENT_ID, value.GOOGLE_CLIENT_SECRET],
       ["GitHub", value.GITHUB_CLIENT_ID, value.GITHUB_CLIENT_SECRET],
@@ -199,10 +258,11 @@ const environmentSchema = z
         ["APP_BASE_URL", value.APP_BASE_URL],
         ["API_BASE_URL", value.API_BASE_URL],
       ] as const) {
-        if (configuredUrl && new URL(configuredUrl).protocol !== "https:") {
+        if (configuredUrl && !isProductionOrigin(configuredUrl)) {
           context.addIssue({
             code: "custom",
-            message: "must use HTTPS in production",
+            message:
+              "must use a public HTTPS origin without credentials, path, query or fragment in production",
             path: [key],
           });
         }
@@ -237,6 +297,16 @@ export function parseEnvironment(source: NodeJS.ProcessEnv = process.env): AppEn
       .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
       .join("\n");
     throw new Error(`Invalid environment configuration:\n${details}`);
+  }
+
+  if (parsed.data.NODE_ENV === "production") {
+    for (const key of ["DATABASE_URL", "REDIS_URL"] as const) {
+      if (!source[key]?.trim()) {
+        throw new Error(
+          `Invalid environment configuration:\n${key}: explicit production connection required`,
+        );
+      }
+    }
   }
 
   return {

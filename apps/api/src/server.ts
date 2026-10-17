@@ -12,6 +12,7 @@ import { registerClassificationRoutes } from "./classification.js";
 import { registerCreditRoutes } from "./credits.js";
 import { registerEvidenceRoutes } from "./evidence.js";
 import { registerIntegrationRoutes } from "./integrations.js";
+import { requestLoggerOptions } from "./logging.js";
 import { registerNotificationRoutes } from "./notifications.js";
 import { registerOnboardingRoutes } from "./onboarding.js";
 import { registerPrivacyRoutes } from "./privacy.js";
@@ -22,19 +23,7 @@ import { registerTaskRoutes } from "./tasks.js";
 
 const app = Fastify({
   trustProxy: ["127.0.0.1", "::1"],
-  logger: {
-    level: env.LOG_LEVEL,
-    redact: {
-      paths: [
-        "req.url",
-        "req.headers.authorization",
-        "req.headers.cookie",
-        "req.headers.x-enough-signature",
-        "req.headers.stripe-signature",
-      ],
-      censor: "[REDACTED]",
-    },
-  },
+  logger: requestLoggerOptions(env.LOG_LEVEL),
   bodyLimit: 16 * 1024,
 });
 
