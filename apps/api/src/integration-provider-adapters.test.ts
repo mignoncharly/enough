@@ -412,6 +412,9 @@ describe("provider sync contracts", () => {
       );
       expect(String(init?.body)).not.toContain("userId");
       return json({
+        metadata: { timeZone: "UTC" },
+        dimensionHeaders: [{ name: "date" }, { name: "eventName" }],
+        metricHeaders: [{ name: "eventCount" }],
         rows: [
           {
             dimensionValues: [{ value: "20261012" }, { value: "purchase" }],

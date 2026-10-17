@@ -528,24 +528,27 @@ async function syncPlausible(input: ProviderSyncInput): Promise<ProviderSyncEven
 async function syncGa4(input: ProviderSyncInput): Promise<ProviderSyncEvent[]> {
   const propertyId = z
     .string()
-    .regex(/^\d{1,20}$/)
-    .parse(input.configuration.propertyId);
+    .regex(/^[1-9]\d{0,19}$/)
+    .safeParse(input.configuration.propertyId);
+  if (!propertyId.success) throw new ProviderApiError("INVALID_CONFIGURATION");
   const mapping = configuredEventMap(input.configuration);
+  if (Object.keys(mapping).some((name) => !/^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(name)))
+    throw new ProviderApiError("INVALID_CONFIGURATION");
   const response = objectValue(
     await providerJson(
       input,
-      `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
+      `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId.data}:runReport`,
       {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          dateRanges: [{ startDate: "7daysAgo", endDate: "yesterday" }],
+          dateRanges: [{ startDate: "6daysAgo", endDate: "today" }],
           dimensions: [{ name: "date" }, { name: "eventName" }],
           metrics: [{ name: "eventCount" }],
           dimensionFilter: {
             filter: {
               fieldName: "eventName",
-              inListFilter: { values: Object.keys(mapping) },
+              inListFilter: { values: Object.keys(mapping), caseSensitive: true },
             },
           },
           limit: "500",
@@ -554,26 +557,89 @@ async function syncGa4(input: ProviderSyncInput): Promise<ProviderSyncEvent[]> {
       true,
     ),
   );
+  const headersValid =
+    listValue(response?.dimensionHeaders)
+      .map((value) => objectValue(value)?.name)
+      .join(",") === "date,eventName" &&
+    listValue(response?.metricHeaders)
+      .map((value) => objectValue(value)?.name)
+      .join(",") === "eventCount";
+  const rows = response?.rows === undefined ? [] : response.rows;
+  const timeZone = objectValue(response?.metadata)?.timeZone;
+  let dayFormatter: Intl.DateTimeFormat;
+  try {
+    if (typeof timeZone !== "string") throw new Error();
+    dayFormatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      calendar: "iso8601",
+      numberingSystem: "latn",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+  } catch {
+    throw new ProviderApiError("PROVIDER_INVALID_RESPONSE");
+  }
+  const propertyDate = (time: number) => {
+    const parts = dayFormatter.formatToParts(new Date(time));
+    return ["year", "month", "day"]
+      .map((type) => parts.find((part) => part.type === type)?.value)
+      .join("-");
+  };
+  if (
+    !headersValid ||
+    !Array.isArray(rows) ||
+    (response?.rowCount !== undefined &&
+      (!Number.isSafeInteger(response.rowCount) || Number(response.rowCount) < 0)) ||
+    Number(response?.rowCount ?? rows.length) < rows.length ||
+    (response?.rows === undefined && Number(response?.rowCount ?? 0) > 0)
+  )
+    throw new ProviderApiError("PROVIDER_INVALID_RESPONSE");
+  // At most 20 configured event names across seven property-local dates: 140 rows.
+  // Fail visibly on truncation rather than silently losing evidence.
+  if (rows.length > 500 || Number(response?.rowCount ?? rows.length) > rows.length)
+    throw new ProviderApiError("PROVIDER_RESPONSE_LIMIT");
   const result: ProviderSyncEvent[] = [];
-  for (const row of listValue(response?.rows).slice(0, 500)) {
+  for (const row of rows) {
     const value = objectValue(row);
     const dimensions = listValue(value?.dimensionValues).map((item) => objectValue(item)?.value);
     const metrics = listValue(value?.metricValues).map((item) => objectValue(item)?.value);
     const rawDate = dimensions[0];
     const name = dimensions[1];
-    const count = Number(metrics[0]);
-    if (typeof rawDate !== "string" || typeof name !== "string" || !(name in mapping)) continue;
-    if (!/^\d{8}$/.test(rawDate) || !Number.isFinite(count) || count <= 0) continue;
+    const count =
+      typeof metrics[0] === "string" && /^\d+$/.test(metrics[0]) ? Number(metrics[0]) : NaN;
+    if (
+      typeof rawDate !== "string" ||
+      !/^\d{8}$/.test(rawDate) ||
+      typeof name !== "string" ||
+      !Number.isSafeInteger(count)
+    )
+      throw new ProviderApiError("PROVIDER_INVALID_RESPONSE");
     const day = `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`;
+    const marker = new Date(`${day}T00:00:00.000Z`);
+    if (!Number.isFinite(marker.getTime()) || marker.toISOString().slice(0, 10) !== day)
+      throw new ProviderApiError("PROVIDER_INVALID_RESPONSE");
+    if (count === 0 || !Object.hasOwn(mapping, name)) continue;
+    // Find the start of this property-local reporting date, including DST changes.
+    // Its UTC instant can be on the previous UTC date; the event ID retains the source date.
+    let lower = marker.getTime() - 36 * 3_600_000;
+    let upper = marker.getTime() + 36 * 3_600_000;
+    while (lower < upper) {
+      const middle = Math.floor((lower + upper) / 2);
+      if (propertyDate(middle) < day) lower = middle + 1;
+      else upper = middle;
+    }
+    if (propertyDate(lower) !== day) throw new ProviderApiError("PROVIDER_INVALID_RESPONSE");
     const event = normalizedEvent({
       provider: input.provider,
       id: `${day}:${name}`,
       eventType: mapping[name],
-      occurredAt: `${day}T23:59:59.000Z`,
+      // A stable UTC marker for the property day's start, not an exact event instant.
+      occurredAt: new Date(lower),
     });
     if (event) result.push(event);
   }
-  return uniqueEvents(result);
+  return uniqueEvents(result, 500);
 }
 
 export type ProviderSyncAdapter = (input: ProviderSyncInput) => Promise<ProviderSyncEvent[]>;

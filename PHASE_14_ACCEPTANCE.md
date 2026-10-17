@@ -1,6 +1,6 @@
 # Phase 14 — Integrations Acceptance
 
-**Status: ACTIVE — deterministic provider acceptance PASS; local browser acceptance PASS; Google and Stripe external acceptance PASS; Microsoft functional acceptance PASS with provider-side revocation BLOCKED; PostHog and Plausible external acceptance PASS; GA4 remains pending.**
+**Status: PHASE 14 CHECKPOINT COMPLETE WITH EXPLICIT EXTERNAL EXCEPTIONS - implementation and automated acceptance PASS; GA4 standard reporting and dependent acceptance DEFERRED / WAITING; Microsoft PERSONAL_MSA provider-side revocation BLOCKED. Production NO-GO.**
 
 The canonical exit criterion is: **Meaningful real-world events can be verified automatically.** The Generic webhook and Public Event API authenticate only the workspace owner's configured source. Provider OAuth/API connections now authenticate to Gmail, Google and Microsoft calendars/mail, Stripe, PostHog, Plausible, and GA4. External provider evidence and remaining gates are recorded below. Stripe events are checked against the connected Stripe account; only a confirmed payment event with a matching task completion ID can automatically verify a task and issue its reward.
 
@@ -32,10 +32,20 @@ The seeded Stripe vendor-authenticated event appeared as automatically verified 
 
 The fixture issue found during acceptance is also closed: cleanup had removed `google-oauth.env`, and its absence was previously treated as empty configuration. Manual Google fixture startup now fails clearly when that configuration is required. The loader accepts only the two Google integration client settings, verifies their presence in the API child environment before application modules initialize, and never logs credential values. Synthetic configured/unconfigured catalog regression coverage confirms Gmail, Google Calendar, and GA4 availability behavior without contacting Google.
 
-## Remaining external real-provider gates
+## Final provider matrix and external exceptions
 
 - Microsoft: Calendar normalization, deduplication, and real refresh passed. The combined Microsoft gate is **BLOCKED** because the same previously valid access token still succeeds against Graph after local Disconnect; provider revocation is `MANUAL_REQUIRED` for this `PERSONAL_MSA` account.
-- GA4 dedicated test property and credentials.
+- GA4: clean browser gtag ingestion and the exactly-once clean Measurement Protocol submission have **Realtime ingestion PASS**. Standard `runReport` propagation remains **DEFERRED / WAITING**; real Enough normalization/dedup and Disconnect/revocation are deferred until the standard report exposes the event. OAuth/refresh and clean property/stream access passed.
+
+| Provider | Current acceptance | Remaining exception |
+| --- | --- | --- |
+| Stripe | External PASS | None in the recorded provider gate. |
+| Gmail / Google Calendar | Combined Google PASS | None in the recorded provider gate. |
+| Outlook / Microsoft Calendar | Functional/data, refresh, and local Disconnect PASS; combined BLOCKED | PERSONAL_MSA provider-side revocation remains MANUAL_REQUIRED / BLOCKED by provider behavior. |
+| PostHog | Functional/data and provider revocation PASS; combined PASS | None. |
+| Plausible | Functional/data and provider revocation PASS; combined PASS | None. |
+| GA4 | OAuth/refresh, clean property/stream, browser seed, exactly-once MP submission and Realtime ingestion PASS; combined DEFERRED / NOT PASSED | Standard reporting propagation WAITING; dependent real Enough normalization/dedup and Disconnect/revocation DEFERRED. |
+| Generic webhook / Public Event API | Automated and local acceptance PASS | Owner-controlled sources; no claim of vendor origin or automatic verification. |
 
 ## External provider acceptance — Microsoft — BLOCKED — 2026-10-15
 
@@ -70,6 +80,45 @@ The fixture issue found during acceptance is also closed: cleanup had removed `g
 - **Combined Plausible gate — PASS:** authenticated site access, normalization, stable day handling, exactly-once persistence, immediate resync deduplication, encrypted credentials, local Disconnect/deletion/409, and rejection of the same key after manual provider-side revocation all passed. The diagnosis and acceptance reused existing events. Safe numeric dropped-header values, response status, content type, and browser CORS visibility limits are retained in TEMP for future probes; arbitrary provider headers and response bodies are excluded.
 
 Do not use personal production accounts or production credentials for these gates. Deterministic local protocol coverage and browser acceptance do not substitute for the listed external account checks.
+
+## GA4 external acceptance - REALTIME INGESTION PASS; STANDARD REPORTING DEFERRED - 2026-10-17
+
+**Final checkpoint decision:** Phase 14 work is checkpointed with two explicit external exceptions: GA4 standard reporting propagation is **DEFERRED / WAITING**, and Microsoft PERSONAL_MSA provider-side revocation is **BLOCKED by provider behavior**. Neither exception is classified as a product implementation failure. The overall external acceptance gates are not all PASS, and production remains **NO-GO**. No further live GA4 polling, seed, collection, Disconnect, or revocation is part of this checkpoint.
+
+### GA4 real-provider checks - PASS
+
+- Google OAuth authorization with only `openid` and `analytics.readonly`; encrypted access and refresh credentials; real forced refresh and private Data API access HTTP 200.
+- The clean property is present in the authenticated complete property enumeration and direct property access returns HTTP 200. Property name/timezone and the exact numeric property/stream relationship were verified; the configured measurement ID belongs to that same web stream. Stream name/URL matched. The property reports in UTC.
+- After explicit Viewer access was granted to the intended test account, authorization and forced refresh passed. The returned subject matched the previous saved identity; the earlier 403 therefore did not establish an account mismatch. Email was not requested or returned under the minimal scopes.
+- One manual `phase14_clean_client_seed` event from the local gtag fixture appeared in Realtime with count 1. `send_page_view:false` prevented an automatic pageview. Real client/session values were acquired through gtag callbacks and retained only in temporary runtime memory; the browser received no MP API secret.
+- The clean `phase14_clean_mp_probe` used only the clean configuration, matching stream, and retained real gtag client/session. Preflight passed; the debug endpoint returned HTTP 200 with zero validation messages. Validation does not authenticate the API secret or establish ingestion.
+- A new clean attempt marker was persisted before exactly one real `/mp/collect` submission at **2026-10-16 23:54:51 UTC**. Positive engagement was included, with no real-collection `debug_mode`. HTTP 204 established receipt only. **Realtime subsequently returned HTTP 200 with count 1 on the third poll at 23:55:13 UTC**, proving clean MP ingestion. No duplicate submission or replacement seed followed.
+
+### GA4 real-provider checks - DEFERRED / WAITING
+
+- Standard `runReport` propagation remains WAITING. The latest explicitly authorized check at **2026-10-17 06:18:14 UTC** returned HTTP 200, count 0, approximately 6 hours 23 minutes after submission. Each resumed check stopped at zero. The query uses the exact clean probe name and the property-local seven-date window `6daysAgo` through `today`.
+- Actual Enough normalization to exactly one `analytics.user_signup`, provider-origin verification, automatic-verification eligibility false, and immediate zero-new-event resync are **DEFERRED until standard reporting exposes the clean probe**. Synthetic coverage passed but is not presented as real-provider acceptance.
+- Real GA4 Disconnect, local REVOKED/token deletion/post-disconnect 409, and Google provider-side revocation are **DEFERRED because normalization acceptance is incomplete**. No real GA4 Disconnect or revoke was attempted.
+- Combined GA4 gate remains **DEFERRED / NOT PASSED**. The open ingestion item is standard reporting propagation, not failure of OAuth, clean configuration, browser ingestion, or MP Realtime ingestion.
+
+### Preserved state and bounded resume
+
+- `TEMP/enough-phase14/ga4-clean.env`, the saved OAuth connection, the clean seed and MP attempt markers, and all safe acceptance evidence remain outside the repository and are preserved. Their values are never printed or included here.
+- Retired original/v2/v3/v4 attempts remain historical evidence only. Original synthetic-client and v2 wrong-secret submissions were non-qualifying; v3/v4 did not prove ingestion. Their markers are preserved, and none is used by the clean resume command.
+- The repository's `pnpm phase14:ga4:acceptance --resume-only` now targets only the existing clean probe and requires its preserved marker plus recorded Realtime PASS. It cannot create a seed, collect an MP event, create another attempt marker, or initiate OAuth. It performs one standard report check and stops at zero. Running it later requires an explicit resume instruction; it was not run during checkpoint validation.
+- Once standard reporting contains the probe, the acceptance map contains only `phase14_clean_mp_probe -> analytics.user_signup`; neither the seed nor any retired event is mapped. The runner verifies one persisted daily row, provider origin true, automatic eligibility false, and immediate resync with zero new rows.
+- The normal Enough Disconnect invokes Google revocation. The safety guard therefore runs **before Disconnect**, blocks cleanup if a matching active Gmail/Google Calendar (or another GA4) grant would be affected, and leaves the connection intact on conflict. When safe, it proves the token valid, verifies local cleanup, and requires rejection of that same token after official revocation.
+- Any future zero-count result after 24 hours requires diagnosis of the standard query/date/timezone/filter path without resending. No automatic polling schedule is installed.
+
+### Retained implementation and regression tooling
+
+- Production GA4 stays on read-only Google OAuth with existing PKCE/state/callback/encryption/refresh protections. Gmail/Google Calendar behavior and scopes are unchanged. Account identity is encrypted/HMAC-indexed; no email scope is added.
+- The production report includes today: `6daysAgo` through `today`, seven inclusive dates in the property's reporting timezone. Positive numeric property IDs and mapped event names are validated. Malformed successful responses, invalid dates/counts/timezones, and truncation fail safely; zero counts and unmapped names are ignored.
+- Source reporting date plus event name provides deterministic deduplication. The stable UTC marker represents the start of that property-local date, including DST. All 140 possible configured name/day rows survive normalization; the request limit is 500.
+- Clean config parsing requires exactly four nonempty keys (property ID, stream ID, measurement ID, API secret), rejects duplicates/quotes/whitespace/control characters and extra content, and never changes other providers' configuration. MP secrets are acceptance-only; Enough stores OAuth tokens.
+- The separately tested local gtag helper keeps one guarded manual button, durable seed claims, same-origin/nonce protection, and in-memory identity handling. Arbitrary synthetic identities cannot construct an acceptance payload. No live Google call runs in normal tests.
+
+Official references: [Data API setup](https://developers.google.com/analytics/devguides/reporting/data/v1/quickstart), [property-local dates](https://developers.google.com/analytics/devguides/reporting/data/v1/rest/v1beta/DateRange), [web MP verification](https://developers.google.com/analytics/devguides/collection/protocol/ga4/verify-implementation?client_type=gtag), [validation limits](https://developers.google.com/analytics/devguides/collection/protocol/ga4/validating-events?client_type=gtag), [data freshness](https://support.google.com/analytics/answer/11198161), [Google revocation](https://developers.google.com/identity/protocols/oauth2/web-server#tokenrevoke).
 
 ## Canonical scope audited
 
@@ -106,7 +155,26 @@ The Phase 14 fixture applied and prechecked migrations `0001`–`0019` in a disp
 - Prevent duplicate Google connections for the same user/product/provider/identity while keeping Gmail, Google Calendar, and GA4 as distinct provider integrations; preserve an existing matching Google refresh token on reconnect when no replacement is returned; record safe callback failure and provider-revocation metadata.
 - Load the dedicated Google OAuth fixture settings before API configuration initialization, fail clearly when required manual-fixture settings are missing, and test configured/unconfigured catalog availability with synthetic values only.
 
-## Final checks
+## Final Phase 14 checkpoint validation - 2026-10-17
+
+- Complete relevant Phase 14 automated suite: **PASS, 67 tests across 13 files**. The normal `scripts/phase2-runtime.mjs test --phase14` suite ran serially in a fresh TEMP fixture, with migrations through `0020`, migration precheck, and full-stack readiness passing. Provider requests in this suite were synthetic.
+- Workspace `pnpm typecheck`: **PASS**. Changed-scope `pnpm exec biome check`: **PASS, 12 code/config files, no warnings or errors**. `git diff --check`: **PASS**.
+- All 13 changed/untracked files and the complete tracked diff were reviewed. Only GA4 implementation/regression work, fixture support, acceptance tooling, package entry point, and this existing document are included. The obsolete collection/OAuth diagnostic runner was consolidated into the clean standard-report resume command. No one-off TEMP helpers or acceptance artifacts are included.
+- Private comparison against available local credentials and provider identifiers, credential-pattern checks, and artifact/path checks found **zero matches**. Synthetic test values only are present. No real secrets, tokens, provider identifiers, TEMP credential contents, or raw private responses entered the diff.
+- Original acceptance configs, JSON evidence, and attempt markers were checked byte-for-byte before and after validation and remained unchanged. Tests used a separate database directory; the original OAuth connection/database is preserved. Passive local helpers were stopped; no live GA4 polling, collection, OAuth action, Disconnect, or revocation was performed during checkpointing.
+- Dependency audit baseline is unchanged and was not rerun: **21 findings (3 critical, 9 high, 9 moderate)**. No dependency upgrades or lockfile changes. Production remains **NO-GO**.
+- Phase 14 is checkpointed with the two explicit external exceptions in the final matrix. This does not claim combined GA4 or Microsoft external acceptance PASS. No deployment or Phase 15 work is included.
+
+## Earlier GA4 validation - 2026-10-16 (historical)
+
+- Full Phase 14 suite: **PASS, 67 tests across 13 files**, with migration precheck through `0020` and no pending migrations. Provider calls were synthetic; no live GA4 polling, seed, or collection occurred.
+- Default suite first run: **150 passed, 3 failed, 167 skipped**. The unchanged evidence-storage, billing webhook route-contract, and auth session-security tests hit their existing five-second timeouts. The complete single-worker rerun (`pnpm test --maxWorkers=1`) then **passed all 153 tests**, with 167 opt-in tests skipped across 42 files. No timeout settings, unrelated tests, dependencies, or lockfile were changed.
+- Workspace typecheck: **PASS**. Changed-scope Biome lint/format: **PASS, 12 code/config files, no warnings or errors**. `git diff --check`: **PASS**.
+- Security review: all **13 changed/untracked files** and the tracked diff were compared privately against available local fixture/provider credentials and identifiers, plus credential-format, bearer-literal, absolute private-TEMP-path, and accidental-artifact checks. **No matches or artifacts found.** Source review found synthetic placeholders only; generic TEMP config references carry no credential values. All six existing collection/seed attempt markers remain present outside the repository.
+- Dependency audit was not rerun in this validation. Last reported baseline remains **21 findings: 3 critical, 9 high, 9 moderate**. No dependencies were upgraded. Production remains **NO-GO**.
+- Safe to checkpoint as **partial acceptance with explicit deferrals**, not as completed GA4 or Phase 14 acceptance. No commit, push, deployment, or Phase 15 work was performed.
+
+## Previous Plausible checkpoint checks (historical)
 
 - `pnpm test:integrations:integration`: PASS, 55 tests across 10 files; migration precheck through `0020` passed with no pending migrations. Earlier startup attempts encountered leftover isolated fixture listeners; those services were stopped before the successful serial run.
 - Focused Plausible config/provider adapter tests: PASS, 11 tests across 2 files, including today's event retrieval in an explicit seven-day window, stable resync identity, and a refreshed polling window. All 8 provider-route tests also passed within the isolated suite, covering authenticated API routes, encrypted storage, duplicate handling, Disconnect cleanup, and post-disconnect HTTP 409 with synthetic credentials.
@@ -116,10 +184,10 @@ The Phase 14 fixture applied and prechecked migrations `0001`–`0019` in a disp
 - `pnpm lint`: PASS with 129 repository warnings and no errors.
 - `pnpm audit --json`: findings remain open; 21 package/advisory entries (3 critical, 9 high, 9 moderate) across `@vitest/mocker`, `dicer`, `esbuild`, `fast-xml-parser`, `sprintf-js`, `tar`, `tinypool`, and `vitest`. The 18 previously tracked entries remain unresolved; the fresh registry report adds `GHSA-wm7h-9275-46v2` (dicer) and `GHSA-x3cc-x39p-42qx` / `GHSA-gh4j-gqv2-49f6` (fast-xml-parser). No dependency or lockfile changes were made. Production remains NO-GO.
 - `git diff --check`: PASS.
-- Phase 14 status/documentation consistency checks: PASS. Phase 14 is ACTIVE; deterministic provider and local browser acceptance are PASS; Google and Stripe external acceptance are PASS; PostHog and Plausible combined acceptance are PASS; Microsoft remains BLOCKED solely by provider-side revocation; GA4 remains pending; Phases 11–13 retain their accepted statuses; production remains NO-GO with 21 dependency audit entries open.
+- Phase 14 status/documentation consistency checks: PASS. Phase 14 is ACTIVE; deterministic provider and local browser acceptance are PASS; Google and Stripe external acceptance are PASS; PostHog and Plausible combined acceptance are PASS; Microsoft remains BLOCKED solely by provider-side revocation; GA4 was pending at that checkpoint and is now deferred as recorded above; Phases 11–13 retain their accepted statuses; production remains NO-GO with 21 dependency audit entries open.
 
 ## Security and release status
 
 The common signed-source flow remains authenticated and owner/product scoped. The signing secret is encrypted at rest; API keys are stored as hashes; event user references are hashed; raw provider/backend exceptions are not exposed. A valid owner HMAC establishes control of the configured source only. It does **not** establish vendor origin. Owner-controlled Generic webhook and Public Event API evidence remains pending and grants no automatic credits. Provider-origin evidence follows the accepted vendor-authenticated path, with automatic Build Credit exactly-once behavior verified for the Stripe fixture.
 
-Phase 11 remains ACTIVE with P11-1, P11-2, P11-3 PASS and P11-4/P11-5 BLOCKED. Phase 12 remains COMPLETE. Phase 13 remains COMPLETE. Phase 14 remains ACTIVE until Microsoft provider-side revocation and the GA4 external gate pass. Production remains **NO-GO** while the 21 dependency audit entries and remaining external gates are unresolved. No production provider account or credential was used; the Microsoft Calendar, PostHog, and Plausible checks used dedicated test credentials described above.
+Phase 11 remains ACTIVE with P11-1, P11-2, P11-3 PASS and P11-4/P11-5 BLOCKED. Phase 12 remains COMPLETE. Phase 13 remains COMPLETE. Phase 14 is checkpointed with explicit external exceptions: Microsoft PERSONAL_MSA provider-side revocation BLOCKED and GA4 standard propagation/dependent acceptance DEFERRED. Production remains **NO-GO** while the 21 dependency audit entries and remaining external gates are unresolved. No production provider account or credential was used; the Microsoft Calendar, PostHog, and Plausible checks used dedicated test credentials described above.

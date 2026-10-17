@@ -1450,6 +1450,164 @@ describe.skipIf(process.env.ENOUGH_PHASE14_INTEGRATION !== "1")(
       expect(calls).toBe(3);
     });
 
+    it("connects GA4 with read-only OAuth, refreshes encrypted tokens, deduplicates today, and revokes through Google", async () => {
+      const owner = await account();
+      const { productId } = await createProductAndCompletion(owner);
+      const scope = "openid https://www.googleapis.com/auth/analytics.readonly";
+      let refreshed = false;
+      let revoked = false;
+      let reports = 0;
+      activeFetcher = async (url, init) => {
+        const endpoint = String(url);
+        if (endpoint === "https://oauth2.googleapis.com/token") {
+          const form = new URLSearchParams(String(init?.body));
+          refreshed = form.get("grant_type") === "refresh_token";
+          return json({
+            access_token: refreshed ? "synthetic-ga4-refreshed" : "synthetic-ga4-original",
+            refresh_token: "synthetic-ga4-refresh",
+            expires_in: 3600,
+            token_type: "Bearer",
+            scope,
+          });
+        }
+        if (endpoint === "https://openidconnect.googleapis.com/v1/userinfo")
+          return json({ sub: "synthetic-ga4-subject" });
+        if (endpoint === "https://oauth2.googleapis.com/revoke") {
+          expect(new URLSearchParams(String(init?.body)).get("token")).toBe(
+            "synthetic-ga4-refresh",
+          );
+          revoked = true;
+          return new Response(null, { status: 200 });
+        }
+        expect(endpoint).toBe(
+          "https://analyticsdata.googleapis.com/v1beta/properties/123456:runReport",
+        );
+        reports += 1;
+        expect(JSON.parse(String(init?.body)).dateRanges).toEqual([
+          { startDate: "6daysAgo", endDate: "today" },
+        ]);
+        return json({
+          metadata: { timeZone: "UTC" },
+          dimensionHeaders: [{ name: "date" }, { name: "eventName" }],
+          metricHeaders: [{ name: "eventCount" }],
+          rows: [
+            {
+              dimensionValues: [
+                { value: new Date().toISOString().slice(0, 10).replaceAll("-", "") },
+                { value: "phase14_acceptance_probe" },
+              ],
+              metricValues: [{ value: "1" }],
+            },
+          ],
+        });
+      };
+      for (const body of [
+        {
+          propertyId: "properties/123456",
+          eventMap: { phase14_acceptance_probe: "analytics.user_signup" },
+        },
+        { propertyId: "123456", eventMap: { "invalid-name": "analytics.user_signup" } },
+      ]) {
+        const invalid = await providerRequest(owner, "POST", "/integrations/oauth/GA4/start", {
+          productId,
+          displayName: "Synthetic GA4",
+          ...body,
+        });
+        expect(invalid.statusCode).toBe(400);
+      }
+      const started = await providerRequest(owner, "POST", "/integrations/oauth/GA4/start", {
+        productId,
+        displayName: "Synthetic GA4",
+        propertyId: "123456",
+        eventMap: { phase14_acceptance_probe: "analytics.user_signup" },
+      });
+      expect(started.statusCode).toBe(200);
+      const authorization = new URL(started.json().authorizationUrl);
+      expect(authorization.searchParams.get("scope")).toBe(scope);
+      const callback = await providerApp.inject({
+        method: "GET",
+        url: `/integrations/oauth/google/callback?state=${authorization.searchParams.get("state")}&code=synthetic-ga4-code`,
+      });
+      expect(callback.statusCode).toBe(302);
+      const listing = await providerRequest(owner, "GET", `/integrations?productId=${productId}`);
+      expect(listing.body).not.toContain("synthetic-ga4-subject");
+      const connection = listing
+        .json()
+        .accounts.find((entry: { provider: string }) => entry.provider === "GA4");
+      expect(connection.status).toBe("ACTIVE");
+      const stored = await pool.query(
+        "SELECT access_token_ciphertext,refresh_token_ciphertext FROM enough.integration_tokens WHERE integration_account_id=$1",
+        [connection.id],
+      );
+      expect(decryptIntegrationSecret(stored.rows[0].access_token_ciphertext)).toBe(
+        "synthetic-ga4-original",
+      );
+      expect(decryptIntegrationSecret(stored.rows[0].refresh_token_ciphertext)).toBe(
+        "synthetic-ga4-refresh",
+      );
+      expect(stored.rows[0].access_token_ciphertext.toString()).not.toContain(
+        "synthetic-ga4-original",
+      );
+      await pool.query(
+        "UPDATE enough.integration_tokens SET expires_at=now()-interval '1 minute' WHERE integration_account_id=$1",
+        [connection.id],
+      );
+      const first = await providerRequest(owner, "POST", `/integrations/${connection.id}/sync`, {});
+      expect(first.statusCode).toBe(200);
+      expect(first.json().eventsReceived).toBe(1);
+      expect(refreshed).toBe(true);
+      const rotated = await pool.query(
+        "SELECT access_token_ciphertext FROM enough.integration_tokens WHERE integration_account_id=$1",
+        [connection.id],
+      );
+      expect(decryptIntegrationSecret(rotated.rows[0].access_token_ciphertext)).toBe(
+        "synthetic-ga4-refreshed",
+      );
+      const second = await providerRequest(
+        owner,
+        "POST",
+        `/integrations/${connection.id}/sync`,
+        {},
+      );
+      expect(second.json().eventsReceived).toBe(0);
+      const events = await pool.query(
+        "SELECT occurred_at,provider_origin_verified FROM enough.integration_events WHERE integration_account_id=$1",
+        [connection.id],
+      );
+      expect(events.rowCount).toBe(1);
+      expect(events.rows[0].provider_origin_verified).toBe(true);
+      expect(events.rows[0].occurred_at.toISOString()).toBe(
+        `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
+      );
+      const disconnected = await providerRequest(
+        owner,
+        "POST",
+        `/integrations/${connection.id}/revoke`,
+        {},
+      );
+      expect(disconnected.json()).toMatchObject({
+        status: "REVOKED",
+        providerRevocation: "REVOKED",
+      });
+      expect(revoked).toBe(true);
+      expect(
+        (
+          await pool.query(
+            "SELECT 1 FROM enough.integration_tokens WHERE integration_account_id=$1",
+            [connection.id],
+          )
+        ).rowCount,
+      ).toBe(0);
+      const rejected = await providerRequest(
+        owner,
+        "POST",
+        `/integrations/${connection.id}/sync`,
+        {},
+      );
+      expect(rejected.statusCode).toBe(409);
+      expect(reports).toBe(2);
+    });
+
     it("stores Plausible Stats API credentials encrypted, deduplicates goal-day data, and Disconnects locally", async () => {
       const owner = await account();
       const { productId } = await createProductAndCompletion(owner);

@@ -72,7 +72,7 @@ const oauthStartSchema = z
     displayName: z.string().trim().min(2).max(100),
     propertyId: z
       .string()
-      .regex(/^\d{1,20}$/)
+      .regex(/^[1-9]\d{0,19}$/)
       .optional(),
     eventMap: z.record(z.string().trim().min(1).max(100), z.enum(analyticsEventTypes)).optional(),
   })
@@ -763,6 +763,13 @@ export async function registerProviderIntegrationRoutes(
       return reply
         .code(400)
         .send({ error: "A GA4 property and normalized event map are required." });
+    if (
+      body.provider === "GA4" &&
+      (Object.keys(body.eventMap ?? {}).length === 0 ||
+        Object.keys(body.eventMap ?? {}).length > 20 ||
+        Object.keys(body.eventMap ?? {}).some((name) => !/^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(name)))
+    )
+      return reply.code(400).send({ error: "Review the GA4 event map." });
     if (body.provider !== "GA4" && (body.propertyId || body.eventMap))
       return reply.code(400).send({ error: "This provider does not use analytics settings." });
     const configuration =

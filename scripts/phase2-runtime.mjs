@@ -39,8 +39,13 @@ const phase13 = process.argv.includes("--phase13");
 const phase14Microsoft = process.argv.includes("--phase14-microsoft");
 const phase14PostHog = process.argv.includes("--phase14-posthog");
 const phase14Plausible = process.argv.includes("--phase14-plausible");
+const phase14Ga4 = process.argv.includes("--phase14-ga4");
 const phase14 =
-  process.argv.includes("--phase14") || phase14Microsoft || phase14PostHog || phase14Plausible;
+  process.argv.includes("--phase14") ||
+  phase14Microsoft ||
+  phase14PostHog ||
+  phase14Plausible ||
+  phase14Ga4;
 const basePhase = phase14
   ? "phase14"
   : phase12
@@ -847,6 +852,9 @@ try {
           "scripts/phase14-microsoft-config.test.ts",
           "scripts/phase14-posthog-config.test.ts",
           "scripts/phase14-plausible-config.test.ts",
+          "scripts/phase14-ga4-config.test.ts",
+          "scripts/phase14-ga4-gtag-seed.test.ts",
+          "apps/api/src/integration-ga4.test.ts",
           "apps/api/src/integration-provider-adapters.test.ts",
           "apps/api/src/integration-stripe.test.ts",
           "apps/api/src/integrations.integration.test.ts",
