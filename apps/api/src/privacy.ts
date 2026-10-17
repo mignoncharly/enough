@@ -229,17 +229,23 @@ export async function registerPrivacyRoutes(app: FastifyInstance): Promise<void>
       await client.query("BEGIN");
       const saved = await client.query(
         `INSERT INTO enough.privacy_consents
-           (user_id, purpose, enabled, source, revision, granted_at, revoked_at)
-         VALUES ($1, $2, $3, 'web', 1, CASE WHEN $3 THEN now() END, CASE WHEN $3 THEN NULL ELSE now() END)
+           (user_id, purpose, enabled, source, policy_version, revision, granted_at, revoked_at)
+         VALUES ($1, $2, $3, 'web', $4, 1, CASE WHEN $3 THEN now() END, CASE WHEN $3 THEN NULL ELSE now() END)
          ON CONFLICT (user_id, purpose) DO UPDATE SET
            enabled = EXCLUDED.enabled,
            source = 'web',
+           policy_version = EXCLUDED.policy_version,
            revision = privacy_consents.revision + 1,
            granted_at = CASE WHEN EXCLUDED.enabled THEN now() ELSE privacy_consents.granted_at END,
            revoked_at = CASE WHEN EXCLUDED.enabled THEN NULL ELSE now() END,
            updated_at = now()
          RETURNING purpose, enabled, policy_version, source, revision::text AS revision, granted_at, revoked_at, updated_at`,
-        [session.id, purpose, parsed.data.enabled],
+        [
+          session.id,
+          purpose,
+          parsed.data.enabled,
+          purpose === "AI_PROVIDER_PROCESSING" ? "2026-10-17" : "2026-10-06",
+        ],
       );
       await client.query(
         `INSERT INTO enough.auth_audit_events (id, user_id, event_type, metadata)

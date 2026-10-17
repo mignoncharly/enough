@@ -392,6 +392,8 @@ The implementation follow-up adds provider OAuth/API-token adapters, provider sy
 
 ## Phase 15 implementation map
 
+Current reconciliation (2026-10-17): **Phase 15 — AI Layer COMPLETE** under `REMEDIATION_IMPLEMENTATION_PLAN.md`. Passes 1–3, provider/data-handling review and USER-REPORTED P15-1–P15-6 are accepted. Seven capabilities succeeded in exactly seven sequential real calls without retries; final read-only task/credit/audit/consent/log/provider checks pass. Final consent is revoked; the provider is disabled and the fixture stopped with evidence retained. Account controls remain NOT VERIFIED, with no special-control claims. See `AI_COACH.md` for the four-row canonical closure matrix. Phase 11 remains ACTIVE with existing blockers; Phase 14 exceptions are preserved; Phase 16 is not started; production remains NO-GO. The user authorized the Phase 15 checkpoint commit and push only. Release-hardening commit `35f1828`, previously labelled “15A”, remains supporting Phase 25 work and is not Phase 15 acceptance evidence.
+
 - `apps/api/src/ai.ts`: authenticated, CSRF-protected, per-user rate-limited Coach endpoint; product/task/evidence ownership checks; context selection by capability; optional OpenAI Responses request with strict JSON Schema output; deterministic stage-guidance fallback when no provider key is configured.
 - `packages/config/src/index.ts` and `.env.example`: optional `OPENAI_API_KEY` and `OPENAI_MODEL` settings; the API does not require an AI provider to start.
 - `apps/api/src/server.ts`, `apps/web/next.config.ts`, and `infra/nginx/enough.conf`: no-store API responses, same-origin rewrite, and API proxy routing.
@@ -410,10 +412,10 @@ When no OpenAI key is configured, the API identifies its result as `STAGE_GUIDAN
 - [x] Add optional OpenAI Responses integration with strict structured output, bounded response schema, timeout, provider error handling, and `store: false`.
 - [x] Minimize provider context by capability and exclude raw activity details, account IDs, evidence URLs/references, and upload contents.
 - [x] Add a Coach page with provider state, contextual disclosure, selected task/evidence controls, and advisory labels.
-- [ ] Configure an OpenAI key in a development environment and exercise successful, incomplete, refusal, timeout, and provider error responses.
-- [ ] Apply migrations `0002_authentication.sql` through `0011_integration_platform.sql`; exercise every capability, rate limits, CSRF, ownership isolation, and task creation against the API.
-- [ ] Review the data disclosure and provider terms for the deployed account; verify logs do not contain prompts, evidence notes, or responses.
-- [ ] Verify the Coach page across desktop/mobile, keyboard navigation, and loading/empty/error/unauthorized states; complete requested quality checks before marking Phase 15 accepted.
+- [x] Pass 3: dedicated development key, seven sequential real completed/schema-valid successes without retries; incomplete/refusal/timeout/provider-error/malformed branches rerun deterministically. Consent denial, zero-reward save, safe metadata/logs and provider-disabled restart PASS. See `AI_COACH.md`.
+- [x] Separate Phase 15 fixture migrated fresh through `0020`; exact checksum/ledger/precheck/idempotency PASS. All seven capabilities, rate limits, CSRF, ownership, consent, zero-reward tasks and safe logs pass 22 live tests. Fixture stop/restart verified and state retained; Phase 14 state untouched. This does not accept later phases.
+- [x] Review current official provider policy, capability payload categories and minimization; distinguish Enough logs from provider retention. Account settings are ACCOUNT CONFIGURATION NOT VERIFIED, with no special-control claims or deployed-account approval. See dated review in `AI_COACH.md`.
+- [x] USER-REPORTED hydrated browser P15-1–P15-6 PASS, no failures: responsive/keyboard/consent, seven capabilities, context races, explicit zero-reward save and offline recovery. Refusal/missing-context and unauthorized boundaries remain covered by deterministic tests. Final read-only verification, relevant quality checks and clean owned-fixture shutdown PASS; Phase 15 COMPLETE, production NO-GO.
 
 ## Phase 16 implementation map
 

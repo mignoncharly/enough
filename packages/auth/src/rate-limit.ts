@@ -37,8 +37,8 @@ export async function checkRateLimit(
       .code(429)
       .send({ error: "Too many requests. Try again later." });
     return false;
-  } catch (error) {
-    request.log.error({ err: error, scope }, "Rate limiter unavailable");
+  } catch {
+    request.log.error({ category: "RATE_LIMIT_UNAVAILABLE", scope }, "Rate limiter unavailable");
     reply.code(503).send({ error: "The service is temporarily unavailable." });
     return false;
   }

@@ -1,10 +1,12 @@
 # Deployment Status
 
-## Current Phase 15 / slice 15A
+Phase 15 closure — 2026-10-17: AI Layer acceptance is **COMPLETE**; production remains **NO-GO**. USER-REPORTED P15-1–P15-6 and final read-only verification pass; the provider-disabled Phase 15 fixture is stopped with evidence retained. This is not deployment or later-phase acceptance. The dependency baseline remains 21 findings (3 critical / 9 high / 9 moderate), with unchanged versions/lockfile and no repeated audit. See `AI_COACH.md`; the user authorized the Phase 15 checkpoint commit/push only, with no deployment or Phase 16 start.
 
-**PRODUCTION NO-GO.** Releases are operator-controlled on a local/release host, with no Docker or GitHub Actions. Slice 15A reconciles production configuration, isolates install/test/build environments and protects integration OAuth callback logs. See [infra/README.md](infra/README.md) for the current contract and remaining gates. No deployment, credential change or host operation is part of this slice.
+## Phase 25 supporting release-hardening checkpoint
 
-Historical Phases 24–27 below use older numbering. Claims that provider adapters are absent or migrations through 0015 remain locally unaccepted are historical, superseded by Phase 12–14 records. They do not establish production deployment acceptance. GA4 standard reporting/normalization/cleanup stays deferred; Microsoft PERSONAL_MSA revocation stays blocked by provider behavior.
+**PRODUCTION NO-GO.** Releases are operator-controlled on a local/release host, with no Docker or GitHub Actions. Checkpoint `35f18280231613a890d10e340160e62604ccb2d8` reconciles production configuration, isolates install/test/build environments and protects integration OAuth callback logs. Its earlier “15A” label was a numbering mistake: the canonical `REMEDIATION_IMPLEMENTATION_PLAN.md` defines Phase 15 as AI Layer and Phase 25 as Production Infrastructure. The accepted release-hardening work is retained; it does not complete either phase. See [infra/README.md](infra/README.md) for the current contract and remaining gates. No deployment, credential change or host operation occurred.
+
+Phases 24–27 below retain their canonical numbering. Their old claims that provider adapters are absent or migrations through 0015 remain locally unaccepted are historical, superseded by Phase 12–14 records. They do not establish production deployment acceptance. GA4 standard reporting/normalization/cleanup stays deferred; Microsoft PERSONAL_MSA revocation stays blocked by provider behavior.
 
 ## Historical deployment record
 

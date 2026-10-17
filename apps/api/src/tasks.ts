@@ -130,8 +130,8 @@ async function loadTask(client: DbClient, taskId: string, userId: string): Promi
   return result.rows[0] ?? null;
 }
 
-function sendTaskError(request: FastifyRequest, reply: FastifyReply, error: unknown) {
-  request.log.error({ err: error }, "Growth task operation failed");
+function sendTaskError(request: FastifyRequest, reply: FastifyReply, _error: unknown) {
+  request.log.error({ category: "TASK_OPERATION_FAILED" }, "Growth task operation failed");
   return reply.code(503).send({ error: "The task could not be saved. Try again shortly." });
 }
 
@@ -190,7 +190,8 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
         .code(400)
         .send({ error: parsed.error.issues[0]?.message ?? "Review the task details." });
     const body = parsed.data;
-    const client = await pool.connect();
+    const client = await pool.connect().catch(() => null);
+    if (!client) return sendTaskError(request, reply, null);
     try {
       await client.query("BEGIN");
       const product = await client.query<ProductTaskContext>(
@@ -262,7 +263,8 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
       await client.query("COMMIT");
       return reply.code(201).send({ task: taskResponse(created.rows[0]) });
     } catch (error) {
-      await client.query("ROLLBACK");
+      // A rollback failure must not escape to the default logger with SQL detail.
+      await client.query("ROLLBACK").catch(() => {});
       return sendTaskError(request, reply, error);
     } finally {
       client.release();

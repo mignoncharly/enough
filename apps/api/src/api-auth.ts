@@ -8,8 +8,11 @@ export async function requireSession(
   try {
     const session = await authenticate(request);
     if (session) return session;
-  } catch (error) {
-    request.log.error({ err: error }, "Could not load authenticated API session");
+  } catch {
+    request.log.error(
+      { category: "SESSION_READ_FAILED" },
+      "Could not load authenticated API session",
+    );
     reply.code(503).send({ error: "Your workspace is temporarily unavailable." });
     return null;
   }

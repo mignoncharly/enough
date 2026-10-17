@@ -1,5 +1,9 @@
 import { afterEach, expect, it, vi } from "vitest";
 
+// This unit exercises the storage guard, not database configuration at import.
+// The production environment validator independently rejects this endpoint.
+vi.mock("@enough/db", () => ({ pool: {} }));
+
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.resetModules();

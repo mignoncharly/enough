@@ -283,10 +283,21 @@ export default function PrivacyPage() {
                 <span>
                   <strong>Optional AI provider processing</strong>
                   <small>
-                    Allow the Coach to send the selected product, task, goal, numeric traction, and
-                    (only for evidence classification) selected evidence title and note to OpenAI
-                    when you click Get advice. It does not send event details, evidence files, URLs,
-                    or integration references.
+                    Allow relevant product/stage context, goal and task content, numeric traction,
+                    and seven-day activity totals to be sent to OpenAI, an external AI provider,
+                    when you click Get advice. Evidence classification sends only the selected
+                    evidence type, title, and up to 1,500 characters of its note as text. Raw
+                    activity events, evidence files, URL fields, and integration-reference fields
+                    are omitted. Text you enter may still contain personal details, links, or
+                    secrets; remove them before requesting advice and share only content you have
+                    permission to send.
+                  </small>
+                  <small>
+                    Enough keeps AI usage metadata, not prompt or response bodies in application
+                    logs. OpenAI has separate provider retention rules. See the{" "}
+                    <a href="/privacy-policy.md">privacy policy</a> for default training and
+                    retention practices and unverified account controls. Revocation prevents future
+                    submissions; it cannot retract content already sent.
                   </small>
                   <small>
                     {consentRecord("AI_PROVIDER_PROCESSING")?.enabled

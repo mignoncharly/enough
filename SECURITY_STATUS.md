@@ -1,12 +1,14 @@
 # Security Status
 
-## Phase 15A release boundary update
+## Phase 25 supporting release boundary update (formerly labelled “15A”)
 
 **PRODUCTION NO-GO.** Install/test/static subprocesses use an OS/tool allowlist; web builds receive public origins and disposable values. Runtime preflight is separate. Policy signing, evidence storage and integration OAuth configuration are documented in `infra/README.md`. Nginx excludes integration callbacks from access logs; sign-in callback failures log safe messages instead of raw exception objects.
 
-The dependency baseline remains **21 findings (3 critical / 9 high / 9 moderate)**; no remediation or waiver is part of this slice. Remaining gates: migration/evidence-storage orchestration, coordinated backup/restore, monitoring/alerting, hosted/staging/device acceptance, external security/upload-risk approval, legal/publication and operator/recovery approval. Environment isolation is not a filesystem sandbox. Older phase labels below are historical; current release readiness is Phase 15.
+The dependency baseline remains **21 findings (3 critical / 9 high / 9 moderate)**; no remediation or waiver is part of this checkpoint. Remaining gates: migration/evidence-storage orchestration, coordinated backup/restore, monitoring/alerting, hosted/staging/device acceptance, external security/upload-risk approval, legal/publication and operator/recovery approval. Environment isolation is not a filesystem sandbox. `REMEDIATION_IMPLEMENTATION_PLAN.md` remains authoritative: Phase 15 is AI Layer; infrastructure readiness belongs to Phase 25. Checkpoint `35f18280231613a890d10e340160e62604ccb2d8` is retained as supporting release work, not AI acceptance.
 
 Phase 14 exceptions remain: GA4 standard reporting/normalization/cleanup DEFERRED, Microsoft PERSONAL_MSA provider-side revocation BLOCKED. Neither is reopened or labeled a product implementation failure.
+
+Phase 15 closure (2026-10-17): **AI Layer COMPLETE; production NO-GO.** Passes 1–3, provider/data-handling review and USER-REPORTED P15-1–P15-6 pass. Final read-only verification confirms one new owned ACTIVE zero-reward task, no completion/evidence, unchanged credit ledger/balances, final consent revoked and 16 privacy-safe logs. Real-provider ledger remains exactly seven calls, sequential without retries; no further calls/attempts occurred. Provider is disabled and owned fixture services stopped with evidence retained. Prompt/response-free Enough logs and metadata-only usage remain distinct from provider retention; classification sends bounded raw note text, no files or unnecessary stage context. ZDR, MAM, sharing and residency controls remain **ACCOUNT CONFIGURATION NOT VERIFIED**, without special-control claims. See [AI_COACH.md](AI_COACH.md) for accepted evidence and the canonical matrix. Dependency versions/lockfile and the 21-finding baseline remain unchanged; no audit was repeated. Phase 11 blockers, Phase 14 exceptions and later-phase statuses are unchanged.
 
 Last updated: 2026-10-14
 

@@ -10,6 +10,8 @@ User-authored evidence/notes are intentional separate uploads, not passive captu
 
 Provider adapters must request minimum scopes, normalize outcomes and avoid persisting mail/calendar bodies or raw provider payloads. Authentication provider identities and integration OAuth credentials are distinct. Review actual provider data disclosure before connecting accounts. AI receives only disclosed, consented, user-requested context; never raw event streams or evidence files. Prevent prompts, notes, tokens and response bodies entering logs.
 
+Phase 15 provider review (2026-10-17): evidence topic classification sends the selected type/title and up to 1,500 characters of the raw note; it omits stage context, file bytes and dedicated URL/reference fields. User-authored text is not anonymized or scrubbed automatically. Enough's metadata-only AI usage records and content-free application logs do not determine OpenAI retention. See [AI_COACH.md](AI_COACH.md#provider-policy-and-payload-review--2026-10-17) and the [public disclosure](apps/web/public/privacy-policy.md#openai-processing-disclosure--reviewed-2026-10-17) for official policy sources and unverified organization/project controls; no special retention or regional guarantee is made.
+
 ## Lifecycle
 
 | Data | Current target / boundary |

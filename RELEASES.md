@@ -1,6 +1,6 @@
 # Operator-controlled releases
 
-**PRODUCTION NO-GO.** Current Phase 15 owns release readiness. Historical Phases 24–27 refer to earlier distribution/deployment work. There is no GitHub Actions workflow; releases use approved local/release-host execution, with no Docker. Tag pushes do not automatically publish releases.
+**PRODUCTION NO-GO.** `REMEDIATION_IMPLEMENTATION_PLAN.md` is the canonical roadmap: Phase 15 is the AI Layer; Phases 24–27 cover distribution, infrastructure, production verification and launch. Release-hardening checkpoint `35f18280231613a890d10e340160e62604ccb2d8` was previously labelled “15A”; it is supporting work for Phase 25 and does not accept the AI Layer or complete Phase 25. There is no GitHub Actions workflow; releases use approved local/release-host execution, with no Docker. Tag pushes do not automatically publish releases.
 
 ## Server release boundary
 
@@ -8,7 +8,7 @@ See [infra/README.md](infra/README.md) for configuration classifications, offlin
 
 The release CLI requires an explicit environment mode: `--clean` for install/static checks, `--test` for tests, `--build` for public origins and disposable module-evaluation values, `--runtime` for trusted preflight/runtime operations. Isolated modes reject root/web dotenv credential files. Fixtures can explicitly supply synthetic values through the helper API; parent credentials are never copied wholesale into tests.
 
-Deployment remains blocked pending migration/evidence-storage orchestration, compatible rollback review, coordinated database/object backup and restore, and operational acceptance. Slice 15A does not authorize executing deployment commands.
+Deployment remains blocked pending migration/evidence-storage orchestration, compatible rollback review, coordinated database/object backup and restore, and operational acceptance. The release-hardening checkpoint does not authorize executing deployment commands.
 
 ## Desktop installers
 

@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   type AiCapability,
-  type AiCoachResult,
   type AiProviderStatus,
   createGrowthTask,
   type GrowthTaskWorkspace,
@@ -16,6 +15,7 @@ import {
   type TaskEvidenceItem,
 } from "../workspace-data";
 import { WorkspaceFrame } from "../workspace-frame";
+import { type CoachContext, coachContextKey, createCoachSession } from "./coach-session";
 
 const capabilityOptions: Array<{ value: AiCapability; label: string; description: string }> = [
   {
@@ -66,14 +66,41 @@ export default function CoachPage() {
   const [evidenceItems, setEvidenceItems] = useState<TaskEvidenceItem[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState("");
   const [selectedEvidenceId, setSelectedEvidenceId] = useState("");
-  const [result, setResult] = useState<AiCoachResult | null>(null);
-  const [addedTaskTitles, setAddedTaskTitles] = useState<string[]>([]);
+  const [session] = useState(() =>
+    createCoachSession({
+      request: requestAiAdvice,
+      createTask: createGrowthTask,
+      unauthorized: () => window.location.replace("/login"),
+    }),
+  );
+  const coach = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
+  const context: CoachContext = useMemo(
+    () => ({
+      productId,
+      capability,
+      ...(capability === "SCOPE_CHALLENGE" ? { taskId: selectedTaskId } : {}),
+      ...(capability === "EVIDENCE_CLASSIFICATION" ? { evidenceId: selectedEvidenceId } : {}),
+    }),
+    [productId, capability, selectedTaskId, selectedEvidenceId],
+  );
+  const current = coachContextKey(context) === coachContextKey(coach.context);
+  const result = current ? coach.result : null;
+  const requesting = current && coach.requesting;
+  const savingTask = current ? coach.savingTask : "";
+  const addedTaskTitles = current ? coach.addedTaskTitles : [];
+  const notice = current ? coach.notice : "";
+  const refusal = current ? coach.refusal : "";
+  function changeContext(next: CoachContext) {
+    session.select(next);
+  }
+  useEffect(() => {
+    session.select(context);
+  }, [session, context]);
+  useEffect(() => () => session.dispose(), [session]);
   const [loading, setLoading] = useState(true);
   const [contextLoading, setContextLoading] = useState(false);
-  const [requesting, setRequesting] = useState(false);
-  const [savingTask, setSavingTask] = useState("");
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [contextError, setError] = useState("");
+  const error = contextError || (current ? coach.error : "");
 
   useEffect(() => {
     let active = true;
@@ -105,9 +132,7 @@ export default function CoachPage() {
     setEvidenceItems([]);
     setSelectedTaskId("");
     setSelectedEvidenceId("");
-    setResult(null);
     setError("");
-    setNotice("");
     setContextLoading(false);
     if (!productId) return;
     if (capability !== "SCOPE_CHALLENGE" && capability !== "EVIDENCE_CLASSIFICATION") return;
@@ -160,48 +185,8 @@ export default function CoachPage() {
 
   async function getAdvice() {
     if (!canRequest) return;
-    setRequesting(true);
-    setError("");
-    setNotice("");
-    setResult(null);
-    try {
-      const response = await requestAiAdvice({
-        productId,
-        capability,
-        ...(capability === "SCOPE_CHALLENGE" ? { taskId: selectedTaskId } : {}),
-        ...(capability === "EVIDENCE_CLASSIFICATION" ? { evidenceId: selectedEvidenceId } : {}),
-      });
-      setResult(response);
-    } catch (cause) {
-      const status = (cause as { status?: number })?.status;
-      if (status === 401) window.location.replace("/login");
-      else setError(cause instanceof Error ? cause.message : "Advice could not be generated.");
-    } finally {
-      setRequesting(false);
-    }
-  }
-
-  async function addSuggestedTask(task: AiCoachResult["advice"]["tasks"][number]) {
-    setSavingTask(task.title);
-    setError("");
-    setNotice("");
-    try {
-      await createGrowthTask({
-        productId,
-        title: task.title,
-        description: task.description,
-        priority: task.priority,
-        signalStrength: task.signalStrength,
-        estimatedMinutes: task.estimatedMinutes,
-        rewardCredits: 0,
-      });
-      setAddedTaskTitles((current) => [...current, task.title]);
-      setNotice("Task added to your list. AI did not save it automatically.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "The suggested task could not be added.");
-    } finally {
-      setSavingTask("");
-    }
+    session.select(context);
+    await session.request();
   }
 
   const selectedTask = activeTasks.find((task) => task.id === selectedTaskId);
@@ -245,7 +230,13 @@ export default function CoachPage() {
             <div className="product-toolbar coach-toolbar">
               <label className="product-select">
                 Product
-                <select value={productId} onChange={(event) => setProductId(event.target.value)}>
+                <select
+                  value={productId}
+                  onChange={(event) => {
+                    changeContext({ productId: event.target.value, capability });
+                    setProductId(event.target.value);
+                  }}
+                >
                   {products.map((product) => (
                     <option key={product.id} value={product.id}>
                       {product.name}
@@ -257,7 +248,10 @@ export default function CoachPage() {
                 Coaching action
                 <select
                   value={capability}
-                  onChange={(event) => setCapability(event.target.value as AiCapability)}
+                  onChange={(event) => {
+                    changeContext({ productId, capability: event.target.value as AiCapability });
+                    setCapability(event.target.value as AiCapability);
+                  }}
                 >
                   {capabilityOptions.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -285,7 +279,10 @@ export default function CoachPage() {
                   <select
                     id="coach-active-task"
                     value={selectedTaskId}
-                    onChange={(event) => setSelectedTaskId(event.target.value)}
+                    onChange={(event) => {
+                      changeContext({ ...context, taskId: event.target.value });
+                      setSelectedTaskId(event.target.value);
+                    }}
                   >
                     {activeTasks.map((task) => (
                       <option key={task.id} value={task.id}>
@@ -308,7 +305,10 @@ export default function CoachPage() {
                   <select
                     id="coach-evidence"
                     value={selectedEvidenceId}
-                    onChange={(event) => setSelectedEvidenceId(event.target.value)}
+                    onChange={(event) => {
+                      changeContext({ ...context, evidenceId: event.target.value });
+                      setSelectedEvidenceId(event.target.value);
+                    }}
                   >
                     {evidenceItems.map((item) => (
                       <option key={item.id} value={item.id}>
@@ -362,20 +362,26 @@ export default function CoachPage() {
               </span>
               <span>
                 {capability === "EVIDENCE_CLASSIFICATION"
-                  ? `This action may send the product stage and selected evidence type, title, and note${selectedEvidence ? ` (currently selected: ${selectedEvidence.title})` : ""}. It does not send file contents, URLs, or integration references.`
+                  ? `This action may send the selected evidence type, title, and up to 1,500 characters of its note${selectedEvidence ? ` (currently selected: ${selectedEvidence.title})` : ""}. The note is sent as text. Evidence file contents, URL fields, and integration-reference fields are omitted.`
                   : null}
               </span>
               <span>
-                No passwords, account identifiers, uploaded files, or rule data are included. Remove
-                names, contact details, and secrets from product descriptions and notes before
-                requesting advice. Evidence classification is assistance only; a person must review
-                the underlying evidence.
+                Enough does not attach account identifiers, uploaded files, rule data, or session
+                credentials to the advice input. User-entered titles and notes are not automatically
+                anonymized or scrubbed of secrets; remove sensitive details and send only content
+                you have permission to share. Evidence classification is advisory and needs human
+                review. See <a href="/privacy">Privacy</a> for OpenAI data handling and consent.
               </span>
             </div>
 
             {error ? (
               <p className="error" role="alert">
                 {error}
+              </p>
+            ) : null}
+            {refusal ? (
+              <p className="notice" role="status">
+                {refusal}
               </p>
             ) : null}
             {notice ? (
@@ -477,7 +483,7 @@ export default function CoachPage() {
                             className="secondary-button"
                             type="button"
                             disabled={Boolean(savingTask) || alreadyAdded}
-                            onClick={() => void addSuggestedTask(task)}
+                            onClick={() => void session.addTask(task)}
                           >
                             {savingTask === task.title
                               ? "Adding…"

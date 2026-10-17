@@ -471,6 +471,14 @@ export interface AiCoachResult {
   advice: AiAdvice;
 }
 
+export type AiCoachResponse =
+  | AiCoachResult
+  | {
+      source: "OPENAI";
+      outcome: "REFUSED";
+      message: string;
+    };
+
 export interface AiProviderStatus {
   providerConfigured: boolean;
   providerConsentEnabled: boolean;
@@ -863,7 +871,7 @@ export function requestAiAdvice(body: {
   capability: AiCapability;
   taskId?: string;
   evidenceId?: string;
-}): Promise<AiCoachResult> {
+}): Promise<AiCoachResponse> {
   return postProductAction("/api/ai/coach", body);
 }
 

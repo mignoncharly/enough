@@ -4,9 +4,9 @@ This is a single Ubuntu VPS deployment. Nginx terminates TLS, Next.js serves the
 
 ## Host layout and prerequisites
 
-**PRODUCTION NO-GO.** Current Phase 15 owns release readiness. Historical Phases 24–27 references describe the same deployment/distribution work, not additional phases to start. Releases are operator-controlled on a local/release host, with no Docker or GitHub Actions.
+**PRODUCTION NO-GO.** `REMEDIATION_IMPLEMENTATION_PLAN.md` is the canonical roadmap: Phase 15 is the AI Layer; Phases 24–27 retain their distribution/infrastructure/verification/launch meanings. Release-hardening checkpoint `35f18280231613a890d10e340160e62604ccb2d8`, previously labelled “15A”, is supporting work for Phase 25, not AI Layer acceptance or Phase 25 completion. Releases are operator-controlled on a local/release host, with no Docker or GitHub Actions.
 
-Slice 15A covers configuration, subprocess isolation and callback logging only. Remaining gates: dependency audit (21 findings: 3 critical, 9 high, 9 moderate), migration/evidence-storage orchestration, coordinated database/object backup and restore, monitoring/alerting, hosted staging/device acceptance, external security approval and upload risk decision, legal/publication approval, and operator/recovery approval. GA4 standard-report normalization/cleanup stays deferred; Microsoft PERSONAL_MSA provider revocation stays blocked by provider behavior. Neither Phase 14 exception is reopened here.
+The release-hardening checkpoint covers configuration, subprocess isolation and callback logging only. Remaining gates: dependency audit (21 findings: 3 critical, 9 high, 9 moderate), migration/evidence-storage orchestration, coordinated database/object backup and restore, monitoring/alerting, hosted staging/device acceptance, external security approval and upload risk decision, legal/publication approval, and operator/recovery approval. GA4 standard-report normalization/cleanup stays deferred; Microsoft PERSONAL_MSA provider revocation stays blocked by provider behavior. Neither Phase 14 exception is reopened here.
 
 The bootstrap script requires an explicit `--apply` and root access. It installs Ubuntu packages and the systemd, Redis, journald, sudoers, and Certbot reload-hook templates. It does not set up Node.js, pnpm, DNS, secrets, TLS certificates, or firewall rules, and it does not enable the app services.
 
@@ -117,7 +117,7 @@ sudo systemctl enable enough-api.service enough-web.service enough-worker.servic
 
 The script requires `BACKUP_AGE_RECIPIENT` and `BACKUP_RCLONE_DEST`; configure an age public recipient and an off-host rclone destination before deployment. The corresponding rclone config must be readable by `enough` and mode `0600`. Daily backups are encrypted before writing, uploaded off-host, and local files older than the retention period are pruned while keeping at least three. Remote retention is governed by the selected storage provider and must be configured there.
 
-Slice 15A only narrows the environments of existing PostgreSQL/age/rclone subprocesses: PostgreSQL receives credentials from its explicit connection argument; age/rclone receive OS/tool plumbing. Rclone uses the protected default user config, not inherited `RCLONE_*` overrides. Backup/restore sequencing is unchanged and has not been executed or accepted by this slice.
+The release-hardening checkpoint only narrows the environments of existing PostgreSQL/age/rclone subprocesses: PostgreSQL receives credentials from its explicit connection argument; age/rclone receive OS/tool plumbing. Rclone uses the protected default user config, not inherited `RCLONE_*` overrides. Backup/restore sequencing is unchanged and was not executed or accepted by that checkpoint.
 
 The code rollback does not reverse database migrations. Migrations must remain backward-compatible with the previous application release; destructive schema changes require a separately reviewed recovery plan. To roll code back manually, use a known release directory:
 

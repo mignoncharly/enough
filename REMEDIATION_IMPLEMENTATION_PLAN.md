@@ -1,5 +1,13 @@
 # Remediation Implementation Plan
 
+## Current roadmap clarification — 2026-10-17
+
+This file remains the canonical phase sequence. **Phase 15 is AI Layer**, Phase 16 is Reports, and Phases 24–27 retain distribution/infrastructure/verification/launch scope. Release-hardening checkpoint `35f18280231613a890d10e340160e62604ccb2d8` (commit message labelled “Phase 15A”) is retained as completed supporting work for Phase 25; it is not AI Layer acceptance and does not complete Phase 25.
+
+Phase 14 is checkpointed at `59ac406fd4be5639346f67eb01ffcacc27a1d4b4` with explicit preserved external exceptions: GA4 clean Realtime ingestion PASS, standard reporting/normalization/cleanup DEFERRED; Microsoft PERSONAL_MSA provider-side revocation BLOCKED by provider behavior. Stripe, Google, PostHog and Plausible acceptance remains preserved. Do not reopen these items while working on AI Layer acceptance.
+
+**Phase 15 — AI Layer: COMPLETE (2026-10-17).** Passes 1–3, accepted provider/data-handling review, USER-REPORTED P15-1–P15-6 and final read-only verification pass; the fixture is stopped with evidence retained. Account controls remain NOT VERIFIED without special-control claims. See `AI_COACH.md`. Phase 11 remains ACTIVE with existing blockers; Phase 14 exceptions are preserved. Phase 16 is NOT STARTED; the user authorized the Phase 15 checkpoint commit and push only. Production remains **NO-GO**; the dependency baseline remains **21 findings (3 critical / 9 high / 9 moderate)** with no upgrade or new audit. The October 14 consolidation below is historical where superseded by this status and later acceptance records.
+
 Last consolidated: 2026-10-14 (Phase 13 baseline checkpoint `d86670bc83b6aab56b76860ee623e6a5831bc215`; Phase 10 remains checkpointed at `6a6110205276b839534427a05b60f4c1044a3c0e`; Phase 11 ACTIVE, P11-1–P11-3 PASS, P11-4–P11-5 BLOCKED; Phase 12 COMPLETE; Phase 13 COMPLETE; Phase 14 deterministic provider, local browser, Google external, and Stripe external acceptance PASS, four external real-provider gates open; production NO-GO with all 18 dependency-security findings open)
 Source of truth for implementation order: this file. The historical scope remains in `ENOUGH_COMPLETE_IMPLEMENTATION_PLAN.md`; historical implementation detail and evidence remain in `IMPLEMENTATION_HANDOFF.md`.
 
@@ -277,7 +285,7 @@ production is NO-GO.
 
 **Critical for Phase 27-required providers; Medium for optional analytics adapters**
 
-- [x] Implement and deterministically accept Gmail, Outlook, Google Calendar, and Microsoft Calendar provider authentication, read scopes, sync, token refresh/disconnect, and safe failure recording. Real Gmail and Google Calendar OAuth/API, refresh, and revocation acceptance passed; Microsoft real OAuth remains open.
+- [x] Implement and deterministically accept Gmail, Outlook, Google Calendar, and Microsoft Calendar provider authentication, read scopes, sync, token refresh/disconnect, and safe failure recording. Real Google acceptance passed. Microsoft real OAuth, functional/data, Calendar refresh and local disconnect passed; PERSONAL_MSA provider revocation remains an explicit external blocker.
 - [x] Implement and accept a separate Stripe customer-revenue integration that confirms signed webhook events through the connected Stripe API. Enough's own subscription webhook remains separate. End-to-end Stripe anonymous sandbox delivery passed.
 - [x] Apply isolated migrations `0001`–`0020` in order, pass migration precheck with no pending migrations, and verify compatibility upgrading from the accepted `0019` schema.
 - [x] Exercise Generic webhook/Public Event API HMAC success/failure, exact-body signing, stale/future timestamp rejection, malformed and out-of-scope monetary payload rejection, identical retry, conflicting event ID, account rate limits, revocation races, account/product ownership, evidence review/reward gating, safe export, and account deletion against isolated PostgreSQL/Redis/API runtime.
@@ -285,16 +293,18 @@ production is NO-GO.
 - [x] Pass migration `0020`, provider OAuth/adapter/Stripe suites (18/18 focused tests), and 29/29 Phase 14 PostgreSQL/API runtime tests in the isolated fixture; privacy/export/deletion checks passed.
 - [x] Complete consolidated local browser acceptance by user report, including exactly-once Stripe-origin reward behavior and pending/no-reward owner-controlled Generic/Public API behavior.
 - [x] Complete dedicated Google OAuth and Stripe customer-revenue sandbox acceptance; see `PHASE_14_ACCEPTANCE.md`.
-- [ ] Complete the remaining dedicated real-provider acceptance for Microsoft OAuth, PostHog, Plausible, and GA4. Generic/Public API signatures authenticate only the workspace owner's source. Phase 14 remains ACTIVE until these gates and the canonical automatic real-world event verification criterion are accepted.
+- [x] Checkpoint Phase 14 external acceptance with the user-approved exceptions preserved in `PHASE_14_ACCEPTANCE.md`: PostHog and Plausible combined PASS; Microsoft combined BLOCKED solely on PERSONAL_MSA provider revocation; GA4 Realtime ingestion PASS with standard reporting/normalization/cleanup DEFERRED. This checkpoint is not a claim that the two exceptions passed. Generic/Public API signatures still authenticate only the workspace owner's source. Do not reopen Phase 14 as part of Phase 15.
 
 ### Phase 15 — AI Layer
 
 **High; Phase 27 includes the AI Coach**
 
-- [ ] With a development OpenAI credential, exercise success, incomplete response, refusal, timeout, and provider errors; verify local fallback.
-- [ ] Apply required migrations through `0011`; exercise all capabilities, rate limits, CSRF, ownership, and task creation.
-- [ ] Review data disclosure/provider terms and confirm prompts, evidence, and responses do not enter logs.
-- [ ] Verify desktop/mobile, keyboard, loading/empty/error/unauthorized UI states and user consent behavior.
+**COMPLETE — 2026-10-17; evidence and canonical criterion matrix in `AI_COACH.md`.** Passes 1–3 and provider/data-handling review are accepted. All seven capabilities passed completed/schema-valid real responses in exactly seven sequential calls without retries. The user reported P15-1–P15-6 PASS in one hydrated browser session; no failures were reported. Final read-only verification confirms exactly one new ACTIVE Product A task, correct owner, reward zero, route audit/POST provenance, no completion/evidence, unchanged Available/Reserved and credit ledger, final consent revoked, safe logs and no additional provider attempts. Owned services stopped cleanly and evidence was retained. Account controls remain NOT VERIFIED without special-control claims. No Phase 14/GA4 state was touched; Phase 16 is not started and production remains NO-GO.
+
+- [x] Development OpenAI success for all seven capabilities; incomplete/refusal/timeout/provider-error/malformed branches rerun deterministically without external calls. Local fallback and consent denial consume zero calls. Bounded runner returned to disabled mode; seven-call ledger retained.
+- [x] Fresh isolated Phase 15 schema through `0020`, exact migration checksums/order/ledger, precheck and idempotent rerun. AI consent uses `0014`, usage metadata `0015`, current evidence `0018`/`0019`. All seven capabilities, rate limits, CSRF, ownership, consent and explicit zero-reward tasks pass live API/database checks; later schema does not accept later phases.
+- [x] Official provider-policy/payload review dated 2026-10-17, category matrix and minimization regressions in `AI_COACH.md`; Enough logs/usage remain content-free. MAM/ZDR/sharing/residency settings are ACCOUNT CONFIGURATION NOT VERIFIED; no special-control claim or production account approval. No additional provider calls.
+- [x] USER-REPORTED consolidated hydrated browser P15-1–P15-6 PASS: desktop/~390px, keyboard/focus, all seven actions, consent/privacy, context-switch/in-flight invalidation, explicit zero-reward save and offline error/recovery. Refusal/missing-context and unauthorized boundaries retain automated coverage; no claim of manual provider refusal. Final read-only verification, relevant checks and clean shutdown PASS. All canonical Phase 15 criteria are satisfied; no later-phase acceptance is implied.
 
 ### Phase 16 — Reports
 
@@ -384,6 +394,8 @@ production is NO-GO.
 ### Phase 25 — Production Infrastructure
 
 **Critical**
+
+- [x] Preserve supporting release-hardening checkpoint `35f18280231613a890d10e340160e62604ccb2d8`: production config contract, install/test/build secret isolation, OAuth callback log protection and offline regression coverage. Its former “15A” label does not change the canonical phase sequence. No deployment or Phase 25 completion is claimed.
 
 - [ ] Configure an Ubuntu host, Node.js 22+, pnpm 11.20.0, PostgreSQL, Redis ACL, Nginx, DNS/TLS, firewall, protected secrets, SSH deploy key, and off-host backup storage.
 - [ ] Validate Nginx/systemd/sudoers on the host; deploy an explicit approved ref with reviewed migration approval.

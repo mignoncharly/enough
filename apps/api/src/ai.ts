@@ -58,7 +58,7 @@ const aiRequestSchema = z
 
 const adviceSchema = z
   .object({
-    headline: z.string().min(1).max(200),
+    headline: z.string().trim().min(1).max(200),
     diagnosis: z.string().max(1600),
     nextAction: z.string().max(500),
     rationale: z.string().max(1200),
@@ -68,7 +68,7 @@ const adviceSchema = z
       .array(
         z
           .object({
-            title: z.string().min(2).max(250),
+            title: z.string().trim().min(2).max(250),
             description: z.string().max(1000),
             priority: z.number().int().min(1).max(5),
             signalStrength: z.number().int().min(1).max(5),
@@ -99,6 +99,73 @@ const adviceSchema = z
 
 type Advice = z.infer<typeof adviceSchema>;
 type Capability = (typeof capabilities)[number];
+
+type ProviderFailure =
+  | "REFUSED"
+  | "INCOMPLETE"
+  | "NOT_COMPLETED"
+  | "TIMEOUT"
+  | "PROVIDER_ERROR"
+  | "MALFORMED";
+
+class AdviceProviderError extends Error {
+  constructor(readonly category: ProviderFailure) {
+    super(category);
+  }
+}
+
+// Validate the REST envelope before considering any generated text. Never concatenate
+// partial messages or prefer an SDK convenience field over the actual output items.
+const providerEnvelope = z.object({
+  status: z.string(),
+  error: z.unknown().optional(),
+  output: z
+    .array(
+      z.object({
+        type: z.string(),
+        role: z.string().optional(),
+        status: z.string().optional(),
+        content: z
+          .array(
+            z.object({
+              type: z.string(),
+              text: z.string().optional(),
+              refusal: z.string().optional(),
+            }),
+          )
+          .optional(),
+      }),
+    )
+    .optional(),
+  usage: z
+    .object({ input_tokens: z.unknown().optional(), output_tokens: z.unknown().optional() })
+    .nullish(),
+});
+
+function safeTokenCount(value: unknown): number | null {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= 2_147_483_647
+    ? value
+    : null;
+}
+
+async function providerFetch(init: RequestInit): Promise<unknown> {
+  try {
+    const response = await fetch("https://api.openai.com/v1/responses", init);
+    if (!response.ok) throw new AdviceProviderError("PROVIDER_ERROR");
+    return await response.json();
+  } catch (error) {
+    if (error instanceof AdviceProviderError) throw error;
+    if (
+      init.signal?.aborted ||
+      (error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name))
+    )
+      throw new AdviceProviderError("TIMEOUT");
+    throw new AdviceProviderError(error instanceof SyntaxError ? "MALFORMED" : "PROVIDER_ERROR");
+  }
+}
 
 interface ProductContextRow {
   product_stage: ProductStage;
@@ -314,7 +381,13 @@ async function requestOpenAiAdvice(
   capability: Capability,
   context: AdviceContext,
 ): Promise<{ advice: Advice; inputTokens: number | null; outputTokens: number | null }> {
-  const response = await fetch("https://api.openai.com/v1/responses", {
+  // Evidence topic classification needs only the selected evidence text/type.
+  // Keep stage guidance in the local context for provider-disabled fallback.
+  const providerContext =
+    capability === "EVIDENCE_CLASSIFICATION"
+      ? { selectedEvidence: context.selectedEvidence }
+      : context;
+  const raw = await providerFetch({
     method: "POST",
     headers: {
       authorization: `Bearer ${env.OPENAI_API_KEY}`,
@@ -336,7 +409,9 @@ async function requestOpenAiAdvice(
         },
         {
           role: "user",
-          content: [{ type: "input_text", text: JSON.stringify({ capability, context }) }],
+          content: [
+            { type: "input_text", text: JSON.stringify({ capability, context: providerContext }) },
+          ],
         },
       ],
       text: {
@@ -351,30 +426,36 @@ async function requestOpenAiAdvice(
     redirect: "error",
     signal: AbortSignal.timeout(25_000),
   });
-  if (!response.ok) throw new Error(`OpenAI request failed with status ${response.status}.`);
-  const payload = (await response.json().catch(() => null)) as {
-    status?: string;
-    output_text?: string;
-    usage?: { input_tokens?: number; output_tokens?: number };
-    output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
-  } | null;
-  if (!payload || payload.status === "incomplete")
-    throw new Error("OpenAI returned an incomplete response.");
-  const outputText =
-    payload.output_text ??
-    payload.output
-      ?.flatMap((item) => item.content ?? [])
-      .find((item) => item.type === "output_text")?.text;
-  if (!outputText) throw new Error("OpenAI returned no structured advice.");
-  const parsed = adviceSchema.safeParse(JSON.parse(outputText) as unknown);
-  if (!parsed.success) throw new Error("OpenAI returned advice outside the expected schema.");
+  const envelope = providerEnvelope.safeParse(raw);
+  if (!envelope.success) throw new AdviceProviderError("MALFORMED");
+  const payload = envelope.data;
+  if (payload.status === "incomplete") throw new AdviceProviderError("INCOMPLETE");
+  if (payload.status === "failed" || payload.error != null)
+    throw new AdviceProviderError("PROVIDER_ERROR");
+  if (payload.status !== "completed") throw new AdviceProviderError("NOT_COMPLETED");
+  const messages = (payload.output ?? []).filter((item) => item.type === "message");
+  if (messages.some((item) => item.content?.some((part) => part.type === "refusal")))
+    throw new AdviceProviderError("REFUSED");
+  if (
+    messages.length !== 1 ||
+    messages[0].role !== "assistant" ||
+    messages[0].status !== "completed"
+  )
+    throw new AdviceProviderError("MALFORMED");
+  const content = messages[0].content;
+  if (content?.length !== 1 || content[0].type !== "output_text" || !content[0].text)
+    throw new AdviceProviderError("MALFORMED");
+  let output: unknown;
+  try {
+    output = JSON.parse(content[0].text);
+  } catch {
+    throw new AdviceProviderError("MALFORMED");
+  }
+  const parsed = adviceSchema.safeParse(output);
+  if (!parsed.success) throw new AdviceProviderError("MALFORMED");
   const usage = {
-    inputTokens: Number.isSafeInteger(payload.usage?.input_tokens)
-      ? (payload.usage?.input_tokens ?? null)
-      : null,
-    outputTokens: Number.isSafeInteger(payload.usage?.output_tokens)
-      ? (payload.usage?.output_tokens ?? null)
-      : null,
+    inputTokens: safeTokenCount(payload.usage?.input_tokens),
+    outputTokens: safeTokenCount(payload.usage?.output_tokens),
   };
   if (capability !== "TASK_GENERATION") return { advice: { ...parsed.data, tasks: [] }, ...usage };
   const existingTitles = new Set(
@@ -415,8 +496,11 @@ async function recordAiUsage(
         Math.max(0, Math.floor(latencyMs)),
       ],
     );
-  } catch (error) {
-    request.log.warn({ err: error }, "AI usage metadata could not be recorded");
+  } catch {
+    request.log.warn(
+      { category: "USAGE_WRITE_FAILED", capability },
+      "AI usage metadata could not be recorded",
+    );
   }
 }
 
@@ -541,18 +625,30 @@ async function buildContext(
   return context;
 }
 
+async function providerConsent(request: FastifyRequest, userId: string): Promise<boolean | null> {
+  try {
+    const consent = await pool.query<{ enabled: boolean }>(
+      "SELECT enabled FROM enough.privacy_consents WHERE user_id = $1 AND purpose = 'AI_PROVIDER_PROCESSING'",
+      [userId],
+    );
+    return consent.rows[0]?.enabled === true;
+  } catch {
+    request.log.warn({ category: "CONSENT_READ_FAILED" }, "AI consent could not be loaded");
+    return null;
+  }
+}
+
 export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
   app.get("/ai/status", async (request, reply) => {
     const session = await requireSession(request, reply);
     if (!session) return;
     if (!(await checkRateLimit(request, reply, "ai:status", session.id, 120, 60))) return;
-    const consent = await pool.query<{ enabled: boolean }>(
-      "SELECT enabled FROM enough.privacy_consents WHERE user_id = $1 AND purpose = 'AI_PROVIDER_PROCESSING'",
-      [session.id],
-    );
+    const consent = await providerConsent(request, session.id);
+    if (consent === null)
+      return reply.code(503).send({ error: "AI consent is temporarily unavailable." });
     return reply.send({
       providerConfigured: Boolean(env.OPENAI_API_KEY),
-      providerConsentEnabled: Boolean(consent.rows[0]?.enabled),
+      providerConsentEnabled: consent,
       model: env.OPENAI_API_KEY ? env.OPENAI_MODEL : null,
     });
   });
@@ -560,6 +656,7 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
   app.post("/ai/coach", async (request, reply) => {
     const session = await requireSession(request, reply);
     if (!session || !requireCsrf(request, reply, session)) return;
+    const userId = session.id;
     if (!(await checkRateLimit(request, reply, "ai:coach", session.id, 8, 60))) return;
 
     const parsed = aiRequestSchema.safeParse(request.body);
@@ -568,24 +665,31 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
         .code(400)
         .send({ error: parsed.error.issues[0]?.message ?? "Choose a valid coaching action." });
 
-    if (env.OPENAI_API_KEY) {
-      const consent = await pool.query<{ enabled: boolean }>(
-        "SELECT enabled FROM enough.privacy_consents WHERE user_id = $1 AND purpose = 'AI_PROVIDER_PROCESSING'",
-        [session.id],
-      );
-      if (!consent.rows[0]?.enabled) {
-        return reply.code(403).send({
+    async function allowProvider() {
+      const consent = await providerConsent(request, userId);
+      if (consent === null) {
+        reply.code(503).send({ error: "AI consent is temporarily unavailable." });
+        return false;
+      }
+      if (!consent) {
+        reply.code(403).send({
           error:
             "Optional AI provider processing is disabled. Review and grant consent in Privacy settings before sending selected context to OpenAI.",
         });
+        return false;
       }
+      return true;
     }
+    if (env.OPENAI_API_KEY && !(await allowProvider())) return;
 
     let context: AdviceContext | null;
     try {
       context = await buildContext(request, session.id, parsed.data);
-    } catch (error) {
-      request.log.error({ err: error }, "AI coach context could not be loaded");
+    } catch {
+      request.log.error(
+        { category: "CONTEXT_READ_FAILED", capability: parsed.data.capability },
+        "AI coach context could not be loaded",
+      );
       return reply.code(503).send({ error: "Product context is temporarily unavailable." });
     }
     if (!context)
@@ -600,6 +704,9 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
+    // Respect revocations completed while context was being assembled. Consent
+    // cannot retract data already sent to a provider by an earlier request.
+    if (!(await allowProvider())) return;
     const startedAt = Date.now();
     try {
       const result = await requestOpenAiAdvice(parsed.data.capability, context);
@@ -621,17 +728,24 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
         "FAILED",
         Date.now() - startedAt,
       );
-      const status =
-        error instanceof Error && error.message.includes("status ")
-          ? error.message.match(/status (\d+)/)?.[1]
-          : undefined;
+      const category = error instanceof AdviceProviderError ? error.category : "MALFORMED";
+      if (category === "REFUSED") {
+        request.log.info({ category, capability: parsed.data.capability }, "AI advice was refused");
+        return reply.send({
+          source: "OPENAI",
+          outcome: "REFUSED",
+          message:
+            "The Coach could not offer advice for this request. No task was created. Try a different coaching action or revise the selected context.",
+        });
+      }
       request.log.error(
-        { providerStatus: status ?? "unavailable" },
+        { category, capability: parsed.data.capability },
         "AI provider request did not return usable advice",
       );
-      return reply
-        .code(502)
-        .send({ error: "AI advice is temporarily unavailable. Try again later." });
+      return reply.code(502).send({
+        code: `AI_${category}`,
+        error: "AI advice is temporarily unavailable. Try again later.",
+      });
     }
   });
 }
