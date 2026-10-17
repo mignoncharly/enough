@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  loadProductReport,
-  loadProducts,
-  type ProductReport,
-  type ProductSummary,
-} from "../workspace-data";
+import { reportSum } from "@enough/shared";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { loadProductReport, loadProducts, type ProductSummary } from "../workspace-data";
 import { WorkspaceFrame } from "../workspace-frame";
+import { creditTrendSummary, formatPayment, formatReportUtc } from "./report-presentation";
+import { createReportSession, type ReportContext, sameReportContext } from "./report-session";
 
 type ReportRange = 7 | 30 | 90;
 
@@ -19,24 +17,30 @@ function durationLabel(seconds: number): string {
   return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
-function formatPayment(amountMinor: number, currency: string): string {
-  try {
-    const formatter = new Intl.NumberFormat(undefined, { style: "currency", currency });
-    const fractionDigits = formatter.resolvedOptions().maximumFractionDigits ?? 2;
-    return formatter.format(amountMinor / 10 ** fractionDigits);
-  } catch {
-    return `${amountMinor} minor units ${currency}`;
-  }
-}
-
 export default function ReportsPage() {
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [productId, setProductId] = useState("");
   const [rangeDays, setRangeDays] = useState<ReportRange>(30);
   const [selectedDay, setSelectedDay] = useState("");
-  const [report, setReport] = useState<ProductReport | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [productsError, setProductsError] = useState("");
+  const [session] = useState(() =>
+    createReportSession({
+      request: ({ productId, days }) => loadProductReport(productId, days),
+      unauthorized: () => window.location.replace("/login"),
+    }),
+  );
+  const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
+  const context: ReportContext = { productId, days: rangeDays };
+  const current = sameReportContext(state.context, context);
+  const report = current ? state.report : null;
+  const loading = productsLoading || (!!productId && (!current || state.loading));
+  const error = productsError || (current ? state.error : "");
+  function changeContext(next: ReportContext) {
+    session.select(next);
+    setProductId(next.productId);
+    setRangeDays(next.days);
+  }
 
   useEffect(() => {
     let active = true;
@@ -46,14 +50,14 @@ export default function ReportsPage() {
         setProducts(items);
         const requested = new URLSearchParams(window.location.search).get("productId");
         setProductId(items.find((item) => item.id === requested)?.id ?? items[0]?.id ?? "");
-        setLoading(false);
+        setProductsLoading(false);
       })
       .catch((cause: unknown) => {
+        if (!active) return;
         const status = (cause as { status?: number })?.status;
         if (status === 401) window.location.replace("/login");
-        else if (active)
-          setError(cause instanceof Error ? cause.message : "Products could not be loaded.");
-        if (active) setLoading(false);
+        else setProductsError("Products could not be loaded.");
+        setProductsLoading(false);
       });
     return () => {
       active = false;
@@ -61,40 +65,12 @@ export default function ReportsPage() {
   }, []);
 
   useEffect(() => {
-    if (!productId) {
-      setReport(null);
-      return;
-    }
-    let active = true;
-    setLoading(true);
-    setError("");
-    void loadProductReport(productId, rangeDays)
-      .then((result) => {
-        if (!active) return;
-        setReport(result);
-        setSelectedDay((current) =>
-          result.days.some((day) => day.day === current)
-            ? current
-            : (result.days.at(-1)?.day ?? ""),
-        );
-      })
-      .catch((cause: unknown) => {
-        const status = (cause as { status?: number })?.status;
-        if (status === 401) window.location.replace("/login");
-        else if (active)
-          setError(
-            cause instanceof Error ? cause.message : "The product report could not be loaded.",
-          );
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [productId, rangeDays]);
+    if (productId) void session.request({ productId, days: rangeDays });
+    return () => session.dispose();
+  }, [productId, rangeDays, session]);
 
-  const selected = report?.days.find((day) => day.day === selectedDay) ?? null;
+  const selected =
+    report?.days.find((day) => day.day === selectedDay) ?? report?.days.at(-1) ?? null;
   const trendDays = useMemo(() => report?.days.slice(-14) ?? [], [report]);
   const maxFocusSeconds = Math.max(
     1,
@@ -106,6 +82,7 @@ export default function ReportsPage() {
     ...trendDays.map((day) => Math.max(day.credits.earned, day.credits.spent)),
   );
   const weekly = report?.weeklyReview;
+  const creditTrend = creditTrendSummary(trendDays);
 
   return (
     <WorkspaceFrame
@@ -118,7 +95,10 @@ export default function ReportsPage() {
         <div className="product-toolbar report-toolbar">
           <label className="product-select">
             Product
-            <select value={productId} onChange={(event) => setProductId(event.target.value)}>
+            <select
+              value={productId}
+              onChange={(event) => changeContext({ ...context, productId: event.target.value })}
+            >
               {products.map((product) => (
                 <option key={product.id} value={product.id}>
                   {product.name}
@@ -130,7 +110,9 @@ export default function ReportsPage() {
             Trend range
             <select
               value={rangeDays}
-              onChange={(event) => setRangeDays(Number(event.target.value) as ReportRange)}
+              onChange={(event) =>
+                changeContext({ ...context, days: Number(event.target.value) as ReportRange })
+              }
             >
               <option value={7}>7 days</option>
               <option value={30}>30 days</option>
@@ -230,7 +212,7 @@ export default function ReportsPage() {
                   <strong>{weekly.tasksCompleted}</strong>
                 </article>
                 <article>
-                  <span>Completions verified</span>
+                  <span>Completions verified (owner/automatic)</span>
                   <strong>{weekly.tasksVerified}</strong>
                 </article>
                 <article>
@@ -267,7 +249,10 @@ export default function ReportsPage() {
             <h2>Choose a day</h2>
             <label className="report-day-select">
               Report date
-              <select value={selectedDay} onChange={(event) => setSelectedDay(event.target.value)}>
+              <select
+                value={selected?.day ?? ""}
+                onChange={(event) => setSelectedDay(event.target.value)}
+              >
                 {report.days
                   .slice()
                   .reverse()
@@ -300,7 +285,7 @@ export default function ReportsPage() {
                 </div>
                 <ul className="report-detail-list">
                   <li>
-                    <span>Prospects contacted</span>
+                    <span>Outreach event records</span>
                     <strong>{selected.signals.outreach}</strong>
                   </li>
                   <li>
@@ -308,13 +293,15 @@ export default function ReportsPage() {
                     <strong>{selected.signals.replies}</strong>
                   </li>
                   <li>
-                    <span>Customer conversations</span>
+                    <span>Conversation event records</span>
                     <strong>
-                      {selected.signals.interviews +
-                        selected.signals.feedbackCalls +
-                        selected.signals.salesCalls +
-                        selected.signals.onboardingCalls +
-                        selected.signals.retentionCalls}
+                      {reportSum([
+                        selected.signals.interviews,
+                        selected.signals.feedbackCalls,
+                        selected.signals.salesCalls,
+                        selected.signals.onboardingCalls,
+                        selected.signals.retentionCalls,
+                      ])}
                     </strong>
                   </li>
                   <li>
@@ -322,7 +309,7 @@ export default function ReportsPage() {
                     <strong>{selected.signals.demos}</strong>
                   </li>
                   <li>
-                    <span>Signups / activations / retained</span>
+                    <span>Signup / activation / retention records</span>
                     <strong>
                       {selected.signals.signups} / {selected.signals.activations} /{" "}
                       {selected.signals.retained}
@@ -331,7 +318,7 @@ export default function ReportsPage() {
                   <li>
                     <span>Task completions</span>
                     <strong>
-                      {selected.tasksCompleted} · {selected.tasksVerified} verified
+                      {`${selected.tasksCompleted} completed · ${selected.tasksVerified} verified (owner/automatic)`}
                     </strong>
                   </li>
                   <li>
@@ -449,16 +436,16 @@ export default function ReportsPage() {
             <p className="report-footnote">
               Counts include replies, completed conversations and demos, signups, activations,
               retention, and payment events. Outreach attempts are shown in the daily detail but are
-              not counted as outcomes.
+              not counted in this signal total. These are normalized records, not necessarily unique
+              people or customers; analytics daily records may represent provider reporting-day
+              buckets.
             </p>
           </section>
 
           <section className="account-card">
             <p className="eyebrow">Credit trend · last {trendDays.length} days</p>
             <h2>Product-wallet credits earned and spent</h2>
-            {trendDays.some(
-              (day) => day.credits.earned + day.credits.spent + Math.abs(day.credits.adjusted) > 0,
-            ) ? (
+            {creditTrend.hasActivity ? (
               <>
                 <div className="report-chart-legend">
                   <span>
@@ -475,7 +462,7 @@ export default function ReportsPage() {
                     aria-label={trendDays
                       .map(
                         (day) =>
-                          `${day.day}: ${day.credits.earned} earned, ${day.credits.spent} spent`,
+                          `${day.day}: ${day.credits.earned} earned, ${day.credits.spent} spent, ${day.credits.refunded} refunded, ${day.credits.adjusted} net adjustment`,
                       )
                       .join("; ")}
                   >
@@ -498,15 +485,15 @@ export default function ReportsPage() {
                   </div>
                 </div>
                 <p className="report-footnote">
-                  Refunded credits:{" "}
-                  {trendDays.reduce((total, day) => total + day.credits.refunded, 0)} · Net
-                  adjustments: {trendDays.reduce((total, day) => total + day.credits.adjusted, 0)}.
-                  Manual wallet controls are prototype controls.
+                  {`Refunded credits: ${creditTrend.refunded} · Net adjustments: ${creditTrend.adjusted}. `}
+                  Bars show earned/spent only; refunds and adjustments are included above. Manual
+                  wallet controls are prototype controls.
                 </p>
               </>
             ) : (
               <p className="muted-copy">
-                No product-wallet credit transactions were recorded in this range.
+                No earned, spent, refunded or net-adjustment credit activity was recorded in this
+                range.
               </p>
             )}
           </section>
@@ -551,7 +538,7 @@ export default function ReportsPage() {
                         ? `${change.fromStageLabel} → ${change.toStageLabel}`
                         : `Started at ${change.toStageLabel}`}
                     </strong>
-                    <span>{new Date(change.changedAt).toLocaleString()} · UTC</span>
+                    <span>{formatReportUtc(change.changedAt)}</span>
                   </li>
                 ))}
               </ol>

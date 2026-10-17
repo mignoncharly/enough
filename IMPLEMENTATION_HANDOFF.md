@@ -419,6 +419,8 @@ When no OpenAI key is configured, the API identifies its result as `STAGE_GUIDAN
 
 ## Phase 16 implementation map
 
+Current Phase 16 (2026-10-17): **COMPLETE**, based on checkpoint `cb80d92a9161f967d6e622b1ec7f29d361afaddd` plus the Phase 16 changes; see `PHASE_16_ACCEPTANCE.md`, the Pass 1 follow-up in `PHASE_16_AUDIT.md`, and `REPORTS.md`. Dedicated full-0020 PostgreSQL/runtime acceptance passes 18 tests with 93 raw-row SQL comparisons; 114 final focused deterministic/controller/safety tests pass. USER-REPORTED browser P16-1–P16-7 and final read-only data/privacy checks PASS. The API/UI disclose best-effort sections rather than one transactional snapshot. Owned services stopped, dedicated ports free, with state/evidence retained and providers disabled. Earlier implementation descriptions below are historical where superseded. Production NO-GO; Phase 17 NOT STARTED. Phase 15 remains COMPLETE; Phase 11/14 blockers/exceptions, dependency baseline 21 findings (3 critical / 9 high / 9 moderate), and Phase 25 supporting checkpoint `35f18280231613a890d10e340160e62604ccb2d8` are preserved.
+
 - `apps/api/src/reports.ts`: authenticated and rate-limited `GET /report-data`; product ownership checks; bounded 7/30/90-day UTC aggregates for focus durations, recognized integration signals, payment amounts, product-wallet ledger activity, task completions, linked conversion event ratios, and stage history; deterministic weekly review prompt.
 - `apps/api/src/server.ts`, `apps/web/next.config.ts`, and `infra/nginx/enough.conf`: no-store report responses, same-origin `/api/reports` rewrite to `/report-data`, and API proxy route that does not shadow the web `/reports` page.
 - `apps/web/app/reports/page.tsx`, `workspace-data.ts`, and `globals.css`: daily report selector, weekly founder review, Build/Grow, signal and credit trends, conversion ratios, current product snapshot, and stage history.
@@ -436,9 +438,9 @@ API database behavior, ownership isolation, timezone display, daily ranges, link
 - [x] Add daily Build/Grow, market-signal, and credit trends plus product stage history.
 - [x] Add outreach-to-reply, demo-to-signup, and signup-to-payment event ratios using anonymous linked references within an integration account.
 - [x] Label reported/source-supplied data and document the limits on interpreting signatures, events, focus time, and credit ledger entries.
-- [ ] Apply migrations `0002_authentication.sql` through `0011_integration_platform.sql`; exercise report queries with empty, single-currency, multi-currency, large-volume, and mixed-verification data.
-- [ ] Verify ownership isolation, invalid ranges, rate limits, UTC boundaries, malformed focus attributes, linked/unlinked event ratios, and wallet scoping against PostgreSQL.
-- [ ] Verify the Reports page across desktop/mobile, keyboard navigation, and loading/empty/error/unauthorized states; complete requested quality checks before marking Phase 16 accepted.
+- [x] Exercise report queries with empty, single-currency, multi-currency, large-volume, and mixed-verification data on a fresh isolated full `0001`–`0020` schema; exact migration order/checksums/ledger/precheck/idempotency PASS. `0011` remains the direct report-read floor; later schema does not accept later phases.
+- [x] Verify ownership isolation, invalid ranges, rate limits, UTC boundaries, malformed focus attributes, linked/unlinked event ratios, and wallet scoping against PostgreSQL; direct truth and numeric/concurrency/privacy checks in `PHASE_16_ACCEPTANCE.md` PASS.
+- [x] Verify the Reports page across desktop/mobile, keyboard navigation, and loading/empty/error/unauthorized states; USER-REPORTED P16-1–P16-7 PASS and final quality/privacy checks PASS. See the canonical closure matrix in `PHASE_16_ACCEPTANCE.md`.
 
 ## Phase 17 implementation map
 

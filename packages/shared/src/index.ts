@@ -1,5 +1,13 @@
 export type HealthStatus = "ok" | "degraded";
 
+export {
+  REPORT_ANALYTICS_NOTE,
+  REPORT_VERIFICATION_NOTE,
+  reportInteger,
+  reportPercent,
+  reportSum,
+} from "./report-numbers.ts";
+
 export interface ServiceHealth {
   service: string;
   status: HealthStatus;

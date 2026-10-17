@@ -1,6 +1,15 @@
 import { checkRateLimit } from "@enough/auth";
 import { pool } from "@enough/db";
-import { PRODUCT_STAGE_GUIDANCE, PRODUCT_STAGE_LABELS, type ProductStage } from "@enough/shared";
+import {
+  PRODUCT_STAGE_GUIDANCE,
+  PRODUCT_STAGE_LABELS,
+  type ProductStage,
+  REPORT_ANALYTICS_NOTE,
+  REPORT_VERIFICATION_NOTE,
+  reportInteger,
+  reportPercent,
+  reportSum,
+} from "@enough/shared";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireSession } from "./api-auth.js";
@@ -58,10 +67,12 @@ interface CreditDayRow {
   adjusted: string;
 }
 
-function safeInteger(value: string | number | null | undefined): number {
-  const parsed = Number(value ?? 0);
-  if (!Number.isSafeInteger(parsed)) throw new Error("Report value exceeds the supported range.");
-  return parsed;
+function aggregateInteger<T extends object>(
+  row: T | undefined,
+  key: keyof T,
+  signed = false,
+): number {
+  return row === undefined ? 0 : reportInteger(row[key], signed);
 }
 
 function utcDays(startAt: Date, days: number): string[] {
@@ -188,8 +199,9 @@ export async function registerReportRoutes(app: FastifyInstance): Promise<void> 
           from_stage: ProductStage | null;
           to_stage: ProductStage;
           changed_at: Date;
+          reason: string | null;
         }>(
-          `SELECT history.id, history.from_stage, history.to_stage, history.changed_at
+          `SELECT history.id, history.from_stage, history.to_stage, history.changed_at, history.change_reason AS reason
            FROM enough.product_stage_history history
            WHERE history.product_id = $1
            ORDER BY history.changed_at DESC LIMIT 100`,
@@ -251,8 +263,8 @@ export async function registerReportRoutes(app: FastifyInstance): Promise<void> 
         const dayPayments = paymentsByDay.get(row.report_day) ?? [];
         dayPayments.push({
           currency: row.currency.trim(),
-          amountMinor: safeInteger(row.amount_minor),
-          paymentCount: safeInteger(row.payment_count),
+          amountMinor: reportInteger(row.amount_minor),
+          paymentCount: reportInteger(row.payment_count),
         });
         paymentsByDay.set(row.report_day, dayPayments);
       }
@@ -263,60 +275,74 @@ export async function registerReportRoutes(app: FastifyInstance): Promise<void> 
         const creditDay = creditsByDay.get(day);
         const completionDay = completionsByDay.get(day);
         const dailySignals = {
-          outreach: safeInteger(signalDay?.outreach),
-          replies: safeInteger(signalDay?.replies),
-          interviews: safeInteger(signalDay?.interviews),
-          demos: safeInteger(signalDay?.demos),
-          feedbackCalls: safeInteger(signalDay?.feedback_calls),
-          salesCalls: safeInteger(signalDay?.sales_calls),
-          onboardingCalls: safeInteger(signalDay?.onboarding_calls),
-          retentionCalls: safeInteger(signalDay?.retention_calls),
-          signups: safeInteger(signalDay?.signups),
-          activations: safeInteger(signalDay?.activations),
-          retained: safeInteger(signalDay?.retained),
-          payments: safeInteger(signalDay?.payments),
+          outreach: aggregateInteger(signalDay, "outreach"),
+          replies: aggregateInteger(signalDay, "replies"),
+          interviews: aggregateInteger(signalDay, "interviews"),
+          demos: aggregateInteger(signalDay, "demos"),
+          feedbackCalls: aggregateInteger(signalDay, "feedback_calls"),
+          salesCalls: aggregateInteger(signalDay, "sales_calls"),
+          onboardingCalls: aggregateInteger(signalDay, "onboarding_calls"),
+          retentionCalls: aggregateInteger(signalDay, "retention_calls"),
+          signups: aggregateInteger(signalDay, "signups"),
+          activations: aggregateInteger(signalDay, "activations"),
+          retained: aggregateInteger(signalDay, "retained"),
+          payments: aggregateInteger(signalDay, "payments"),
         };
-        const marketSignals =
-          dailySignals.replies +
-          dailySignals.interviews +
-          dailySignals.demos +
-          dailySignals.feedbackCalls +
-          dailySignals.salesCalls +
-          dailySignals.onboardingCalls +
-          dailySignals.retentionCalls +
-          dailySignals.signups +
-          dailySignals.activations +
-          dailySignals.retained +
-          dailySignals.payments;
+        const marketSignals = reportSum(
+          Object.entries(dailySignals)
+            .filter(([key]) => key !== "outreach")
+            .map(([, value]) => value),
+        );
+        const buildSeconds = aggregateInteger(activityDay, "build_seconds");
+        const growSeconds = aggregateInteger(activityDay, "grow_seconds");
+        reportSum([buildSeconds, growSeconds]);
+        const tasksCompleted = aggregateInteger(completionDay, "completed");
+        const tasksVerified = aggregateInteger(completionDay, "verified");
+        reportPercent(tasksVerified, tasksCompleted);
         return {
           day,
-          activityEvents: safeInteger(activityDay?.activity_events),
-          buildSeconds: safeInteger(activityDay?.build_seconds),
-          growSeconds: safeInteger(activityDay?.grow_seconds),
+          activityEvents: aggregateInteger(activityDay, "activity_events"),
+          buildSeconds,
+          growSeconds,
           marketSignals,
           signals: dailySignals,
           payments: paymentsByDay.get(day) ?? [],
           credits: {
-            earned: safeInteger(creditDay?.earned),
-            spent: safeInteger(creditDay?.spent),
-            refunded: safeInteger(creditDay?.refunded),
-            adjusted: safeInteger(creditDay?.adjusted),
+            earned: aggregateInteger(creditDay, "earned"),
+            spent: aggregateInteger(creditDay, "spent"),
+            refunded: aggregateInteger(creditDay, "refunded"),
+            adjusted: aggregateInteger(creditDay, "adjusted", true),
           },
-          tasksCompleted: safeInteger(completionDay?.completed),
-          tasksVerified: safeInteger(completionDay?.verified),
+          tasksCompleted,
+          tasksVerified,
         };
       });
 
       const week = days.slice(-7);
-      const weekBuildSeconds = week.reduce((total, day) => total + day.buildSeconds, 0);
-      const weekGrowSeconds = week.reduce((total, day) => total + day.growSeconds, 0);
-      const weekMarketSignals = week.reduce((total, day) => total + day.marketSignals, 0);
-      const weekCreditsEarned = week.reduce((total, day) => total + day.credits.earned, 0);
-      const weekCreditsSpent = week.reduce((total, day) => total + day.credits.spent, 0);
+      const weekBuildSeconds = reportSum(week.map((day) => day.buildSeconds));
+      const weekGrowSeconds = reportSum(week.map((day) => day.growSeconds));
+      const weekMarketSignals = reportSum(week.map((day) => day.marketSignals));
+      const weekCreditsEarned = reportSum(week.map((day) => day.credits.earned));
+      const weekCreditsSpent = reportSum(week.map((day) => day.credits.spent));
       const weekTaskSummary = weeklyTasks.rows[0];
-      const totalFocusSeconds = weekBuildSeconds + weekGrowSeconds;
-      const buildShare =
-        totalFocusSeconds > 0 ? Math.round((weekBuildSeconds / totalFocusSeconds) * 100) : null;
+      const totalFocusSeconds = reportSum([weekBuildSeconds, weekGrowSeconds]);
+      const buildShare = reportPercent(weekBuildSeconds, totalFocusSeconds);
+      // The UI also sums these two fields over its last-14-day trend.
+      reportSum(days.slice(-14).map((day) => day.credits.refunded));
+      reportSum(
+        days.slice(-14).map((day) => day.credits.adjusted),
+        true,
+      );
+      const weekCompleted = aggregateInteger(weekTaskSummary, "completed");
+      const weekVerified = aggregateInteger(weekTaskSummary, "verified");
+      const weekAwaiting = aggregateInteger(weekTaskSummary, "awaiting_review");
+      reportPercent(reportSum([weekVerified, weekAwaiting]), weekCompleted);
+      const userCount = reportInteger(product.user_count);
+      const payingUserCount = reportInteger(product.paying_user_count);
+      reportPercent(payingUserCount, userCount);
+      const highest = highestSignalTask.rows[0];
+      if (highest && (reportInteger(highest.signal_strength) < 1 || highest.signal_strength > 5))
+        throw new Error("Invalid report signal strength.");
       const stageGuidance = PRODUCT_STAGE_GUIDANCE[product.product_stage];
       const recommendation =
         totalFocusSeconds === 0
@@ -333,14 +359,14 @@ export async function registerReportRoutes(app: FastifyInstance): Promise<void> 
         signup_customer: "Signup → payment or subscription event",
       };
       const conversionFunnels = funnels.rows.map((row) => {
-        const started = safeInteger(row.started);
-        const converted = safeInteger(row.converted);
+        const started = reportInteger(row.started);
+        const converted = reportInteger(row.converted);
         return {
           key: row.funnel_key,
           label: funnelLabels[row.funnel_key] ?? row.funnel_key,
           started,
           converted,
-          conversionPercent: started > 0 ? Math.round((converted / started) * 1000) / 10 : null,
+          conversionPercent: reportPercent(converted, started, true),
         };
       });
 
@@ -351,8 +377,8 @@ export async function registerReportRoutes(app: FastifyInstance): Promise<void> 
           productStage: product.product_stage,
           productStageLabel: PRODUCT_STAGE_LABELS[product.product_stage],
           hasLaunched: product.has_launched,
-          userCount: product.user_count,
-          payingUserCount: product.paying_user_count,
+          userCount,
+          payingUserCount,
           currentRevenue: product.current_revenue,
           revenueCurrency: product.revenue_currency.trim(),
         },
@@ -376,9 +402,9 @@ export async function registerReportRoutes(app: FastifyInstance): Promise<void> 
           buildShare,
           growShare: buildShare === null ? null : 100 - buildShare,
           marketSignals: weekMarketSignals,
-          tasksCompleted: safeInteger(weekTaskSummary?.completed),
-          tasksVerified: safeInteger(weekTaskSummary?.verified),
-          tasksAwaitingReview: safeInteger(weekTaskSummary?.awaiting_review),
+          tasksCompleted: weekCompleted,
+          tasksVerified: weekVerified,
+          tasksAwaitingReview: weekAwaiting,
           creditsEarned: weekCreditsEarned,
           creditsSpent: weekCreditsSpent,
           highestSignalTask: highestSignalTask.rows[0]
@@ -396,17 +422,21 @@ export async function registerReportRoutes(app: FastifyInstance): Promise<void> 
           fromStageLabel: row.from_stage ? PRODUCT_STAGE_LABELS[row.from_stage] : null,
           toStage: row.to_stage,
           toStageLabel: PRODUCT_STAGE_LABELS[row.to_stage],
+          reason: row.reason ?? null,
           changedAt: row.changed_at.toISOString(),
         })),
         trustNotes: [
+          "Sections are best-effort reads, not one transactional snapshot. Concurrent changes may appear in some sections before others; refresh after changes settle.",
+          REPORT_VERIFICATION_NOTE,
+          REPORT_ANALYTICS_NOTE,
           "Build/Grow time is derived from reported focus.session_ended durations, limited to six hours per event; active or unreported sessions may be missing.",
           "Market signals and funnel counts come from authenticated integration events. A valid signature shows control of the configured source, not independent vendor verification.",
           "Funnel conversion uses anonymous references only when the same integration account supplies them; unlinked events are excluded from conversion percentages.",
           "Credit values summarize the product wallet ledger. Manual earn and adjustment controls are prototype controls.",
         ],
       });
-    } catch (error) {
-      request.log.error({ err: error }, "Could not build product report");
+    } catch {
+      request.log.error({ category: "REPORT_READ_FAILED" }, "Could not build product report");
       return reply.code(503).send({ error: "The report is temporarily unavailable." });
     }
   });
